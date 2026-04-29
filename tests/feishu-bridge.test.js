@@ -303,6 +303,64 @@ test('createServer sends immediate Feishu receipt in async mode when notificatio
   }
 });
 
+test('createServer can skip immediate automation receipt', async () => {
+  let receipt;
+  let dispatchCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_AUTOMATION_RECEIPT_ENABLED: 'false',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+    },
+    {
+      dispatch: async () => {
+        dispatchCalled = true;
+        return {
+          actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+        };
+      },
+      receiptSender: async (message) => {
+        receipt = message;
+      },
+      scheduler: async () => {},
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '/run-ui-test main smoke' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 202);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(dispatchCalled, true);
+    assert.equal(receipt, undefined);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('createServer replies to greeting without dispatching workflow', async () => {
   let reply;
   let dispatchCalled = false;

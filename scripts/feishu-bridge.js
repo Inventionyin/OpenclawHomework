@@ -483,6 +483,10 @@ function shouldNotifyFeishu(env) {
     && Boolean(env.FEISHU_APP_SECRET || env.LARK_APP_SECRET);
 }
 
+function shouldSendAutomationReceipt(env) {
+  return String(env.FEISHU_AUTOMATION_RECEIPT_ENABLED ?? 'true').toLowerCase() !== 'false';
+}
+
 function formatRunResultMessage(job, run) {
   const conclusion = run.conclusion || 'unknown';
   const statusText = conclusion === 'success' ? '成功' : '失败';
@@ -707,7 +711,7 @@ function runWebhookInBackground(payload, env, options = {}) {
       return;
     }
 
-    if (shouldNotifyFeishu(env)) {
+    if (shouldNotifyFeishu(env) && shouldSendAutomationReceipt(env)) {
       const receipt = buildFeishuTextMessage(
         payload,
         '已收到 UI 自动化测试指令，正在后台解析并触发 GitHub Actions。',
