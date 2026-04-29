@@ -50,6 +50,10 @@ jobs:
         run: npm ci
         working-directory: ui-tests
 
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: ui-tests
+
       - name: Typecheck UI automation project
         run: npm run typecheck
         working-directory: ui-tests
@@ -116,4 +120,3 @@ jobs:
           name: summary-report
           path: ui-tests/output/reports/
           if-no-files-found: ignore
-
