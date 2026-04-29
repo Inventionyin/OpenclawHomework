@@ -425,7 +425,37 @@ function sendJson(response, statusCode, body) {
   response.end(JSON.stringify(body));
 }
 
-function createServer(env = process.env) {
+function isAsyncWebhookEnabled(env) {
+  return String(env.FEISHU_WEBHOOK_ASYNC ?? 'true').toLowerCase() !== 'false';
+}
+
+function runWebhookInBackground(payload, env, options = {}) {
+  setTimeout(() => {
+    if (shouldNotifyFeishu(env)) {
+      const receipt = buildFeishuTextMessage(
+        payload,
+        '已收到 UI 自动化测试指令，正在后台解析并触发 GitHub Actions。',
+        env,
+      );
+      const receiptSender = options.receiptSender || ((message) => sendFeishuTextMessage(env, message));
+      Promise.resolve(receiptSender(receipt)).catch((error) => {
+        console.error(`Feishu receipt notification failed: ${error.message}`);
+      });
+    }
+
+    handleFeishuWebhook(
+      payload,
+      env,
+      options.dispatch || dispatchWorkflow,
+      options.parser,
+      options.scheduler,
+    ).catch((error) => {
+      console.error(`Feishu webhook background job failed: ${error.message}`);
+    });
+  }, 0);
+}
+
+function createServer(env = process.env, options = {}) {
   return http.createServer(async (request, response) => {
     if (request.method === 'GET' && request.url === '/health') {
       sendJson(response, 200, { ok: true });
@@ -440,7 +470,28 @@ function createServer(env = process.env) {
     try {
       const rawBody = await readRequestBody(request);
       const payload = rawBody ? JSON.parse(rawBody) : {};
-      const result = await handleFeishuWebhook(payload, env);
+      if (payload?.challenge) {
+        const result = await handleFeishuWebhook(payload, env, options.dispatch || dispatchWorkflow, options.parser, options.scheduler);
+        sendJson(response, result.statusCode, result.body);
+        return;
+      }
+
+      if (isAsyncWebhookEnabled(env)) {
+        runWebhookInBackground(payload, env, options);
+        sendJson(response, 202, {
+          ok: true,
+          message: '飞书指令已收到，正在后台触发 UI 自动化测试',
+        });
+        return;
+      }
+
+      const result = await handleFeishuWebhook(
+        payload,
+        env,
+        options.dispatch || dispatchWorkflow,
+        options.parser,
+        options.scheduler,
+      );
       sendJson(response, result.statusCode, result.body);
     } catch (error) {
       sendJson(response, 500, {
@@ -472,6 +523,7 @@ module.exports = {
   notifyFeishuRunResult,
   parseRunUiTestCommand,
   parseOpenClawCommandOutput,
+  runWebhookInBackground,
   runOpenClawParser,
   sendFeishuTextMessage,
 };

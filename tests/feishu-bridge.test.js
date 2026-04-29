@@ -3,6 +3,7 @@ const test = require('node:test');
 
 const {
   buildFeishuTextMessage,
+  createServer,
   extractFeishuText,
   handleFeishuWebhook,
   parseOpenClawCommandOutput,
@@ -130,6 +131,126 @@ test('handleFeishuWebhook responds to Feishu challenge', async () => {
 
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.body, { challenge: 'abc123' });
+});
+
+test('createServer acknowledges Feishu webhook before background dispatch completes', async () => {
+  let dispatchStarted = false;
+  let finishDispatch;
+  const dispatchFinished = new Promise((resolve) => {
+    finishDispatch = resolve;
+  });
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+    },
+    {
+      dispatch: async () => {
+        dispatchStarted = true;
+        await dispatchFinished;
+        return {
+          actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+        };
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '/run-ui-test main contracts' }),
+          },
+        },
+      }),
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 202);
+    assert.equal(body.ok, true);
+    assert.equal(body.message, '飞书指令已收到，正在后台触发 UI 自动化测试');
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(dispatchStarted, true);
+    finishDispatch();
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer sends immediate Feishu receipt in async mode when notification is configured', async () => {
+  let receipt;
+  let finishDispatch;
+  const dispatchFinished = new Promise((resolve) => {
+    finishDispatch = resolve;
+  });
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+    },
+    {
+      dispatch: async () => {
+        await dispatchFinished;
+        return {
+          actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+        };
+      },
+      receiptSender: async (message) => {
+        receipt = message;
+      },
+      scheduler: async () => {},
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '/run-ui-test main contracts' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 202);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(receipt.receiveIdType, 'chat_id');
+    assert.equal(receipt.receiveId, 'chat-a');
+    assert.match(JSON.parse(receipt.content).text, /已收到/);
+    finishDispatch();
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 test('handleFeishuWebhook rejects unauthorized sender when allowlist is configured', async () => {
