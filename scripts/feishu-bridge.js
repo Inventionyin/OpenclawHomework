@@ -69,6 +69,10 @@ function normalizeOpenClawCommand(command) {
     return null;
   }
 
+  if (command.intent === 'none' || command.intent === 'chat') {
+    return null;
+  }
+
   if (command.intent && command.intent !== 'run-ui-test') {
     return null;
   }
@@ -101,6 +105,7 @@ function buildOpenClawPrompt(text) {
     '你是飞书 UI 自动化指令解析器，只输出 JSON，不要解释。',
     '目标：判断用户是否要触发 UI 自动化测试。',
     '输出格式：{"intent":"run-ui-test","targetRef":"main","runMode":"contracts"}',
+    '如果用户只是问候、闲聊、感谢，或不是要跑 UI 自动化，输出：{"intent":"none"}',
     'runMode 只能是 contracts、smoke、all。',
     '如果用户说冒烟测试，runMode 用 smoke；如果说全量测试，runMode 用 all；默认用 contracts。',
     'targetRef 默认 main。',
@@ -155,6 +160,25 @@ function extractSenderId(payload) {
 
 function extractFeishuChatId(payload) {
   return payload?.event?.message?.chat_id || payload?.message?.chat_id || payload?.chat_id || '';
+}
+
+function parseSmallTalkMessage(text) {
+  const normalized = String(text ?? '').trim().replace(/^@\S+\s*/, '');
+  if (/^(你好|您好|hi|hello|嗨|在吗|在不在)[!！。.\s]*$/i.test(normalized)) {
+    return '你好，我是 OpenClaw UI 自动化助手。你可以发：帮我跑一下 main 分支的 UI 自动化冒烟测试';
+  }
+
+  if (/^(帮助|help|怎么用|使用说明)[!！。.\s]*$/i.test(normalized)) {
+    return [
+      '我是 OpenClaw UI 自动化助手。',
+      '可用指令：',
+      '1. 帮我跑一下 main 分支的 UI 自动化冒烟测试',
+      '2. /run-ui-test main smoke',
+      '3. /run-ui-test main contracts',
+    ].join('\n');
+  }
+
+  return null;
 }
 
 function buildFeishuTextMessage(payload, text, env = process.env) {
@@ -431,6 +455,16 @@ function isAsyncWebhookEnabled(env) {
 
 function runWebhookInBackground(payload, env, options = {}) {
   setTimeout(() => {
+    const smallTalkReply = parseSmallTalkMessage(extractFeishuText(payload));
+    if (smallTalkReply) {
+      const message = buildFeishuTextMessage(payload, smallTalkReply, env);
+      const receiptSender = options.receiptSender || ((reply) => sendFeishuTextMessage(env, reply));
+      Promise.resolve(receiptSender(message)).catch((error) => {
+        console.error(`Feishu small talk reply failed: ${error.message}`);
+      });
+      return;
+    }
+
     if (shouldNotifyFeishu(env)) {
       const receipt = buildFeishuTextMessage(
         payload,
@@ -521,6 +555,7 @@ module.exports = {
   extractFeishuText,
   handleFeishuWebhook,
   notifyFeishuRunResult,
+  parseSmallTalkMessage,
   parseRunUiTestCommand,
   parseOpenClawCommandOutput,
   runWebhookInBackground,

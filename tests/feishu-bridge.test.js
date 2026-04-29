@@ -8,6 +8,7 @@ const {
   handleFeishuWebhook,
   parseOpenClawCommandOutput,
   parseRunUiTestCommand,
+  parseSmallTalkMessage,
   sendFeishuTextMessage,
   runOpenClawParser,
 } = require('../scripts/feishu-bridge');
@@ -44,6 +45,17 @@ test('parseOpenClawCommandOutput extracts JSON command from model output', () =>
     targetRef: 'develop',
     runMode: 'smoke',
   });
+});
+
+test('parseOpenClawCommandOutput ignores non automation intent', () => {
+  assert.equal(parseOpenClawCommandOutput('{"intent":"none"}'), null);
+});
+
+test('parseSmallTalkMessage replies to greeting without triggering automation', () => {
+  assert.equal(
+    parseSmallTalkMessage('你好'),
+    '你好，我是 OpenClaw UI 自动化助手。你可以发：帮我跑一下 main 分支的 UI 自动化冒烟测试',
+  );
 });
 
 test('extractFeishuText supports Feishu event message content', () => {
@@ -248,6 +260,63 @@ test('createServer sends immediate Feishu receipt in async mode when notificatio
     assert.equal(receipt.receiveId, 'chat-a');
     assert.match(JSON.parse(receipt.content).text, /已收到/);
     finishDispatch();
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer replies to greeting without dispatching workflow', async () => {
+  let reply;
+  let dispatchCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+    },
+    {
+      dispatch: async () => {
+        dispatchCalled = true;
+        return {
+          actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+        };
+      },
+      receiptSender: async (message) => {
+        reply = message;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '你好' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 202);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(dispatchCalled, false);
+    assert.equal(reply.receiveId, 'chat-a');
+    assert.match(JSON.parse(reply.content).text, /OpenClaw UI 自动化助手/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
