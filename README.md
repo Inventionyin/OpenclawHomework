@@ -9,6 +9,7 @@ Use Feishu + OpenClaw to trigger GitHub Actions remotely, run UI automation test
 See the Chinese step-by-step task list:
 
 - [老师任务学习清单](docs/老师任务学习清单.md)
+- [流程图实现拆解](docs/流程图实现拆解.md)
 
 ## Minimum Demo Flow
 
