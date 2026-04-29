@@ -6,6 +6,8 @@ const DEFAULTS = {
   runMode: 'contracts',
   targetRepository: 'Inventionyin/UItest',
   targetRef: 'main',
+  appRepository: 'dengzhekun/projectku-web',
+  appRef: 'main',
   baseUrl: 'http://127.0.0.1:5173',
 };
 
@@ -36,6 +38,8 @@ function parseCliArgs(args = process.argv.slice(2), env = process.env) {
     env.UI_TEST_TARGET_REPOSITORY ?? DEFAULTS.targetRepository,
   );
   const targetRef = readOption(args, '--target-ref', env.UI_TEST_TARGET_REF ?? DEFAULTS.targetRef);
+  const appRepository = readOption(args, '--app-repository', env.UI_TEST_APP_REPOSITORY ?? DEFAULTS.appRepository);
+  const appRef = readOption(args, '--app-ref', env.UI_TEST_APP_REF ?? DEFAULTS.appRef);
   const baseUrl = readOption(args, '--base-url', env.UI_TEST_BASE_URL ?? DEFAULTS.baseUrl);
 
   return {
@@ -48,6 +52,8 @@ function parseCliArgs(args = process.argv.slice(2), env = process.env) {
       run_mode: runMode,
       target_repository: targetRepository,
       target_ref: targetRef,
+      app_repository: appRepository,
+      app_ref: appRef,
       base_url: baseUrl,
     },
   };

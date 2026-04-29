@@ -29,6 +29,8 @@ test('parseCliArgs returns homework defaults and supplied workflow inputs', () =
     run_mode: 'contracts',
     target_repository: 'Inventionyin/UItest',
     target_ref: 'main',
+    app_repository: 'dengzhekun/projectku-web',
+    app_ref: 'main',
     base_url: 'http://127.0.0.1:5173',
   });
 });
@@ -44,6 +46,8 @@ test('buildWorkflowDispatchRequest creates GitHub workflow_dispatch request', ()
       run_mode: 'contracts',
       target_repository: 'Inventionyin/UItest',
       target_ref: 'main',
+      app_repository: 'dengzhekun/projectku-web',
+      app_ref: 'main',
       base_url: 'http://127.0.0.1:5173',
     },
   });
@@ -61,6 +65,8 @@ test('buildWorkflowDispatchRequest creates GitHub workflow_dispatch request', ()
       run_mode: 'contracts',
       target_repository: 'Inventionyin/UItest',
       target_ref: 'main',
+      app_repository: 'dengzhekun/projectku-web',
+      app_ref: 'main',
       base_url: 'http://127.0.0.1:5173',
     },
   });

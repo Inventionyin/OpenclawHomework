@@ -20,6 +20,14 @@ on:
         description: "测试仓库分支或标签"
         required: true
         default: "main"
+      app_repository:
+        description: "被测电商平台仓库"
+        required: true
+        default: "dengzhekun/projectku-web"
+      app_ref:
+        description: "被测电商平台分支或标签"
+        required: true
+        default: "main"
       base_url:
         description: "被测电商平台地址"
         required: true
@@ -39,6 +47,13 @@ jobs:
           ref: ${{ inputs.target_ref }}
           path: ui-tests
 
+      - name: Checkout e-commerce application
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.app_repository }}
+          ref: ${{ inputs.app_ref }}
+          path: app
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -53,6 +68,26 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
         working-directory: ui-tests
+
+      - name: Install app frontend dependencies
+        run: npm ci
+        working-directory: app/frontend
+
+      - name: Start app frontend
+        shell: bash
+        working-directory: app/frontend
+        run: |
+          set -euo pipefail
+          nohup npm run dev -- --host 127.0.0.1 > /tmp/projectku-frontend.log 2>&1 &
+          for attempt in {1..60}; do
+            if curl -fsS "${{ inputs.base_url }}" >/dev/null; then
+              echo "Frontend is ready at ${{ inputs.base_url }}"
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/projectku-frontend.log
+          exit 1
 
       - name: Typecheck UI automation project
         run: npm run typecheck
