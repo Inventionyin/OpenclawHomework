@@ -2,10 +2,12 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const {
+  buildFeishuTextMessage,
   extractFeishuText,
   handleFeishuWebhook,
   parseOpenClawCommandOutput,
   parseRunUiTestCommand,
+  sendFeishuTextMessage,
   runOpenClawParser,
 } = require('../scripts/feishu-bridge');
 
@@ -53,6 +55,72 @@ test('extractFeishuText supports Feishu event message content', () => {
   };
 
   assert.equal(extractFeishuText(payload), '/run-ui-test main');
+});
+
+test('buildFeishuTextMessage uses chat id before sender id', () => {
+  const payload = {
+    event: {
+      sender: {
+        sender_id: {
+          open_id: 'user-a',
+        },
+      },
+      message: {
+        chat_id: 'chat-a',
+      },
+    },
+  };
+
+  assert.deepEqual(buildFeishuTextMessage(payload, '测试完成'), {
+    receiveIdType: 'chat_id',
+    receiveId: 'chat-a',
+    msgType: 'text',
+    content: JSON.stringify({ text: '测试完成' }),
+  });
+});
+
+test('sendFeishuTextMessage fetches tenant token and sends text message', async () => {
+  const calls = [];
+  await sendFeishuTextMessage(
+    {
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+    },
+    {
+      receiveIdType: 'open_id',
+      receiveId: 'user-a',
+      msgType: 'text',
+      content: JSON.stringify({ text: 'UI 自动化完成' }),
+    },
+    async (url, options) => {
+      calls.push({ url, options });
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        return {
+          ok: true,
+          json: async () => ({
+            code: 0,
+            tenant_access_token: 'tenant-token',
+          }),
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({
+          code: 0,
+        }),
+      };
+    },
+  );
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].options.method, 'POST');
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    app_id: 'cli_xxx',
+    app_secret: 'secret_xxx',
+  });
+  assert.match(calls[1].url, /receive_id_type=open_id$/);
+  assert.equal(calls[1].options.headers.Authorization, 'Bearer tenant-token');
 });
 
 test('handleFeishuWebhook responds to Feishu challenge', async () => {
@@ -168,6 +236,49 @@ test('handleFeishuWebhook can use OpenClaw parser for natural language command',
   assert.equal(parserInput, '帮我跑一下 main 分支的 UI 自动化冒烟测试');
   assert.equal(dispatchedConfig.inputs.target_ref, 'main');
   assert.equal(dispatchedConfig.inputs.run_mode, 'smoke');
+});
+
+test('handleFeishuWebhook schedules Feishu result notification when configured', async () => {
+  let scheduled;
+  const response = await handleFeishuWebhook(
+    {
+      event: {
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+        message: {
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '/run-ui-test main contracts' }),
+        },
+      },
+    },
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+    },
+    async () => ({
+      actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+      run: {
+        id: 123,
+        status: 'queued',
+        html_url: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123',
+      },
+    }),
+    undefined,
+    async (job) => {
+      scheduled = job;
+    },
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.workflowRunUrl, 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123');
+  assert.equal(scheduled.run.id, 123);
+  assert.equal(scheduled.message.receiveIdType, 'chat_id');
+  assert.equal(scheduled.message.receiveId, 'chat-a');
 });
 
 test('runOpenClawParser uses OpenClaw node entry on Windows when OPENCLAW_BIN is not set', async () => {

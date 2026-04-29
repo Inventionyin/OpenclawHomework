@@ -6,6 +6,7 @@ const { join } = require('node:path');
 const {
   dispatchWorkflow,
   parseCliArgs,
+  waitForWorkflowCompletion,
 } = require('./trigger-ui-tests');
 
 const VALID_RUN_MODES = new Set(['contracts', 'smoke', 'all']);
@@ -152,6 +153,153 @@ function extractSenderId(payload) {
   return senderId.open_id || senderId.user_id || senderId.union_id || payload?.sender_id || '';
 }
 
+function extractFeishuChatId(payload) {
+  return payload?.event?.message?.chat_id || payload?.message?.chat_id || payload?.chat_id || '';
+}
+
+function buildFeishuTextMessage(payload, text, env = process.env) {
+  const configuredReceiveId = env.FEISHU_NOTIFY_RECEIVE_ID || '';
+  const configuredReceiveIdType = env.FEISHU_NOTIFY_RECEIVE_ID_TYPE || '';
+  if (configuredReceiveId) {
+    return {
+      receiveIdType: configuredReceiveIdType || 'chat_id',
+      receiveId: configuredReceiveId,
+      msgType: 'text',
+      content: JSON.stringify({ text }),
+    };
+  }
+
+  const chatId = extractFeishuChatId(payload);
+  if (chatId) {
+    return {
+      receiveIdType: 'chat_id',
+      receiveId: chatId,
+      msgType: 'text',
+      content: JSON.stringify({ text }),
+    };
+  }
+
+  return {
+    receiveIdType: 'open_id',
+    receiveId: extractSenderId(payload),
+    msgType: 'text',
+    content: JSON.stringify({ text }),
+  };
+}
+
+async function fetchFeishuTenantAccessToken(env = process.env, fetchImpl = fetch) {
+  const appId = env.FEISHU_APP_ID || env.LARK_APP_ID || '';
+  const appSecret = env.FEISHU_APP_SECRET || env.LARK_APP_SECRET || '';
+  if (!appId || !appSecret) {
+    throw new Error('Missing Feishu app credentials. Set FEISHU_APP_ID and FEISHU_APP_SECRET.');
+  }
+
+  const response = await fetchImpl('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+    },
+    body: JSON.stringify({
+      app_id: appId,
+      app_secret: appSecret,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Feishu tenant token request failed: ${response.status} ${response.statusText}\n${body}`);
+  }
+
+  const body = await response.json();
+  if (body.code !== 0 || !body.tenant_access_token) {
+    throw new Error(`Feishu tenant token request failed: ${body.msg || JSON.stringify(body)}`);
+  }
+
+  return body.tenant_access_token;
+}
+
+async function sendFeishuTextMessage(env = process.env, message, fetchImpl = fetch) {
+  if (!message?.receiveId) {
+    throw new Error('Missing Feishu receive id for result notification.');
+  }
+
+  const tenantAccessToken = await fetchFeishuTenantAccessToken(env, fetchImpl);
+  const receiveIdType = encodeURIComponent(message.receiveIdType);
+  const response = await fetchImpl(`https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=${receiveIdType}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${tenantAccessToken}`,
+      'Content-Type': 'application/json; charset=utf-8',
+    },
+    body: JSON.stringify({
+      receive_id: message.receiveId,
+      msg_type: message.msgType,
+      content: message.content,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Feishu message send failed: ${response.status} ${response.statusText}\n${body}`);
+  }
+
+  const body = await response.json();
+  if (body.code !== 0) {
+    throw new Error(`Feishu message send failed: ${body.msg || JSON.stringify(body)}`);
+  }
+
+  return body;
+}
+
+function shouldNotifyFeishu(env) {
+  return String(env.FEISHU_RESULT_NOTIFY_ENABLED || '').toLowerCase() === 'true'
+    && Boolean(env.FEISHU_APP_ID || env.LARK_APP_ID)
+    && Boolean(env.FEISHU_APP_SECRET || env.LARK_APP_SECRET);
+}
+
+function formatRunResultMessage(job, run) {
+  const conclusion = run.conclusion || 'unknown';
+  const statusText = conclusion === 'success' ? '成功' : '失败';
+  const reportHint = conclusion === 'success' ? '可以打开链接查看 Allure / Playwright 报告 artifact。' : '请打开链接查看失败日志、截图或 trace。';
+
+  return [
+    `UI 自动化测试${statusText}`,
+    `分支：${job.targetRef}`,
+    `模式：${job.runMode}`,
+    `结论：${conclusion}`,
+    `链接：${run.html_url || job.actionsUrl}`,
+    reportHint,
+  ].join('\n');
+}
+
+async function notifyFeishuRunResult(job, env = process.env, fetchImpl = fetch) {
+  if (!job.run?.id) {
+    await sendFeishuTextMessage(env, {
+      ...job.message,
+      content: JSON.stringify({ text: `UI 自动化测试已启动，请查看：${job.actionsUrl}` }),
+    }, fetchImpl);
+    return null;
+  }
+
+  const completedRun = await waitForWorkflowCompletion(job.config, job.run.id, fetchImpl, {
+    attempts: Number(env.GITHUB_RUN_NOTIFY_ATTEMPTS || 60),
+    intervalMs: Number(env.GITHUB_RUN_NOTIFY_INTERVAL_MS || 10000),
+  });
+
+  const text = formatRunResultMessage(job, completedRun);
+  await sendFeishuTextMessage(env, {
+    ...job.message,
+    content: JSON.stringify({ text }),
+  }, fetchImpl);
+  return completedRun;
+}
+
+function scheduleFeishuResultNotification(job, env = process.env) {
+  notifyFeishuRunResult(job, env).catch((error) => {
+    console.error(`Feishu result notification failed: ${error.message}`);
+  });
+}
+
 function isAuthorized(payload, env) {
   const allowlist = String(env.FEISHU_ALLOWED_USER_IDS ?? '')
     .split(',')
@@ -224,12 +372,32 @@ async function handleFeishuWebhook(payload, env = process.env, dispatch = dispat
 
   const config = buildDispatchConfig(command, env);
   const result = await dispatch(config);
+  const workflowRunUrl = result.workflowRunUrl || result.run?.html_url;
+  const notificationMessage = buildFeishuTextMessage(
+    payload,
+    `UI 自动化测试已启动：分支 ${command.targetRef}，模式 ${command.runMode}\n链接：${workflowRunUrl || result.actionsUrl}`,
+    env,
+  );
+
+  if (shouldNotifyFeishu(env)) {
+    const scheduler = arguments[4] || scheduleFeishuResultNotification;
+    await scheduler({
+      actionsUrl: result.actionsUrl,
+      config,
+      message: notificationMessage,
+      run: result.run,
+      runMode: config.inputs.run_mode,
+      targetRef: config.inputs.target_ref,
+    }, env);
+  }
+
   return {
     statusCode: 200,
     body: {
       ok: true,
       message: `UI 自动化测试已触发：分支 ${command.targetRef}，模式 ${command.runMode}`,
       actionsUrl: result.actionsUrl,
+      workflowRunUrl,
       commandSource,
       targetRepository: config.inputs.target_repository,
       targetRef: config.inputs.target_ref,
@@ -297,10 +465,13 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildFeishuTextMessage,
   createServer,
   extractFeishuText,
   handleFeishuWebhook,
+  notifyFeishuRunResult,
   parseRunUiTestCommand,
   parseOpenClawCommandOutput,
   runOpenClawParser,
+  sendFeishuTextMessage,
 };

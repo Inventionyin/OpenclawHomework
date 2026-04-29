@@ -174,3 +174,23 @@ OPENCLAW_MODEL=xfyun/astron-code-latest
 ```bash
 systemctl restart openclaw-feishu-bridge
 ```
+
+## 6. 结果通知
+
+桥梁服务现在已经能在触发 GitHub Actions 后查询对应的 workflow run。
+
+如果服务器配置飞书应用凭证，还可以把最终结果主动发回飞书：
+
+```text
+FEISHU_RESULT_NOTIFY_ENABLED=true
+FEISHU_APP_ID=...
+FEISHU_APP_SECRET=...
+```
+
+通知内容包含：
+
+- 成功或失败
+- 分支
+- 测试模式
+- GitHub Actions run 链接
+- 报告和失败日志查看提示

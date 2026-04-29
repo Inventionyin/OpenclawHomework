@@ -79,7 +79,108 @@ function buildWorkflowDispatchRequest(config) {
   };
 }
 
+function buildGitHubHeaders(config) {
+  if (!config.token) {
+    throw new Error('Missing GitHub token. Set GITHUB_TOKEN, GH_TOKEN, or pass --token.');
+  }
+
+  return {
+    Accept: 'application/vnd.github+json',
+    Authorization: `Bearer ${config.token}`,
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+}
+
+function buildWorkflowRunRequest(config) {
+  if (!config.token) {
+    throw new Error('Missing GitHub token. Set GITHUB_TOKEN, GH_TOKEN, or pass --token.');
+  }
+
+  const workflowId = encodeURIComponent(config.workflowId);
+  const branch = encodeURIComponent(config.ref);
+  const url = `https://api.github.com/repos/${config.owner}/${config.repo}/actions/workflows/${workflowId}/runs?event=workflow_dispatch&branch=${branch}&per_page=10`;
+
+  return {
+    url,
+    options: {
+      method: 'GET',
+      headers: buildGitHubHeaders(config),
+    },
+  };
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function fetchWorkflowRuns(config, fetchImpl = fetch) {
+  const request = buildWorkflowRunRequest(config);
+  const response = await fetchImpl(request.url, request.options);
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`GitHub workflow run lookup failed: ${response.status} ${response.statusText}\n${body}`);
+  }
+
+  const body = await response.json();
+  return Array.isArray(body.workflow_runs) ? body.workflow_runs : [];
+}
+
+async function waitForLatestWorkflowRun(config, sinceIso, fetchImpl = fetch, options = {}) {
+  const attempts = Number(options.attempts ?? 10);
+  const intervalMs = Number(options.intervalMs ?? 3000);
+  const since = new Date(sinceIso).getTime();
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const runs = await fetchWorkflowRuns(config, fetchImpl);
+    const run = runs.find((item) => new Date(item.created_at).getTime() >= since - 5000);
+    if (run) {
+      return run;
+    }
+
+    if (attempt < attempts - 1) {
+      await sleep(intervalMs);
+    }
+  }
+
+  return null;
+}
+
+async function getWorkflowRun(config, runId, fetchImpl = fetch) {
+  const url = `https://api.github.com/repos/${config.owner}/${config.repo}/actions/runs/${runId}`;
+  const response = await fetchImpl(url, {
+    method: 'GET',
+    headers: buildGitHubHeaders(config),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`GitHub workflow run status lookup failed: ${response.status} ${response.statusText}\n${body}`);
+  }
+
+  return response.json();
+}
+
+async function waitForWorkflowCompletion(config, runId, fetchImpl = fetch, options = {}) {
+  const attempts = Number(options.attempts ?? 60);
+  const intervalMs = Number(options.intervalMs ?? 10000);
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const run = await getWorkflowRun(config, runId, fetchImpl);
+    if (run.status === 'completed') {
+      return run;
+    }
+
+    if (attempt < attempts - 1) {
+      await sleep(intervalMs);
+    }
+  }
+
+  return getWorkflowRun(config, runId, fetchImpl);
+}
+
 async function dispatchWorkflow(config, fetchImpl = fetch) {
+  const dispatchedAt = new Date().toISOString();
   const request = buildWorkflowDispatchRequest(config);
   const response = await fetchImpl(request.url, request.options);
 
@@ -88,8 +189,15 @@ async function dispatchWorkflow(config, fetchImpl = fetch) {
     throw new Error(`GitHub workflow dispatch failed: ${response.status} ${response.statusText}\n${body}`);
   }
 
+  const run = await waitForLatestWorkflowRun(config, dispatchedAt, fetchImpl, {
+    attempts: Number(config.runLookupAttempts ?? 10),
+    intervalMs: Number(config.runLookupIntervalMs ?? 3000),
+  });
+
   return {
     actionsUrl: `https://github.com/${config.owner}/${config.repo}/actions/workflows/${config.workflowId}`,
+    run,
+    workflowRunUrl: run?.html_url,
   };
 }
 
@@ -112,7 +220,10 @@ if (require.main === module) {
 
 module.exports = {
   buildWorkflowDispatchRequest,
+  buildWorkflowRunRequest,
   dispatchWorkflow,
+  getWorkflowRun,
   parseCliArgs,
+  waitForLatestWorkflowRun,
+  waitForWorkflowCompletion,
 };
-

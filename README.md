@@ -21,7 +21,7 @@ See the Chinese step-by-step task list:
 2. The webhook bridge parses the command, optionally using OpenClaw for natural language.
 3. The bridge calls the GitHub API.
 4. GitHub Actions runs UI automation tests.
-5. Feishu receives the workflow result link.
+5. The bridge can poll the workflow run and send the final result back to Feishu.
 
 ## Task Breakdown
 
