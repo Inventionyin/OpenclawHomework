@@ -46,46 +46,20 @@ GitHub Actions 调度
 https://github.com/Inventionyin/OpenclawHomework
 ```
 
-## 2. 当前阻塞点
+## 2. 当前状态
 
-新服务器现在能 `ping` 通，但 `22` 端口从外部测是关的：
+双服务器已经拆分完成，当前真实状态如下：
 
-```text
-38.76.188.94:22 TCP 连接失败
-```
+- 新服务器 `38.76.188.94` 的 SSH 已打通
+- `hermes.evanshine.me` 已解析到新服务器
+- 新服务器已部署 `hermes-feishu-bridge`
+- 新服务器本机健康检查与 HTTPS 健康检查都通过
+- 旧服务器已清理 Hermes 的独立 Nginx 入口
+- 旧服务器已清空 Hermes 的飞书凭证占位，恢复为 `OpenClaw-only`
 
-这意味着在核云控制台里大概率有下面几种情况之一：
+当前推荐直接把这份文档当成“接手说明”使用，不再按最早那套阻塞排查流程走。
 
-1. SSH 服务还没起来
-2. 防火墙没放行 22
-3. 安全组没放行 22
-4. 服务器刚创建好，还没完全启动完
-
-先在核云控制台检查：
-
-```text
-安全组 / 防火墙：放行 TCP 22
-系统状态：确认实例运行中
-控制台远程终端：确认能登录
-```
-
-然后在服务器控制台里执行：
-
-```bash
-systemctl status ssh
-ss -tulpn | grep ':22'
-```
-
-如果没起来：
-
-```bash
-apt-get update
-apt-get install -y openssh-server
-systemctl enable ssh
-systemctl restart ssh
-```
-
-## 3. 推荐部署方式
+## 3. 新服务器部署方式
 
 仓库里已经准备了安装脚本：
 
@@ -93,7 +67,7 @@ systemctl restart ssh
 scripts/install-hermes-host.sh
 ```
 
-等 SSH 打通后，在新服务器上执行：
+在新服务器上执行：
 
 ```bash
 apt-get update
@@ -111,7 +85,7 @@ bash /opt/OpenclawHomework/scripts/install-hermes-host.sh
 - 创建 Hermes 专用 systemd 服务
 - 创建 Hermes 专用 Nginx 站点
 
-## 4. 安装后必须手动补的内容
+## 4. 安装后必须补的内容
 
 脚本会生成：
 
@@ -131,7 +105,7 @@ HERMES_FEISHU_APP_SECRET=__FILL_HERMES_APP_SECRET__
 
 说明：
 
-- 这里填的是 Hermes 那个飞书应用的 `App ID / App Secret`
+- 这里填的是 Hermes 单独那个飞书应用的 `App ID / App Secret`
 - 不要把这些值提交到 GitHub
 - `GITHUB_TOKEN` 要能触发 `OpenclawHomework` 仓库的 Actions
 
@@ -141,7 +115,7 @@ HERMES_FEISHU_APP_SECRET=__FILL_HERMES_APP_SECRET__
 systemctl restart hermes-feishu-bridge
 ```
 
-## 5. DNS 操作
+## 5. DNS 与证书
 
 你要把 Hermes 的域名解析到新服务器：
 
@@ -155,11 +129,13 @@ OpenClaw 的域名不要动：
 openclaw.evanshine.me -> 38.76.178.91
 ```
 
-等 DNS 生效后，新服务器上执行：
+DNS 生效后，新服务器上执行：
 
 ```bash
 certbot --nginx -d hermes.evanshine.me
 ```
+
+当前线上已经完成到这一步，`https://hermes.evanshine.me/health` 已通过。
 
 ## 6. 飞书后台要改什么
 
@@ -212,33 +188,45 @@ curl -sS -X POST https://hermes.evanshine.me/webhook/feishu \
 {"challenge":"hermes-check"}
 ```
 
-## 8. 拆分后旧服务器怎么处理
+## 8. 旧服务器清理动作
 
-旧服务器建议保留 OpenClaw 主服务，不要再继续让 Hermes 跑在上面。
+旧服务器现在应该只保留 OpenClaw 主链路。
 
-可以保留代码仓库，但把 Hermes 相关入口下线：
+这次实际已经做过的清理包括：
 
-- 停掉 Hermes 独立域名 Nginx 配置
-- 删除 Hermes 的飞书凭证
-- 保留 OpenClaw 链路
+- 下线旧服务器上的 `hermes-feishu-bridge` Nginx 独立站点入口
+- 清空旧服务器环境文件里的：
+  - `HERMES_FEISHU_APP_ID`
+  - `HERMES_FEISHU_APP_SECRET`
+  - `HERMES_FEISHU_ALLOWED_USER_IDS`
+- 强制关闭旧服务器上的：
+  - `HERMES_FALLBACK_ENABLED`
+  - `OPENCLAW_CHAT_ENABLED`
+  - `FEISHU_GROUP_PASSIVE_REPLY_ENABLED`
+  - `FEISHU_AUTOMATION_RECEIPT_ENABLED`
+- 保留 `FEISHU_RESULT_NOTIFY_ENABLED=true`
+- 重启 `openclaw-feishu-bridge`
 
-如果你想稳一点，可以先这样过渡：
+如果以后还要复查旧服务器，可以执行：
 
-1. 新服务器 Hermes 部署成功
-2. `hermes.evanshine.me` 切到新 IP
-3. 飞书 Hermes 机器人后台改 URL
-4. 测试 Hermes 正常
-5. 再从旧服务器移除 Hermes 入口
+```bash
+systemctl status openclaw-feishu-bridge --no-pager -l
+curl -sS https://openclaw.evanshine.me/health
+```
 
-## 9. 结论
+备份目录会保留在旧服务器 `root` 目录下，名字类似：
 
-是的，分开会更好。
+```text
+/root/openclaw-split-backup-YYYYMMDD-HHMMSS
+```
 
-更推荐的长期结构是：
+## 9. 拆分完成后的结果
+
+当前推荐长期结构就是：
 
 ```text
 38.76.178.91 -> OpenClaw
 38.76.188.94 -> Hermes
 ```
 
-你现在真正缺的不是方案，而是新服务器的 `22` 端口先打通。只要 SSH 能连上，我就可以继续往下把 Hermes 真正部署起来。
+两边现在都能独立运行，后续如果出现问题，也可以分开排查，不会再像之前那样互相串扰。
