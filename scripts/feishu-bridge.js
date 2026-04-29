@@ -413,6 +413,7 @@ async function bindAllowedSender(payload, env = process.env, options = {}) {
 
   env.FEISHU_ALLOWED_USER_IDS = senderId;
   env[allowlistKey] = senderId;
+  process.env[allowlistKey] = senderId;
   return `已绑定当前飞书用户，后续只有你可以触发 UI 自动化测试。\nopen_id：${senderId}`;
 }
 

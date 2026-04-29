@@ -1,4 +1,7 @@
 const assert = require('node:assert/strict');
+const { mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const { join } = require('node:path');
 const test = require('node:test');
 
 const {
@@ -1070,6 +1073,140 @@ test('createServer binds Hermes sender to separate Hermes allowlist', async () =
     assert.match(JSON.parse(reply.content).text, /已绑定/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer persists Hermes binding into process env for later requests', async () => {
+  const originalEnv = {
+    GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+    FEISHU_WEBHOOK_ASYNC: process.env.FEISHU_WEBHOOK_ASYNC,
+    FEISHU_RESULT_NOTIFY_ENABLED: process.env.FEISHU_RESULT_NOTIFY_ENABLED,
+    FEISHU_REQUIRE_BINDING: process.env.FEISHU_REQUIRE_BINDING,
+    FEISHU_APP_ID: process.env.FEISHU_APP_ID,
+    FEISHU_APP_SECRET: process.env.FEISHU_APP_SECRET,
+    FEISHU_ALLOWED_USER_IDS: process.env.FEISHU_ALLOWED_USER_IDS,
+    HERMES_FEISHU_APP_ID: process.env.HERMES_FEISHU_APP_ID,
+    HERMES_FEISHU_APP_SECRET: process.env.HERMES_FEISHU_APP_SECRET,
+    HERMES_FEISHU_ALLOWED_USER_IDS: process.env.HERMES_FEISHU_ALLOWED_USER_IDS,
+    FEISHU_ENV_FILE: process.env.FEISHU_ENV_FILE,
+  };
+  const tempDir = mkdtempSync(join(tmpdir(), 'openclaw-feishu-test-'));
+  const envFile = join(tempDir, 'bridge.env');
+  writeFileSync(envFile, 'FEISHU_ALLOWED_USER_IDS=openclaw-user\n', 'utf8');
+
+  Object.assign(process.env, {
+    GITHUB_TOKEN: 'ghp_example',
+    FEISHU_WEBHOOK_ASYNC: 'true',
+    FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+    FEISHU_REQUIRE_BINDING: 'true',
+    FEISHU_APP_ID: 'cli_openclaw',
+    FEISHU_APP_SECRET: 'secret_openclaw',
+    FEISHU_ALLOWED_USER_IDS: 'openclaw-user',
+    HERMES_FEISHU_APP_ID: 'cli_hermes',
+    HERMES_FEISHU_APP_SECRET: 'secret_hermes',
+    FEISHU_ENV_FILE: envFile,
+  });
+  delete process.env.HERMES_FEISHU_ALLOWED_USER_IDS;
+
+  let bindReply;
+  let automationReply;
+  let dispatchCalled = false;
+  const server = createServer(
+    process.env,
+    {
+      dispatch: async () => {
+        dispatchCalled = true;
+        return {
+          actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+        };
+      },
+      receiptSender: async (message) => {
+        const text = JSON.parse(message.content).text;
+        if (/已绑定/.test(text)) {
+          bindReply = message;
+        } else {
+          automationReply = message;
+        }
+      },
+      scheduler: async () => {},
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const payloadBase = {
+      header: {
+        app_id: 'cli_hermes',
+      },
+      event: {
+        sender: {
+          sender_id: {
+            open_id: 'hermes-user',
+          },
+        },
+        message: {
+          chat_id: 'chat-a',
+        },
+      },
+    };
+
+    const bindResponse = await fetch(`http://127.0.0.1:${port}/webhook/feishu/hermes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...payloadBase,
+        event: {
+          ...payloadBase.event,
+          message: {
+            ...payloadBase.event.message,
+            message_id: 'message-bind',
+            content: JSON.stringify({ text: '绑定我' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(bindResponse.status, 202);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.match(JSON.parse(bindReply.content).text, /已绑定/);
+    assert.equal(process.env.HERMES_FEISHU_ALLOWED_USER_IDS, 'hermes-user');
+    assert.match(readFileSync(envFile, 'utf8'), /HERMES_FEISHU_ALLOWED_USER_IDS=hermes-user/);
+
+    const runResponse = await fetch(`http://127.0.0.1:${port}/webhook/feishu/hermes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...payloadBase,
+        event: {
+          ...payloadBase.event,
+          message: {
+            ...payloadBase.event.message,
+            message_id: 'message-run',
+            content: JSON.stringify({ text: '/run-ui-test main smoke' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(runResponse.status, 202);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(dispatchCalled, true);
+    assert.doesNotMatch(JSON.parse(automationReply.content).text, /还没有绑定/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    rmSync(tempDir, { recursive: true, force: true });
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
   }
 });
 
