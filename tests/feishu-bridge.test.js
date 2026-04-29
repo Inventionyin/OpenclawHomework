@@ -824,6 +824,61 @@ test('createServer replies to greeting as Hermes on Hermes route', async () => {
   }
 });
 
+test('createServer ignores Feishu message read events without replying', async () => {
+  let reply;
+  let chatCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      OPENCLAW_CHAT_ENABLED: 'true',
+    },
+    {
+      chat: async () => {
+        chatCalled = true;
+        return '不应该处理已读事件';
+      },
+      receiptSender: async (message) => {
+        reply = message;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu/hermes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        header: {
+          event_type: 'im.message.message_read_v1',
+          event_id: 'read-event-a',
+        },
+        event: {
+          reader: {
+            reader_id: {
+              open_id: 'user-a',
+            },
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 202);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(chatCalled, false);
+    assert.equal(reply, undefined);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('createServer prefers Feishu app id over URL route for bot identity', async () => {
   let reply;
   const server = createServer(

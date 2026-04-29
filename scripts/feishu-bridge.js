@@ -298,6 +298,19 @@ function extractFeishuChatType(payload) {
   return payload?.event?.message?.chat_type || payload?.message?.chat_type || payload?.chat_type || '';
 }
 
+function extractFeishuEventType(payload) {
+  return payload?.header?.event_type || payload?.event_type || payload?.type || '';
+}
+
+function shouldProcessFeishuMessagePayload(payload) {
+  const eventType = extractFeishuEventType(payload);
+  if (eventType && eventType !== 'im.message.receive_v1') {
+    return false;
+  }
+
+  return Boolean(payload?.event?.message || payload?.message || extractFeishuText(payload));
+}
+
 function isFeishuGroupChat(payload) {
   const chatType = extractFeishuChatType(payload);
   return chatType && chatType !== 'p2p';
@@ -1062,6 +1075,16 @@ function createServer(env = process.env, options = {}) {
           routeOptions.fallbackParserSource,
         );
         sendJson(response, result.statusCode, result.body);
+        return;
+      }
+
+      if (!shouldProcessFeishuMessagePayload(payload)) {
+        console.log(`Ignored non-message Feishu event: ${extractFeishuEventType(payload) || 'unknown'}`);
+        sendJson(response, 202, {
+          ok: true,
+          ignored: true,
+          message: '非消息类飞书事件已忽略',
+        });
         return;
       }
 
