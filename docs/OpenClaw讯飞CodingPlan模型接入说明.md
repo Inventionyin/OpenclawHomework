@@ -158,7 +158,7 @@ OpenClaw -> 讯飞 CodingPlan 模型
 - 支持模型 `xfyun/astron-code-latest`
 - 支持把冒烟测试解析成 `runMode=smoke`
 
-云服务器还需要补：
+云服务器已经完成：
 
 - 安装 OpenClaw
 - 配置讯飞 CodingPlan 模型
@@ -173,6 +173,20 @@ OPENCLAW_MODEL=xfyun/astron-code-latest
 
 ```bash
 systemctl restart openclaw-feishu-bridge
+```
+
+已验证公网自然语言指令：
+
+```text
+帮我跑一下 main 分支的 UI 自动化冒烟测试
+```
+
+验证结果：
+
+```text
+commandSource=openclaw
+runMode=smoke
+GitHub Actions success
 ```
 
 ## 6. 结果通知
