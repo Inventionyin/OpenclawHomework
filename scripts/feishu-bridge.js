@@ -12,6 +12,7 @@ const {
 
 const VALID_RUN_MODES = new Set(['contracts', 'smoke', 'all']);
 const seenFeishuEventKeys = new Map();
+const scheduledFeishuNotificationKeys = new Map();
 
 function parseJsonContent(content) {
   if (typeof content !== 'string') {
@@ -668,10 +669,36 @@ async function notifyFeishuRunResult(job, env = process.env, fetchImpl = fetch) 
   return completedRun;
 }
 
-function scheduleFeishuResultNotification(job, env = process.env) {
-  notifyFeishuRunResult(job, env).catch((error) => {
+function buildFeishuRunNotificationKey(job) {
+  return [
+    job.message?.receiveIdType || '',
+    job.message?.receiveId || '',
+    job.config?.inputs?.target_repository || '',
+    job.targetRef || job.config?.inputs?.target_ref || '',
+    job.runMode || job.config?.inputs?.run_mode || '',
+  ].join('|');
+}
+
+function scheduleFeishuResultNotification(job, env = process.env, options = {}) {
+  const cache = options.cache || scheduledFeishuNotificationKeys;
+  const now = Date.now();
+  const ttlMs = Number(env.FEISHU_RUN_NOTIFICATION_DEDUP_TTL_MS || 300000);
+  pruneFeishuDedupCache(cache, now);
+
+  if (ttlMs > 0) {
+    const notificationKey = buildFeishuRunNotificationKey(job);
+    if (notificationKey && cache.has(notificationKey)) {
+      console.log('Ignored duplicate Feishu result notification schedule.');
+      return false;
+    }
+    cache.set(notificationKey, now + ttlMs);
+  }
+
+  const notifier = options.notifier || notifyFeishuRunResult;
+  Promise.resolve(notifier(job, env)).catch((error) => {
     console.error(`Feishu result notification failed: ${error.message}`);
   });
+  return true;
 }
 
 function isAuthorized(payload, env) {
@@ -941,7 +968,7 @@ function runWebhookInBackground(payload, env, options = {}) {
     if (shouldNotifyFeishu(env) && shouldSendAutomationReceipt(env)) {
       const receipt = buildFeishuTextMessage(
         payload,
-        '已收到 UI 自动化测试指令，正在后台解析并触发 GitHub Actions。',
+        '收到了，正在运行 UI 自动化测试。报告生成后我会发给你。',
         env,
       );
       Promise.resolve(receiptSender(receipt)).catch((error) => {
@@ -1064,6 +1091,7 @@ module.exports = {
   handleFeishuWebhook,
   isDuplicateFeishuEvent,
   notifyFeishuRunResult,
+  scheduleFeishuResultNotification,
   parseOpenClawChatOutput,
   parseSmallTalkMessage,
   parseRunUiTestCommand,

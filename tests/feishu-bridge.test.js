@@ -492,11 +492,62 @@ test('createServer sends immediate Feishu receipt in async mode when notificatio
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(receipt.receiveIdType, 'chat_id');
     assert.equal(receipt.receiveId, 'chat-a');
-    assert.match(JSON.parse(receipt.content).text, /已收到/);
+    assert.match(JSON.parse(receipt.content).text, /收到了，正在运行 UI 自动化测试/);
+    assert.match(JSON.parse(receipt.content).text, /报告生成后我会发给你/);
     finishDispatch();
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+test('scheduleFeishuResultNotification deduplicates repeated report notifications for same chat and command', async () => {
+  const {
+    scheduleFeishuResultNotification,
+  } = require('../scripts/feishu-bridge');
+  const cache = new Map();
+  const scheduled = [];
+  const job = {
+    actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123',
+    config: {
+      owner: 'Inventionyin',
+      repo: 'OpenclawHomework',
+      inputs: {
+        target_ref: 'main',
+        run_mode: 'smoke',
+      },
+    },
+    message: {
+      receiveIdType: 'chat_id',
+      receiveId: 'chat-a',
+      msgType: 'text',
+      content: JSON.stringify({ text: 'started' }),
+    },
+    run: {
+      id: 123,
+    },
+    runMode: 'smoke',
+    targetRef: 'main',
+  };
+
+  scheduleFeishuResultNotification(job, {
+    FEISHU_RUN_NOTIFICATION_DEDUP_TTL_MS: '300000',
+  }, {
+    cache,
+    notifier: async (scheduledJob) => {
+      scheduled.push(scheduledJob);
+    },
+  });
+  scheduleFeishuResultNotification(job, {
+    FEISHU_RUN_NOTIFICATION_DEDUP_TTL_MS: '300000',
+  }, {
+    cache,
+    notifier: async (scheduledJob) => {
+      scheduled.push(scheduledJob);
+    },
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(scheduled.length, 1);
 });
 
 test('createServer can skip immediate automation receipt', async () => {
