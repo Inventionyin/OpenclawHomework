@@ -183,6 +183,10 @@ function buildHermesCommand(env, prompt) {
   };
 }
 
+function getAssistantName(env = process.env, fallback = 'OpenClaw') {
+  return String(env.FEISHU_ASSISTANT_NAME || env.ASSISTANT_NAME || fallback).trim() || fallback;
+}
+
 function parseOpenClawChatOutput(output) {
   return String(output ?? '')
     .split(/\r?\n/)
@@ -220,9 +224,9 @@ function runHermesParser(text, env = process.env, execFileImpl = execFile) {
   });
 }
 
-function buildOpenClawChatPrompt(text) {
+function buildOpenClawChatPrompt(text, assistantName = 'OpenClaw') {
   return [
-    '你是 OpenClaw UI 自动化助手，正在飞书里和用户对话。',
+    `你是 ${assistantName} UI 自动化助手，正在飞书里和用户对话。`,
     '回答要简洁、中文、像一个靠谱的项目助手。',
     '你可以说明当前项目能触发 GitHub Actions 跑 UI 自动化、查看报告、回复帮助。',
     '如果用户想跑测试，提醒他可以说：帮我跑一下 main 分支的 UI 自动化冒烟测试。',
@@ -231,7 +235,7 @@ function buildOpenClawChatPrompt(text) {
 }
 
 function runHermesChat(text, env = process.env, execFileImpl = execFile) {
-  const prompt = buildOpenClawChatPrompt(text);
+  const prompt = buildOpenClawChatPrompt(text, getAssistantName(env, 'Hermes'));
   const { command, args } = buildHermesCommand(env, prompt);
 
   return new Promise((resolve, reject) => {
@@ -256,7 +260,7 @@ function runHermesChat(text, env = process.env, execFileImpl = execFile) {
 }
 
 function runOpenClawChat(text, env = process.env, execFileImpl = execFile) {
-  const prompt = buildOpenClawChatPrompt(text);
+  const prompt = buildOpenClawChatPrompt(text, getAssistantName(env, 'OpenClaw'));
   const { command, args } = buildOpenClawCommand(env, prompt);
 
   return new Promise((resolve, reject) => {
@@ -348,15 +352,16 @@ function isDuplicateFeishuEvent(payload, env = process.env, cache = seenFeishuEv
   return false;
 }
 
-function parseSmallTalkMessage(text) {
+function parseSmallTalkMessage(text, env = process.env) {
   const normalized = String(text ?? '').trim().replace(/^@\S+\s*/, '');
+  const assistantName = getAssistantName(env, 'OpenClaw');
   if (/^(你好|您好|hi|hello|嗨|在吗|在不在)[!！。.\s]*$/i.test(normalized)) {
-    return '你好，我是 OpenClaw UI 自动化助手。你可以发：帮我跑一下 main 分支的 UI 自动化冒烟测试';
+    return `你好，我是 ${assistantName} UI 自动化助手。你可以发：帮我跑一下 main 分支的 UI 自动化冒烟测试`;
   }
 
   if (/^(帮助|help|怎么用|使用说明)[!！。.\s]*$/i.test(normalized)) {
     return [
-      '我是 OpenClaw UI 自动化助手。',
+      `我是 ${assistantName} UI 自动化助手。`,
       '可用指令：',
       '1. 帮我跑一下 main 分支的 UI 自动化冒烟测试',
       '2. /run-ui-test main smoke',
@@ -856,6 +861,7 @@ function buildRouteEnv(mode, env = process.env) {
   if (env.HERMES_FEISHU_NOTIFY_RECEIVE_ID_TYPE) {
     routeEnv.FEISHU_NOTIFY_RECEIVE_ID_TYPE = env.HERMES_FEISHU_NOTIFY_RECEIVE_ID_TYPE;
   }
+  routeEnv.FEISHU_ASSISTANT_NAME = env.HERMES_FEISHU_ASSISTANT_NAME || 'Hermes';
   return routeEnv;
 }
 
@@ -877,7 +883,7 @@ function runWebhookInBackground(payload, env, options = {}) {
       return;
     }
 
-    const smallTalkReply = parseSmallTalkMessage(extractFeishuText(payload));
+    const smallTalkReply = parseSmallTalkMessage(extractFeishuText(payload), env);
     if (smallTalkReply) {
       const message = buildFeishuTextMessage(payload, smallTalkReply, env);
       Promise.resolve(receiptSender(message)).catch((error) => {

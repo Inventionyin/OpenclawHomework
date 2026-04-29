@@ -16,6 +16,7 @@ const {
   parseSmallTalkMessage,
   buildRunArtifactsUrl,
   parseOpenClawChatOutput,
+  runHermesChat,
   runOpenClawChat,
   sendFeishuTextMessage,
   runOpenClawParser,
@@ -587,6 +588,78 @@ test('createServer replies to greeting without dispatching workflow', async () =
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+test('createServer replies to greeting as Hermes on Hermes route', async () => {
+  let reply;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      HERMES_FEISHU_APP_ID: 'cli_hermes',
+      HERMES_FEISHU_APP_SECRET: 'secret_hermes',
+    },
+    {
+      receiptSender: async (message) => {
+        reply = message;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu/hermes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '你好' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 202);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const text = JSON.parse(reply.content).text;
+    assert.match(text, /Hermes UI 自动化助手/);
+    assert.doesNotMatch(text, /OpenClaw UI 自动化助手/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('runHermesChat prompts model with Hermes identity', async () => {
+  let capturedArgs;
+  await runHermesChat(
+    '你是谁',
+    {
+      HERMES_BIN: 'hermes',
+      HERMES_MODEL: 'astron-code-latest',
+      HERMES_PROVIDER: 'custom',
+    },
+    (command, args, options, callback) => {
+      capturedArgs = args;
+      callback(null, '我是 Hermes UI 自动化助手。', '');
+    },
+  );
+
+  const prompt = capturedArgs.at(-1);
+  assert.match(prompt, /你是 Hermes UI 自动化助手/);
+  assert.doesNotMatch(prompt, /你是 OpenClaw UI 自动化助手/);
 });
 
 test('createServer answers free chat without dispatching workflow', async () => {
