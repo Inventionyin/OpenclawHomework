@@ -642,6 +642,61 @@ test('createServer replies to greeting as Hermes on Hermes route', async () => {
   }
 });
 
+test('createServer prefers Feishu app id over URL route for bot identity', async () => {
+  let reply;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_openclaw',
+      FEISHU_APP_SECRET: 'secret_openclaw',
+      HERMES_FEISHU_APP_ID: 'cli_hermes',
+      HERMES_FEISHU_APP_SECRET: 'secret_hermes',
+    },
+    {
+      receiptSender: async (message) => {
+        reply = message;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu/hermes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        header: {
+          app_id: 'cli_openclaw',
+        },
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '你好' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 202);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const text = JSON.parse(reply.content).text;
+    assert.match(text, /OpenClaw UI 自动化助手/);
+    assert.doesNotMatch(text, /Hermes UI 自动化助手/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('runHermesChat prompts model with Hermes identity', async () => {
   let capturedArgs;
   await runHermesChat(

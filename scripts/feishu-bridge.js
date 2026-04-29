@@ -827,6 +827,19 @@ function getFeishuRouteMode(url = '') {
   return null;
 }
 
+function getFeishuPayloadMode(payload, env = process.env, fallbackMode = 'openclaw') {
+  const appId = payload?.header?.app_id || payload?.app_id || payload?.event?.app_id || '';
+  if (appId && env.HERMES_FEISHU_APP_ID && appId === env.HERMES_FEISHU_APP_ID) {
+    return 'hermes';
+  }
+
+  if (appId && env.FEISHU_APP_ID && appId === env.FEISHU_APP_ID) {
+    return 'openclaw';
+  }
+
+  return fallbackMode;
+}
+
 function buildRouteOptions(mode, options = {}) {
   if (mode !== 'hermes') {
     return options;
@@ -959,12 +972,12 @@ function createServer(env = process.env, options = {}) {
       return;
     }
 
-    const routeOptions = buildRouteOptions(routeMode, options);
-    const routeEnv = buildRouteEnv(routeMode, env);
-
     try {
       const rawBody = await readRequestBody(request);
       const payload = rawBody ? JSON.parse(rawBody) : {};
+      const effectiveRouteMode = getFeishuPayloadMode(payload, env, routeMode);
+      const routeOptions = buildRouteOptions(effectiveRouteMode, options);
+      const routeEnv = buildRouteEnv(effectiveRouteMode, env);
       if (payload?.challenge) {
         const result = await handleFeishuWebhook(
           payload,
