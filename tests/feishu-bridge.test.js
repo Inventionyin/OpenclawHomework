@@ -8,6 +8,7 @@ const {
   extractFeishuText,
   getFeishuDedupKeys,
   getFeishuRouteMode,
+  buildRouteEnv,
   handleFeishuWebhook,
   isDuplicateFeishuEvent,
   parseOpenClawCommandOutput,
@@ -112,6 +113,18 @@ test('getFeishuRouteMode supports default and named bot routes', () => {
   assert.equal(getFeishuRouteMode('/webhook/feishu/hermes'), 'hermes');
   assert.equal(getFeishuRouteMode('/webhook/feishu/hermes?foo=bar'), 'hermes');
   assert.equal(getFeishuRouteMode('/webhook/unknown'), null);
+});
+
+test('buildRouteEnv maps Hermes route to Hermes Feishu credentials', () => {
+  const routeEnv = buildRouteEnv('hermes', {
+    FEISHU_APP_ID: 'openclaw-app-id',
+    FEISHU_APP_SECRET: 'openclaw-secret',
+    HERMES_FEISHU_APP_ID: 'hermes-app-id',
+    HERMES_FEISHU_APP_SECRET: 'hermes-secret',
+  });
+
+  assert.equal(routeEnv.FEISHU_APP_ID, 'hermes-app-id');
+  assert.equal(routeEnv.FEISHU_APP_SECRET, 'hermes-secret');
 });
 
 test('getFeishuDedupKeys includes message id and text fallback', () => {

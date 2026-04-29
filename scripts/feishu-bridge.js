@@ -838,6 +838,27 @@ function buildRouteOptions(mode, options = {}) {
   };
 }
 
+function buildRouteEnv(mode, env = process.env) {
+  if (mode !== 'hermes') {
+    return env;
+  }
+
+  const routeEnv = { ...env };
+  if (env.HERMES_FEISHU_APP_ID) {
+    routeEnv.FEISHU_APP_ID = env.HERMES_FEISHU_APP_ID;
+  }
+  if (env.HERMES_FEISHU_APP_SECRET) {
+    routeEnv.FEISHU_APP_SECRET = env.HERMES_FEISHU_APP_SECRET;
+  }
+  if (env.HERMES_FEISHU_NOTIFY_RECEIVE_ID) {
+    routeEnv.FEISHU_NOTIFY_RECEIVE_ID = env.HERMES_FEISHU_NOTIFY_RECEIVE_ID;
+  }
+  if (env.HERMES_FEISHU_NOTIFY_RECEIVE_ID_TYPE) {
+    routeEnv.FEISHU_NOTIFY_RECEIVE_ID_TYPE = env.HERMES_FEISHU_NOTIFY_RECEIVE_ID_TYPE;
+  }
+  return routeEnv;
+}
+
 function isAsyncWebhookEnabled(env) {
   return String(env.FEISHU_WEBHOOK_ASYNC ?? 'true').toLowerCase() !== 'false';
 }
@@ -933,6 +954,7 @@ function createServer(env = process.env, options = {}) {
     }
 
     const routeOptions = buildRouteOptions(routeMode, options);
+    const routeEnv = buildRouteEnv(routeMode, env);
 
     try {
       const rawBody = await readRequestBody(request);
@@ -940,7 +962,7 @@ function createServer(env = process.env, options = {}) {
       if (payload?.challenge) {
         const result = await handleFeishuWebhook(
           payload,
-          env,
+          routeEnv,
           routeOptions.dispatch || dispatchWorkflow,
           routeOptions.parser,
           routeOptions.scheduler,
@@ -952,7 +974,7 @@ function createServer(env = process.env, options = {}) {
         return;
       }
 
-      if (isDuplicateFeishuEvent(payload, env, dedupCache)) {
+      if (isDuplicateFeishuEvent(payload, routeEnv, dedupCache)) {
         console.log('Ignored duplicate Feishu webhook event.');
         sendJson(response, 202, {
           ok: true,
@@ -962,8 +984,8 @@ function createServer(env = process.env, options = {}) {
         return;
       }
 
-      if (isAsyncWebhookEnabled(env)) {
-        runWebhookInBackground(payload, env, routeOptions);
+      if (isAsyncWebhookEnabled(routeEnv)) {
+        runWebhookInBackground(payload, routeEnv, routeOptions);
         sendJson(response, 202, {
           ok: true,
           message: '飞书指令已收到，正在后台触发 UI 自动化测试',
@@ -973,7 +995,7 @@ function createServer(env = process.env, options = {}) {
 
       const result = await handleFeishuWebhook(
         payload,
-        env,
+        routeEnv,
         routeOptions.dispatch || dispatchWorkflow,
         routeOptions.parser,
         routeOptions.scheduler,
@@ -1009,6 +1031,7 @@ module.exports = {
   buildRunArtifactsUrl,
   buildFeishuCardMessage,
   buildFeishuTextMessage,
+  buildRouteEnv,
   createServer,
   extractFeishuText,
   getFeishuDedupKeys,
