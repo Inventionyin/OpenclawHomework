@@ -18,18 +18,19 @@ GitHub 仓库：
 https://github.com/Inventionyin/OpenclawHomework
 
 云服务器：
-Debian 13，公网 IP 38.76.178.91，SSH 用户 root，端口 22。
+OpenClaw 服务器：Debian 13，公网 IP 38.76.178.91，SSH 用户 root，端口 22。
+Hermes 服务器：Debian 12，公网 IP 38.76.188.94，SSH 用户 root，端口 22。
 不要要求用户把密码或 Token 写进仓库；如需登录，请让用户临时提供凭证。
 
-服务器部署目录：
+两台服务器部署目录：
 /opt/OpenclawHomework
 
 核心服务：
-openclaw-feishu-bridge
+OpenClaw：openclaw-feishu-bridge
+Hermes：hermes-feishu-bridge
 
 公网入口：
 https://openclaw.evanshine.me/health
-https://openclaw.evanshine.me/webhook/feishu
 https://openclaw.evanshine.me/webhook/feishu/openclaw
 https://hermes.evanshine.me/health
 https://hermes.evanshine.me/webhook/feishu
@@ -39,15 +40,16 @@ https://hermes.evanshine.me/webhook/feishu
 
 开始接手时先执行：
 1. 本地：git status --short --branch && npm test
-2. 服务器：systemctl is-active openclaw-feishu-bridge
-3. 服务器：curl -sS http://127.0.0.1:8788/health
-4. 服务器：journalctl -u openclaw-feishu-bridge -n 100 --no-pager
-5. 服务器：cd /opt/OpenclawHomework && git log --oneline -5
+2. OpenClaw 服务器：systemctl is-active openclaw-feishu-bridge
+3. OpenClaw 服务器：curl -sS http://127.0.0.1:8788/health
+4. Hermes 服务器：systemctl is-active hermes-feishu-bridge
+5. Hermes 服务器：curl -sS http://127.0.0.1:8788/health
+6. 两台服务器：cd /opt/OpenclawHomework && git log --oneline -5
 
 注意安全：
 - 不要执行 git reset --hard，除非用户明确同意。
 - 不要开放任意 shell 给飞书机器人。
-- 不要把 /etc/openclaw-feishu-bridge.env 的秘密值贴到最终回复。
+- 不要把 /etc/openclaw-feishu-bridge.env 或 /etc/hermes-feishu-bridge.env 的秘密值贴到最终回复。
 - 做代码修改后必须运行 npm test。
 ```
 
@@ -55,19 +57,19 @@ https://hermes.evanshine.me/webhook/feishu
 
 ```text
 飞书 OpenClaw 机器人
-  -> https://openclaw.evanshine.me/webhook/feishu 或 /webhook/feishu/openclaw
-  -> Nginx
+  -> https://openclaw.evanshine.me/webhook/feishu/openclaw
+  -> 38.76.178.91 Nginx
   -> Node 桥梁服务 127.0.0.1:8788
-  -> OpenClaw 优先解析/聊天，Hermes fallback
+  -> OpenClaw 主服务
   -> GitHub Actions
   -> UI 自动化报告
   -> 飞书结果卡片
 
 飞书 Hermes 机器人
   -> https://hermes.evanshine.me/webhook/feishu
-  -> Nginx
+  -> 38.76.188.94 Nginx
   -> Node 桥梁服务 127.0.0.1:8788
-  -> Hermes 优先解析/聊天，OpenClaw fallback
+  -> Hermes 主服务
   -> GitHub Actions
   -> UI 自动化报告
   -> 飞书结果卡片
@@ -75,13 +77,15 @@ https://hermes.evanshine.me/webhook/feishu
 
 关键点：
 
-- OpenClaw 和 Hermes 现在部署在同一台核云服务器上。
-- 两个机器人使用不同飞书 App 凭证。
-- 两个机器人有独立触发授权名单。
-- 后端会优先根据飞书事件里的 `app_id` 判断应该用哪个机器人身份回复，避免 URL 填错导致串身份。
+- OpenClaw 和 Hermes 已经拆成两台核云服务器。
+- 两个机器人使用不同飞书 App 凭证和不同 systemd 服务。
+- 两个机器人有独立触发授权名单和独立环境文件。
+- 飞书事件建议只保留 `接收消息 im.message.receive_v1`，不要订阅 `消息已读 im.message.message_read_v1`。
 - 机器人收到自动化指令后，先回复“收到了，正在运行 UI 自动化测试。报告生成后我会发给你。”，最终只发一次报告卡片。
 
 ## 3. 服务器信息
+
+OpenClaw 服务器：
 
 ```text
 系统：Debian GNU/Linux 13
@@ -91,14 +95,20 @@ SSH 端口：22
 项目目录：/opt/OpenclawHomework
 Node 服务端口：127.0.0.1:8788
 systemd 服务：openclaw-feishu-bridge
-watchdog timer：openclaw-hermes-watchdog.timer
+域名：openclaw.evanshine.me
 ```
 
-公网域名：
+Hermes 服务器：
 
 ```text
-openclaw.evanshine.me
-hermes.evanshine.me
+系统：Debian GNU/Linux 12
+公网 IP：38.76.188.94
+SSH 用户：root
+SSH 端口：22
+项目目录：/opt/OpenclawHomework
+Node 服务端口：127.0.0.1:8788
+systemd 服务：hermes-feishu-bridge
+域名：hermes.evanshine.me
 ```
 
 不要在文档里记录 root 密码。新的 AI 需要登录时，让用户临时提供，或使用用户当前会话已有的安全连接能力。
@@ -108,7 +118,7 @@ hermes.evanshine.me
 ```text
 GitHub：https://github.com/Inventionyin/OpenclawHomework
 本地路径：D:\OtherProject\OpenclawHomework
-服务器路径：/opt/OpenclawHomework
+服务器路径：两台服务器都是 /opt/OpenclawHomework
 ```
 
 主要文件：
@@ -127,7 +137,8 @@ docs/飞书桥梁服务使用说明.md      飞书桥梁功能说明
 服务器环境文件：
 
 ```text
-/etc/openclaw-feishu-bridge.env
+OpenClaw：/etc/openclaw-feishu-bridge.env
+Hermes：/etc/hermes-feishu-bridge.env
 ```
 
 这个文件包含 GitHub Token、飞书 App Secret、模型 API Key 等秘密信息。只允许在服务器上读取和修改，不要复制到 GitHub，不要贴到最终回复。
@@ -168,10 +179,12 @@ FEISHU_DEDUP_TTL_MS=300000
 FEISHU_RUN_NOTIFICATION_DEDUP_TTL_MS=300000
 ```
 
-修改后重启：
+修改后重启对应服务器上的服务：
 
 ```bash
 systemctl restart openclaw-feishu-bridge
+# 或
+systemctl restart hermes-feishu-bridge
 ```
 
 ## 6. 首次接手检查清单
@@ -185,13 +198,25 @@ npm test
 git log --oneline -5
 ```
 
-服务器检查：
+OpenClaw 服务器检查：
 
 ```bash
 systemctl is-active openclaw-feishu-bridge
 curl -sS http://127.0.0.1:8788/health
 systemctl status openclaw-feishu-bridge --no-pager -l
 journalctl -u openclaw-feishu-bridge -n 100 --no-pager
+cd /opt/OpenclawHomework
+git status --short --branch
+git log --oneline -5
+```
+
+Hermes 服务器检查：
+
+```bash
+systemctl is-active hermes-feishu-bridge
+curl -sS http://127.0.0.1:8788/health
+systemctl status hermes-feishu-bridge --no-pager -l
+journalctl -u hermes-feishu-bridge -n 100 --no-pager
 cd /opt/OpenclawHomework
 git status --short --branch
 git log --oneline -5
@@ -230,17 +255,25 @@ curl -sS -X POST https://hermes.evanshine.me/webhook/feishu \
 
 ## 7. 常用运维命令
 
-服务状态：
+OpenClaw 服务状态：
 
 ```bash
 systemctl status openclaw-feishu-bridge --no-pager -l
 systemctl is-active openclaw-feishu-bridge
 ```
 
+Hermes 服务状态：
+
+```bash
+systemctl status hermes-feishu-bridge --no-pager -l
+systemctl is-active hermes-feishu-bridge
+```
+
 重启服务：
 
 ```bash
 systemctl restart openclaw-feishu-bridge
+systemctl restart hermes-feishu-bridge
 ```
 
 查看日志：
@@ -248,9 +281,11 @@ systemctl restart openclaw-feishu-bridge
 ```bash
 journalctl -u openclaw-feishu-bridge -n 100 --no-pager
 journalctl -u openclaw-feishu-bridge -f
+journalctl -u hermes-feishu-bridge -n 100 --no-pager
+journalctl -u hermes-feishu-bridge -f
 ```
 
-检查 watchdog：
+检查 OpenClaw 旧服务器 watchdog：
 
 ```bash
 systemctl list-timers openclaw-hermes-watchdog.timer --no-pager
@@ -270,7 +305,10 @@ systemctl reload nginx
 查看 Nginx 配置：
 
 ```bash
+# OpenClaw 服务器
 cat /etc/nginx/sites-available/openclaw-feishu-bridge
+
+# Hermes 服务器
 cat /etc/nginx/sites-available/hermes-feishu-bridge
 ```
 
@@ -290,7 +328,7 @@ git commit -m "说明本次修改"
 git push origin main
 ```
 
-服务器：
+OpenClaw 服务器：
 
 ```bash
 cd /opt/OpenclawHomework
@@ -298,6 +336,17 @@ git fetch origin main
 git merge --ff-only origin/main
 npm test
 systemctl restart openclaw-feishu-bridge
+curl -sS http://127.0.0.1:8788/health
+```
+
+Hermes 服务器：
+
+```bash
+cd /opt/OpenclawHomework
+git fetch origin main
+git merge --ff-only origin/main
+npm test
+systemctl restart hermes-feishu-bridge
 curl -sS http://127.0.0.1:8788/health
 ```
 
@@ -364,11 +413,13 @@ https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml
 
 - `FEISHU_DEDUP_ENABLED=true` 会忽略短时间重复投递的同一飞书事件。
 - `FEISHU_RUN_NOTIFICATION_DEDUP_TTL_MS=300000` 会避免同一聊天、同一分支、同一模式的报告 5 分钟内重复发送。
+- 飞书后台只保留 `接收消息 im.message.receive_v1`；不要订阅 `消息已读 im.message.message_read_v1`。
 
 如果仍重复，检查：
 
 ```bash
 journalctl -u openclaw-feishu-bridge -n 200 --no-pager | grep -Ei 'duplicate|notification|workflow|Feishu'
+journalctl -u hermes-feishu-bridge -n 200 --no-pager | grep -Ei 'duplicate|notification|workflow|Feishu'
 ```
 
 ### 11.2 Hermes 显示已绑定但仍说未授权
@@ -376,8 +427,8 @@ journalctl -u openclaw-feishu-bridge -n 200 --no-pager | grep -Ei 'duplicate|not
 已修复过一次。检查：
 
 ```bash
-grep -E '^(FEISHU_ALLOWED_USER_IDS|HERMES_FEISHU_ALLOWED_USER_IDS|FEISHU_REQUIRE_BINDING)=' /etc/openclaw-feishu-bridge.env
-systemctl restart openclaw-feishu-bridge
+grep -E '^(FEISHU_ALLOWED_USER_IDS|HERMES_FEISHU_ALLOWED_USER_IDS|FEISHU_REQUIRE_BINDING)=' /etc/hermes-feishu-bridge.env
+systemctl restart hermes-feishu-bridge
 ```
 
 不要把输出里的真实 ID 贴到公开文档。
@@ -393,13 +444,14 @@ Hermes：https://hermes.evanshine.me/webhook/feishu
 
 ### 11.4 普通聊天报 Missing Feishu receive id
 
-这通常发生在飞书事件里没有 `chat_id` 或 `sender_id`。不一定影响自动化触发。排查：
+这通常发生在飞书推送了非消息事件，或者事件里没有 `chat_id` / `sender_id`。当前代码已经忽略 `im.message.message_read_v1`，飞书后台也建议删除“消息已读”事件。排查：
 
 ```bash
 journalctl -u openclaw-feishu-bridge -n 200 --no-pager | grep 'Missing Feishu receive id'
+journalctl -u hermes-feishu-bridge -n 200 --no-pager | grep 'Missing Feishu receive id'
 ```
 
-后续可在代码里补一条更友好的日志，打印事件结构摘要但不要打印秘密。
+如果仍出现，先确认飞书后台只订阅 `接收消息 im.message.receive_v1`。
 
 ### 11.5 OpenClaw session file locked
 
@@ -470,16 +522,14 @@ Hermes 只能调用同样的白名单维护脚本
 
 ## 13. 未来双服务器方案
 
-当前是一台服务器同时跑 OpenClaw 和 Hermes。作业演示足够。
-
-长期更稳的方案：
+当前已经是双服务器方案：
 
 ```text
-服务器 A：
+服务器 A：38.76.178.91
 openclaw.evanshine.me
 OpenClaw 主服务
 
-服务器 B：
+服务器 B：38.76.188.94
 hermes.evanshine.me
 Hermes 主服务
 ```
