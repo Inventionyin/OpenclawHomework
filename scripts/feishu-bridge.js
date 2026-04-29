@@ -1,5 +1,6 @@
 const http = require('node:http');
 const { execFile } = require('node:child_process');
+const { createHash } = require('node:crypto');
 const { existsSync, readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 
@@ -10,6 +11,7 @@ const {
 } = require('./trigger-ui-tests');
 
 const VALID_RUN_MODES = new Set(['contracts', 'smoke', 'all']);
+const seenFeishuEventKeys = new Map();
 
 function parseJsonContent(content) {
   if (typeof content !== 'string') {
@@ -222,6 +224,65 @@ function extractSenderId(payload) {
 
 function extractFeishuChatId(payload) {
   return payload?.event?.message?.chat_id || payload?.message?.chat_id || payload?.chat_id || '';
+}
+
+function buildStableHash(value) {
+  return createHash('sha256').update(String(value)).digest('hex').slice(0, 24);
+}
+
+function getFeishuDedupKeys(payload) {
+  const keys = [];
+  const eventId = payload?.header?.event_id || payload?.event_id || payload?.uuid || '';
+  const message = payload?.event?.message || payload?.message || {};
+  const messageId = message.message_id || message.open_message_id || message.messageId || '';
+  const senderId = extractSenderId(payload);
+  const chatId = extractFeishuChatId(payload);
+  const text = extractFeishuText(payload);
+
+  if (eventId) {
+    keys.push(`event:${eventId}`);
+  }
+
+  if (messageId) {
+    keys.push(`message:${messageId}`);
+  }
+
+  if (text) {
+    keys.push(`text:${buildStableHash([senderId, chatId, text].join('|'))}`);
+  }
+
+  return keys;
+}
+
+function pruneFeishuDedupCache(cache, now) {
+  for (const [key, expiresAt] of cache.entries()) {
+    if (expiresAt <= now) {
+      cache.delete(key);
+    }
+  }
+}
+
+function isDuplicateFeishuEvent(payload, env = process.env, cache = seenFeishuEventKeys) {
+  if (String(env.FEISHU_DEDUP_ENABLED ?? 'true').toLowerCase() === 'false') {
+    return false;
+  }
+
+  const keys = getFeishuDedupKeys(payload);
+  if (keys.length === 0) {
+    return false;
+  }
+
+  const now = Date.now();
+  const ttlMs = Number(env.FEISHU_DEDUP_TTL_MS || 300000);
+  pruneFeishuDedupCache(cache, now);
+
+  if (keys.some((key) => cache.has(key))) {
+    return true;
+  }
+
+  const expiresAt = now + ttlMs;
+  keys.forEach((key) => cache.set(key, expiresAt));
+  return false;
 }
 
 function parseSmallTalkMessage(text) {
@@ -735,6 +796,7 @@ function runWebhookInBackground(payload, env, options = {}) {
 }
 
 function createServer(env = process.env, options = {}) {
+  const dedupCache = options.dedupCache || new Map();
   return http.createServer(async (request, response) => {
     if (request.method === 'GET' && request.url === '/health') {
       sendJson(response, 200, { ok: true });
@@ -752,6 +814,16 @@ function createServer(env = process.env, options = {}) {
       if (payload?.challenge) {
         const result = await handleFeishuWebhook(payload, env, options.dispatch || dispatchWorkflow, options.parser, options.scheduler);
         sendJson(response, result.statusCode, result.body);
+        return;
+      }
+
+      if (isDuplicateFeishuEvent(payload, env, dedupCache)) {
+        console.log('Ignored duplicate Feishu webhook event.');
+        sendJson(response, 202, {
+          ok: true,
+          duplicate: true,
+          message: '重复飞书事件已忽略',
+        });
         return;
       }
 
@@ -801,7 +873,9 @@ module.exports = {
   buildFeishuTextMessage,
   createServer,
   extractFeishuText,
+  getFeishuDedupKeys,
   handleFeishuWebhook,
+  isDuplicateFeishuEvent,
   notifyFeishuRunResult,
   parseOpenClawChatOutput,
   parseSmallTalkMessage,

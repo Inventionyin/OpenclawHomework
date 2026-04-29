@@ -6,7 +6,9 @@ const {
   buildFeishuTextMessage,
   createServer,
   extractFeishuText,
+  getFeishuDedupKeys,
   handleFeishuWebhook,
+  isDuplicateFeishuEvent,
   parseOpenClawCommandOutput,
   parseRunUiTestCommand,
   parseSmallTalkMessage,
@@ -101,6 +103,49 @@ test('buildFeishuTextMessage uses chat id before sender id', () => {
     msgType: 'text',
     content: JSON.stringify({ text: '测试完成' }),
   });
+});
+
+test('getFeishuDedupKeys includes message id and text fallback', () => {
+  const keys = getFeishuDedupKeys({
+    header: {
+      event_id: 'event-a',
+    },
+    event: {
+      sender: {
+        sender_id: {
+          open_id: 'user-a',
+        },
+      },
+      message: {
+        message_id: 'message-a',
+        chat_id: 'chat-a',
+        content: JSON.stringify({ text: '你好' }),
+      },
+    },
+  });
+
+  assert.deepEqual(keys.slice(0, 2), ['event:event-a', 'message:message-a']);
+  assert.match(keys[2], /^text:/);
+});
+
+test('isDuplicateFeishuEvent detects repeated message content', () => {
+  const cache = new Map();
+  const payload = {
+    event: {
+      sender: {
+        sender_id: {
+          open_id: 'user-a',
+        },
+      },
+      message: {
+        chat_id: 'chat-a',
+        content: JSON.stringify({ text: '帮我跑一下 main 分支的 UI 自动化冒烟测试' }),
+      },
+    },
+  };
+
+  assert.equal(isDuplicateFeishuEvent(payload, {}, cache), false);
+  assert.equal(isDuplicateFeishuEvent(payload, {}, cache), true);
 });
 
 test('buildRunArtifactsUrl creates GitHub artifacts shortcut', () => {
@@ -236,6 +281,68 @@ test('createServer acknowledges Feishu webhook before background dispatch comple
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(dispatchStarted, true);
     finishDispatch();
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer ignores duplicate Feishu webhook events', async () => {
+  let dispatchCount = 0;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+    },
+    {
+      dispatch: async () => {
+        dispatchCount += 1;
+        return {
+          actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+        };
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const payload = {
+      header: {
+        event_id: 'event-a',
+      },
+      event: {
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+        message: {
+          message_id: 'message-a',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '/run-ui-test main contracts' }),
+        },
+      },
+    };
+    const firstResponse = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    const secondResponse = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    assert.equal(firstResponse.status, 202);
+    assert.equal(secondResponse.status, 202);
+    assert.equal((await secondResponse.json()).duplicate, true);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(dispatchCount, 1);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
