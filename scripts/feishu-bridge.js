@@ -399,18 +399,20 @@ async function bindAllowedSender(payload, env = process.env, options = {}) {
     return '没有从飞书事件里拿到你的 sender id，暂时不能绑定。';
   }
 
+  const allowlistKey = env.FEISHU_ALLOWED_USER_IDS_ENV_KEY || 'FEISHU_ALLOWED_USER_IDS';
   const allowedSenderIds = getAllowedSenderIds(env);
   if (allowedSenderIds.length > 0 && !allowedSenderIds.includes(senderId)) {
     return '当前已经绑定了其他飞书用户，你没有权限覆盖触发人设置。';
   }
 
   if (options.allowlistBinder) {
-    await options.allowlistBinder(senderId, env);
+    await options.allowlistBinder(senderId, env, allowlistKey);
   } else if (env.FEISHU_ENV_FILE) {
-    upsertEnvFileValue(env.FEISHU_ENV_FILE, 'FEISHU_ALLOWED_USER_IDS', senderId);
+    upsertEnvFileValue(env.FEISHU_ENV_FILE, allowlistKey, senderId);
   }
 
   env.FEISHU_ALLOWED_USER_IDS = senderId;
+  env[allowlistKey] = senderId;
   return `已绑定当前飞书用户，后续只有你可以触发 UI 自动化测试。\nopen_id：${senderId}`;
 }
 
@@ -875,6 +877,9 @@ function buildRouteEnv(mode, env = process.env) {
     routeEnv.FEISHU_NOTIFY_RECEIVE_ID_TYPE = env.HERMES_FEISHU_NOTIFY_RECEIVE_ID_TYPE;
   }
   routeEnv.FEISHU_ASSISTANT_NAME = env.HERMES_FEISHU_ASSISTANT_NAME || 'Hermes';
+  routeEnv.FEISHU_ALLOWED_USER_IDS = env.HERMES_FEISHU_ALLOWED_USER_IDS || '';
+  routeEnv.FEISHU_ALLOWED_USER_IDS_ENV_KEY = 'HERMES_FEISHU_ALLOWED_USER_IDS';
+  routeEnv.FEISHU_REQUIRE_BINDING = env.HERMES_FEISHU_REQUIRE_BINDING || env.FEISHU_REQUIRE_BINDING;
   return routeEnv;
 }
 

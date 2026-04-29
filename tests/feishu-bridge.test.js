@@ -128,6 +128,27 @@ test('buildRouteEnv maps Hermes route to Hermes Feishu credentials', () => {
   assert.equal(routeEnv.FEISHU_APP_SECRET, 'hermes-secret');
 });
 
+test('buildRouteEnv maps Hermes route to Hermes allowlist', () => {
+  const routeEnv = buildRouteEnv('hermes', {
+    FEISHU_ALLOWED_USER_IDS: 'openclaw-user',
+    FEISHU_REQUIRE_BINDING: 'true',
+    HERMES_FEISHU_ALLOWED_USER_IDS: 'hermes-user',
+  });
+
+  assert.equal(routeEnv.FEISHU_ALLOWED_USER_IDS, 'hermes-user');
+  assert.equal(routeEnv.FEISHU_ALLOWED_USER_IDS_ENV_KEY, 'HERMES_FEISHU_ALLOWED_USER_IDS');
+});
+
+test('buildRouteEnv does not reuse OpenClaw allowlist for Hermes route', () => {
+  const routeEnv = buildRouteEnv('hermes', {
+    FEISHU_ALLOWED_USER_IDS: 'openclaw-user',
+    FEISHU_REQUIRE_BINDING: 'true',
+  });
+
+  assert.equal(routeEnv.FEISHU_ALLOWED_USER_IDS, '');
+  assert.equal(routeEnv.FEISHU_REQUIRE_BINDING, 'true');
+});
+
 test('getFeishuDedupKeys includes message id and text fallback', () => {
   const keys = getFeishuDedupKeys({
     header: {
@@ -984,6 +1005,69 @@ test('createServer does not let a second sender overwrite binding', async () => 
     assert.equal(binderCalled, false);
     assert.equal(env.FEISHU_ALLOWED_USER_IDS, 'user-a');
     assert.match(JSON.parse(reply.content).text, /没有权限覆盖/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer binds Hermes sender to separate Hermes allowlist', async () => {
+  let reply;
+  let boundKey;
+  const env = {
+    GITHUB_TOKEN: 'ghp_example',
+    FEISHU_WEBHOOK_ASYNC: 'true',
+    FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+    FEISHU_APP_ID: 'cli_openclaw',
+    FEISHU_APP_SECRET: 'secret_openclaw',
+    FEISHU_ALLOWED_USER_IDS: 'openclaw-user',
+    HERMES_FEISHU_APP_ID: 'cli_hermes',
+    HERMES_FEISHU_APP_SECRET: 'secret_hermes',
+  };
+  const server = createServer(
+    env,
+    {
+      receiptSender: async (message) => {
+        reply = message;
+      },
+      allowlistBinder: async (senderId, routeEnv, allowlistKey) => {
+        boundKey = allowlistKey;
+        env[allowlistKey] = senderId;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu/hermes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        header: {
+          app_id: 'cli_hermes',
+        },
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'hermes-user',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '绑定我' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 202);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(boundKey, 'HERMES_FEISHU_ALLOWED_USER_IDS');
+    assert.equal(env.HERMES_FEISHU_ALLOWED_USER_IDS, 'hermes-user');
+    assert.equal(env.FEISHU_ALLOWED_USER_IDS, 'openclaw-user');
+    assert.match(JSON.parse(reply.content).text, /已绑定/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
