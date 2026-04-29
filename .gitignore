@@ -1,0 +1,9 @@
+_external/
+node_modules/
+coverage/
+playwright-report/
+test-results/
+allure-results/
+allure-report/
+.env
+

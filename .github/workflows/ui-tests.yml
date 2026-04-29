@@ -1,0 +1,119 @@
+name: UI Automation Dispatch
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_mode:
+        description: "测试模式"
+        required: true
+        default: "contracts"
+        type: choice
+        options:
+          - contracts
+          - smoke
+          - all
+      target_repository:
+        description: "UI 自动化测试仓库"
+        required: true
+        default: "Inventionyin/UItest"
+      target_ref:
+        description: "测试仓库分支或标签"
+        required: true
+        default: "main"
+      base_url:
+        description: "被测电商平台地址"
+        required: true
+        default: "http://127.0.0.1:5173"
+
+jobs:
+  ui-tests:
+    name: Run UI Automation
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout UI automation repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.target_repository }}
+          ref: ${{ inputs.target_ref }}
+          path: ui-tests
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ui-tests/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ui-tests
+
+      - name: Typecheck UI automation project
+        run: npm run typecheck
+        working-directory: ui-tests
+
+      - name: List Playwright tests
+        run: npx playwright test --list
+        working-directory: ui-tests
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          HEADLESS: "true"
+
+      - name: Run selected UI tests
+        shell: bash
+        working-directory: ui-tests
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          HEADLESS: "true"
+        run: |
+          set -euo pipefail
+          case "${{ inputs.run_mode }}" in
+            contracts)
+              npm run test:allure -- tests/contracts
+              ;;
+            smoke)
+              npm run test:allure -- tests/smoke
+              ;;
+            all)
+              npm run test:allure
+              ;;
+            *)
+              echo "Unsupported run_mode: ${{ inputs.run_mode }}"
+              exit 1
+              ;;
+          esac
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: ui-tests/playwright-report/
+          if-no-files-found: ignore
+
+      - name: Upload Allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results
+          path: ui-tests/allure-results/
+          if-no-files-found: ignore
+
+      - name: Upload Allure HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: ui-tests/allure-report/
+          if-no-files-found: ignore
+
+      - name: Upload summary report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: summary-report
+          path: ui-tests/output/reports/
+          if-no-files-found: ignore
+
