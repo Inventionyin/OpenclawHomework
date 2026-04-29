@@ -255,6 +255,10 @@ function getAllowedSenderIds(env = process.env) {
     .filter(Boolean);
 }
 
+function isBindingRequired(env = process.env) {
+  return String(env.FEISHU_REQUIRE_BINDING ?? '').toLowerCase() === 'true';
+}
+
 function looksLikeAutomationRequest(text) {
   return Boolean(parseRunUiTestCommand(text))
     || /(UI|ui|自动化|测试|冒烟|全量|contracts|smoke|all|GitHub Actions|workflow|跑一下|运行)/.test(String(text ?? ''));
@@ -533,10 +537,18 @@ function scheduleFeishuResultNotification(job, env = process.env) {
 function isAuthorized(payload, env) {
   const allowlist = getAllowedSenderIds(env);
   if (allowlist.length === 0) {
-    return true;
+    return !isBindingRequired(env);
   }
 
   return allowlist.includes(extractSenderId(payload));
+}
+
+function getUnauthorizedMessage(env) {
+  if (getAllowedSenderIds(env).length === 0 && isBindingRequired(env)) {
+    return '还没有绑定可触发用户。请先在飞书里发送“绑定我”，绑定后只有你本人能触发 UI 自动化测试。';
+  }
+
+  return '未授权用户不能触发 UI 自动化测试';
 }
 
 function buildDispatchConfig(command, env) {
@@ -561,7 +573,7 @@ async function handleFeishuWebhook(payload, env = process.env, dispatch = dispat
       statusCode: 403,
       body: {
         ok: false,
-        message: '未授权用户不能触发 UI 自动化测试',
+        message: getUnauthorizedMessage(env),
       },
     };
   }
@@ -685,6 +697,13 @@ function runWebhookInBackground(payload, env, options = {}) {
         .catch((error) => {
           console.error(`Feishu free chat failed: ${error.message}`);
         });
+      return;
+    }
+
+    if (!isAuthorized(payload, env)) {
+      Promise.resolve(receiptSender(buildFeishuTextMessage(payload, getUnauthorizedMessage(env), env))).catch((error) => {
+        console.error(`Feishu unauthorized reply failed: ${error.message}`);
+      });
       return;
     }
 

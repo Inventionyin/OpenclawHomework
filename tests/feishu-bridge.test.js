@@ -527,6 +527,63 @@ test('createServer does not let a second sender overwrite binding', async () => 
   }
 });
 
+test('createServer requires binding before automation when configured', async () => {
+  let reply;
+  let dispatchCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_REQUIRE_BINDING: 'true',
+    },
+    {
+      dispatch: async () => {
+        dispatchCalled = true;
+        return {
+          actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+        };
+      },
+      receiptSender: async (message) => {
+        reply = message;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '/run-ui-test main smoke' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 202);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(dispatchCalled, false);
+    assert.match(JSON.parse(reply.content).text, /绑定我/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('handleFeishuWebhook rejects unauthorized sender when allowlist is configured', async () => {
   const response = await handleFeishuWebhook(
     {
