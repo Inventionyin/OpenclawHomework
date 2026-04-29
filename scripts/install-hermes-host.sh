@@ -43,6 +43,31 @@ install_dependencies() {
   npm install
 }
 
+install_hermes_agent() {
+  local hermes_dir="${HERMES_AGENT_DIR:-/usr/local/lib/hermes-agent}"
+  local hermes_repo="${HERMES_AGENT_REPO:-https://github.com/NousResearch/hermes-agent.git}"
+  local hermes_ref="${HERMES_AGENT_REF:-58a6171bfb0ba2ca10b1b08854511736cd77a623}"
+
+  apt-get install -y build-essential python3 python3-venv
+
+  if [[ ! -d "${hermes_dir}/.git" ]]; then
+    rm -rf "${hermes_dir}"
+    git clone "${hermes_repo}" "${hermes_dir}"
+  fi
+
+  git -C "${hermes_dir}" fetch origin
+  git -C "${hermes_dir}" checkout "${hermes_ref}"
+  git -C "${hermes_dir}" submodule update --init --recursive || true
+
+  cd "${hermes_dir}"
+  printf 'n\nn\n' | timeout 900 bash setup-hermes.sh || true
+  if [[ ! -x "${hermes_dir}/venv/bin/hermes" ]]; then
+    echo "Hermes CLI was not installed successfully."
+    exit 1
+  fi
+  ln -sfn "${hermes_dir}/venv/bin/hermes" /usr/local/bin/hermes
+}
+
 write_env_template() {
   if [[ -f "${ENV_FILE}" ]]; then
     return
@@ -61,20 +86,22 @@ UI_TEST_BASE_URL=http://127.0.0.1:5173
 
 GITHUB_TOKEN=__FILL_ME__
 
-OPENCLAW_PARSE_ENABLED=false
-OPENCLAW_CHAT_ENABLED=false
+OPENCLAW_PARSE_ENABLED=true
+OPENCLAW_CHAT_ENABLED=true
 OPENCLAW_MODEL=xfyun/astron-code-latest
 
 HERMES_FALLBACK_ENABLED=false
-HERMES_BIN=hermes
+HERMES_BIN=/usr/local/bin/hermes
 HERMES_PROVIDER=custom
 HERMES_MODEL=astron-code-latest
+HERMES_PARSE_TIMEOUT_MS=90000
+HERMES_CHAT_TIMEOUT_MS=90000
 
 FEISHU_RESULT_NOTIFY_ENABLED=true
 FEISHU_WEBHOOK_ASYNC=true
 FEISHU_CARD_ENABLED=true
 FEISHU_REQUIRE_BINDING=true
-FEISHU_AUTOMATION_RECEIPT_ENABLED=false
+FEISHU_AUTOMATION_RECEIPT_ENABLED=true
 FEISHU_DEDUP_ENABLED=true
 FEISHU_DEDUP_TTL_MS=300000
 FEISHU_RUN_NOTIFICATION_DEDUP_TTL_MS=300000
@@ -191,6 +218,7 @@ install_base_packages
 install_nodejs
 clone_or_update_repo
 install_dependencies
+install_hermes_agent
 write_env_template
 write_systemd_service
 write_nginx_site
