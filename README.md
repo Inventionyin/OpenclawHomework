@@ -4,6 +4,12 @@
 
 Use Feishu + OpenClaw to trigger GitHub Actions remotely, run UI automation tests, and return the execution result link.
 
+## Learning Checklist
+
+See the Chinese step-by-step task list:
+
+- [老师任务学习清单](docs/老师任务学习清单.md)
+
 ## Minimum Demo Flow
 
 1. Send a command in Feishu.
@@ -51,4 +57,3 @@ Use Feishu + OpenClaw to trigger GitHub Actions remotely, run UI automation test
 │   └── trigger-ui-tests.js
 └── README.md
 ```
-
