@@ -690,7 +690,7 @@ function buildDispatchConfig(command, env) {
   return config;
 }
 
-async function handleFeishuWebhook(payload, env = process.env, dispatch = dispatchWorkflow) {
+async function handleFeishuWebhook(payload, env = process.env, dispatch = dispatchWorkflow, parserOverride, schedulerOverride, fallbackParserOverride, parserSourceOverride, fallbackParserSourceOverride) {
   if (payload?.challenge) {
     return {
       statusCode: 200,
@@ -716,18 +716,18 @@ async function handleFeishuWebhook(payload, env = process.env, dispatch = dispat
   try {
     command = parseRunUiTestCommand(text);
     if (!command && String(env.OPENCLAW_PARSE_ENABLED).toLowerCase() === 'true') {
-      const parser = arguments[3] || runOpenClawParser;
+      const parser = parserOverride || runOpenClawParser;
       try {
         command = await parser(text, env);
-        commandSource = command ? 'openclaw' : commandSource;
+        commandSource = command ? (parserSourceOverride || 'openclaw') : commandSource;
       } catch (parserError) {
         if (!isHermesFallbackEnabled(env)) {
           throw parserError;
         }
 
-        const hermesParser = arguments[5] || runHermesParser;
+        const hermesParser = fallbackParserOverride || runHermesParser;
         command = await hermesParser(text, env);
-        commandSource = command ? 'hermes' : commandSource;
+        commandSource = command ? (fallbackParserSourceOverride || 'hermes') : commandSource;
       }
     }
   } catch (error) {
@@ -760,7 +760,7 @@ async function handleFeishuWebhook(payload, env = process.env, dispatch = dispat
   );
 
   if (shouldNotifyFeishu(env)) {
-    const scheduler = arguments[4] || scheduleFeishuResultNotification;
+    const scheduler = schedulerOverride || scheduleFeishuResultNotification;
     await scheduler({
       actionsUrl: result.actionsUrl,
       config,
@@ -803,6 +803,39 @@ function sendJson(response, statusCode, body) {
     'Content-Type': 'application/json; charset=utf-8',
   });
   response.end(JSON.stringify(body));
+}
+
+function getFeishuRouteMode(url = '') {
+  const pathname = String(url).split('?')[0].replace(/\/+$/, '');
+  if (pathname === '/webhook/feishu') {
+    return 'openclaw';
+  }
+
+  if (pathname === '/webhook/feishu/openclaw') {
+    return 'openclaw';
+  }
+
+  if (pathname === '/webhook/feishu/hermes') {
+    return 'hermes';
+  }
+
+  return null;
+}
+
+function buildRouteOptions(mode, options = {}) {
+  if (mode !== 'hermes') {
+    return options;
+  }
+
+  return {
+    ...options,
+    chat: options.chat || runHermesChat,
+    hermesChat: options.hermesChat || runOpenClawChat,
+    parser: options.parser || runHermesParser,
+    hermesParser: options.hermesParser || runOpenClawParser,
+    parserSource: options.parserSource || 'hermes',
+    fallbackParserSource: options.fallbackParserSource || 'openclaw',
+  };
 }
 
 function isAsyncWebhookEnabled(env) {
@@ -877,6 +910,8 @@ function runWebhookInBackground(payload, env, options = {}) {
       options.parser,
       options.scheduler,
       options.hermesParser,
+      options.parserSource,
+      options.fallbackParserSource,
     ).catch((error) => {
       console.error(`Feishu webhook background job failed: ${error.message}`);
     });
@@ -891,16 +926,28 @@ function createServer(env = process.env, options = {}) {
       return;
     }
 
-    if (request.method !== 'POST' || request.url !== '/webhook/feishu') {
+    const routeMode = getFeishuRouteMode(request.url);
+    if (request.method !== 'POST' || !routeMode) {
       sendJson(response, 404, { ok: false, message: 'Not found' });
       return;
     }
+
+    const routeOptions = buildRouteOptions(routeMode, options);
 
     try {
       const rawBody = await readRequestBody(request);
       const payload = rawBody ? JSON.parse(rawBody) : {};
       if (payload?.challenge) {
-        const result = await handleFeishuWebhook(payload, env, options.dispatch || dispatchWorkflow, options.parser, options.scheduler, options.hermesParser);
+        const result = await handleFeishuWebhook(
+          payload,
+          env,
+          routeOptions.dispatch || dispatchWorkflow,
+          routeOptions.parser,
+          routeOptions.scheduler,
+          routeOptions.hermesParser,
+          routeOptions.parserSource,
+          routeOptions.fallbackParserSource,
+        );
         sendJson(response, result.statusCode, result.body);
         return;
       }
@@ -916,7 +963,7 @@ function createServer(env = process.env, options = {}) {
       }
 
       if (isAsyncWebhookEnabled(env)) {
-        runWebhookInBackground(payload, env, options);
+        runWebhookInBackground(payload, env, routeOptions);
         sendJson(response, 202, {
           ok: true,
           message: '飞书指令已收到，正在后台触发 UI 自动化测试',
@@ -927,10 +974,12 @@ function createServer(env = process.env, options = {}) {
       const result = await handleFeishuWebhook(
         payload,
         env,
-        options.dispatch || dispatchWorkflow,
-        options.parser,
-        options.scheduler,
-        options.hermesParser,
+        routeOptions.dispatch || dispatchWorkflow,
+        routeOptions.parser,
+        routeOptions.scheduler,
+        routeOptions.hermesParser,
+        routeOptions.parserSource,
+        routeOptions.fallbackParserSource,
       );
       sendJson(response, result.statusCode, result.body);
     } catch (error) {
@@ -963,6 +1012,7 @@ module.exports = {
   createServer,
   extractFeishuText,
   getFeishuDedupKeys,
+  getFeishuRouteMode,
   handleFeishuWebhook,
   isDuplicateFeishuEvent,
   notifyFeishuRunResult,

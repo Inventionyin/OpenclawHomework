@@ -7,6 +7,7 @@ const {
   createServer,
   extractFeishuText,
   getFeishuDedupKeys,
+  getFeishuRouteMode,
   handleFeishuWebhook,
   isDuplicateFeishuEvent,
   parseOpenClawCommandOutput,
@@ -103,6 +104,14 @@ test('buildFeishuTextMessage uses chat id before sender id', () => {
     msgType: 'text',
     content: JSON.stringify({ text: '测试完成' }),
   });
+});
+
+test('getFeishuRouteMode supports default and named bot routes', () => {
+  assert.equal(getFeishuRouteMode('/webhook/feishu'), 'openclaw');
+  assert.equal(getFeishuRouteMode('/webhook/feishu/openclaw'), 'openclaw');
+  assert.equal(getFeishuRouteMode('/webhook/feishu/hermes'), 'hermes');
+  assert.equal(getFeishuRouteMode('/webhook/feishu/hermes?foo=bar'), 'hermes');
+  assert.equal(getFeishuRouteMode('/webhook/unknown'), null);
 });
 
 test('getFeishuDedupKeys includes message id and text fallback', () => {
@@ -226,6 +235,48 @@ test('handleFeishuWebhook responds to Feishu challenge', async () => {
 
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.body, { challenge: 'abc123' });
+});
+
+test('createServer responds to Feishu challenge on Hermes route', async () => {
+  const server = createServer();
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu/hermes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ challenge: 'hermes-challenge' }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { challenge: 'hermes-challenge' });
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer accepts OpenClaw route for Feishu challenge', async () => {
+  const server = createServer();
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu/openclaw`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ challenge: 'openclaw-challenge' }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { challenge: 'openclaw-challenge' });
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 test('createServer acknowledges Feishu webhook before background dispatch completes', async () => {
@@ -629,6 +680,60 @@ test('createServer falls back to Hermes chat when OpenClaw chat fails', async ()
     assert.equal(response.status, 202);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.match(JSON.parse(reply.content).text, /Hermes 已接管/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer uses Hermes as primary chat on Hermes route', async () => {
+  let reply;
+  let openClawChatCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      OPENCLAW_CHAT_ENABLED: 'true',
+      HERMES_FALLBACK_ENABLED: 'true',
+    },
+    {
+      receiptSender: async (message) => {
+        reply = message;
+      },
+      hermesChat: async () => 'OpenClaw fallback should not run here',
+      chat: async () => {
+        openClawChatCalled = true;
+        return 'Hermes 主机器人回复。';
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu/hermes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '这个项目还差什么' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 202);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(openClawChatCalled, true);
+    assert.match(JSON.parse(reply.content).text, /Hermes 主机器人/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
