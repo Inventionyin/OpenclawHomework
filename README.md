@@ -12,6 +12,7 @@ See the Chinese step-by-step task list:
 - [流程图实现拆解](docs/流程图实现拆解.md)
 - [已有项目复用方案](docs/已有项目复用方案.md)
 - [飞书桥梁服务使用说明](docs/飞书桥梁服务使用说明.md)
+- [云服务器接手说明](docs/云服务器接手说明.md)
 
 ## Minimum Demo Flow
 
