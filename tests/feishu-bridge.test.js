@@ -583,6 +583,57 @@ test('createServer answers free chat without dispatching workflow', async () => 
   }
 });
 
+test('createServer falls back to Hermes chat when OpenClaw chat fails', async () => {
+  let reply;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      OPENCLAW_CHAT_ENABLED: 'true',
+      HERMES_FALLBACK_ENABLED: 'true',
+    },
+    {
+      receiptSender: async (message) => {
+        reply = message;
+      },
+      chat: async () => {
+        throw new Error('OpenClaw chat unavailable');
+      },
+      hermesChat: async () => 'Hermes 已接管普通聊天。',
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '这个项目还差什么' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 202);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.match(JSON.parse(reply.content).text, /Hermes 已接管/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('createServer binds current sender before enforcing allowlist', async () => {
   let reply;
   const env = {
@@ -852,6 +903,50 @@ test('handleFeishuWebhook can use OpenClaw parser for natural language command',
   assert.equal(response.body.commandSource, 'openclaw');
   assert.equal(parserInput, '帮我跑一下 main 分支的 UI 自动化冒烟测试');
   assert.equal(dispatchedConfig.inputs.target_ref, 'main');
+  assert.equal(dispatchedConfig.inputs.run_mode, 'smoke');
+});
+
+test('handleFeishuWebhook falls back to Hermes parser when OpenClaw parser fails', async () => {
+  let dispatchedConfig;
+
+  const response = await handleFeishuWebhook(
+    {
+      event: {
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+        message: {
+          content: JSON.stringify({ text: '帮我跑一下 main 分支的 UI 自动化冒烟测试' }),
+        },
+      },
+    },
+    {
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+      GITHUB_TOKEN: 'ghp_example',
+      OPENCLAW_PARSE_ENABLED: 'true',
+      HERMES_FALLBACK_ENABLED: 'true',
+    },
+    async (config) => {
+      dispatchedConfig = config;
+      return {
+        actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+      };
+    },
+    async () => {
+      throw new Error('OpenClaw unavailable');
+    },
+    undefined,
+    async () => ({
+      targetRef: 'main',
+      runMode: 'smoke',
+    }),
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.commandSource, 'hermes');
   assert.equal(dispatchedConfig.inputs.run_mode, 'smoke');
 });
 

@@ -218,3 +218,35 @@ OPENCLAW_CHAT_ENABLED=true
 ```
 
 这样用户发“你好”“帮助”以外的普通问题时，机器人会像项目助手一样回复；只有看起来像 UI 自动化请求的消息才会进入测试触发流程。
+
+## 7. Hermes 备用链路
+
+服务器同时安装了 Hermes Agent：
+
+```bash
+hermes --version
+hermes status
+```
+
+Hermes 已配置到同一个讯飞 CodingPlan OpenAI-compatible 接口：
+
+```text
+provider: custom
+base_url: https://maas-coding-api.cn-huabei-1.xf-yun.com/v2
+model: astron-code-latest
+```
+
+飞书桥梁服务可以打开 Hermes fallback：
+
+```text
+HERMES_FALLBACK_ENABLED=true
+HERMES_BIN=hermes
+HERMES_PROVIDER=custom
+HERMES_MODEL=astron-code-latest
+```
+
+作用：
+
+- OpenClaw 自然语言解析失败时，自动改用 Hermes 解析测试指令。
+- OpenClaw 普通聊天失败时，自动改用 Hermes 回复。
+- GitHub Actions 触发、飞书权限控制和结果卡片仍由 Node 桥梁服务负责，避免两个 agent 同时直接改服务器造成混乱。

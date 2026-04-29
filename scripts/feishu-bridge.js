@@ -173,6 +173,16 @@ function buildOpenClawCommand(env, prompt) {
   return { command, args };
 }
 
+function buildHermesCommand(env, prompt) {
+  const hermesBin = env.HERMES_BIN || 'hermes';
+  const model = env.HERMES_MODEL || 'astron-code-latest';
+  const provider = env.HERMES_PROVIDER || 'custom';
+  return {
+    command: hermesBin,
+    args: ['--provider', provider, '--model', model, '-z', prompt],
+  };
+}
+
 function parseOpenClawChatOutput(output) {
   return String(output ?? '')
     .split(/\r?\n/)
@@ -180,6 +190,34 @@ function parseOpenClawChatOutput(output) {
     .filter((line) => line && !/^model\.run\b/i.test(line) && !/^provider:/i.test(line) && !/^model:/i.test(line) && !/^outputs:/i.test(line))
     .join('\n')
     .trim();
+}
+
+function runHermesParser(text, env = process.env, execFileImpl = execFile) {
+  const prompt = buildOpenClawPrompt(text);
+  const { command, args } = buildHermesCommand(env, prompt);
+
+  return new Promise((resolve, reject) => {
+    execFileImpl(
+      command,
+      args,
+      {
+        timeout: Number(env.HERMES_PARSE_TIMEOUT_MS || 300000),
+        windowsHide: true,
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(`Hermes parser failed: ${error.message}\n${stderr || ''}`.trim()));
+          return;
+        }
+
+        try {
+          resolve(parseOpenClawCommandOutput(stdout));
+        } catch (parseError) {
+          reject(parseError);
+        }
+      },
+    );
+  });
 }
 
 function buildOpenClawChatPrompt(text) {
@@ -190,6 +228,31 @@ function buildOpenClawChatPrompt(text) {
     '如果用户想跑测试，提醒他可以说：帮我跑一下 main 分支的 UI 自动化冒烟测试。',
     `用户消息：${text}`,
   ].join('\n');
+}
+
+function runHermesChat(text, env = process.env, execFileImpl = execFile) {
+  const prompt = buildOpenClawChatPrompt(text);
+  const { command, args } = buildHermesCommand(env, prompt);
+
+  return new Promise((resolve, reject) => {
+    execFileImpl(
+      command,
+      args,
+      {
+        timeout: Number(env.HERMES_CHAT_TIMEOUT_MS || 300000),
+        windowsHide: true,
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(`Hermes chat failed: ${error.message}\n${stderr || ''}`.trim()));
+          return;
+        }
+
+        const answer = parseOpenClawChatOutput(stdout);
+        resolve(answer || '我在，但刚才没有生成有效回复。你可以发“帮助”查看可用指令。');
+      },
+    );
+  });
 }
 
 function runOpenClawChat(text, env = process.env, execFileImpl = execFile) {
@@ -548,6 +611,10 @@ function shouldSendAutomationReceipt(env) {
   return String(env.FEISHU_AUTOMATION_RECEIPT_ENABLED ?? 'true').toLowerCase() !== 'false';
 }
 
+function isHermesFallbackEnabled(env) {
+  return String(env.HERMES_FALLBACK_ENABLED ?? '').toLowerCase() === 'true';
+}
+
 function formatRunResultMessage(job, run) {
   const conclusion = run.conclusion || 'unknown';
   const statusText = conclusion === 'success' ? '成功' : '失败';
@@ -650,8 +717,18 @@ async function handleFeishuWebhook(payload, env = process.env, dispatch = dispat
     command = parseRunUiTestCommand(text);
     if (!command && String(env.OPENCLAW_PARSE_ENABLED).toLowerCase() === 'true') {
       const parser = arguments[3] || runOpenClawParser;
-      command = await parser(text, env);
-      commandSource = command ? 'openclaw' : commandSource;
+      try {
+        command = await parser(text, env);
+        commandSource = command ? 'openclaw' : commandSource;
+      } catch (parserError) {
+        if (!isHermesFallbackEnabled(env)) {
+          throw parserError;
+        }
+
+        const hermesParser = arguments[5] || runHermesParser;
+        command = await hermesParser(text, env);
+        commandSource = command ? 'hermes' : commandSource;
+      }
     }
   } catch (error) {
     return {
@@ -760,7 +837,17 @@ function runWebhookInBackground(payload, env, options = {}) {
       Promise.resolve(chat(text, env))
         .then((replyText) => receiptSender(buildFeishuTextMessage(payload, replyText, env)))
         .catch((error) => {
-          console.error(`Feishu free chat failed: ${error.message}`);
+          if (!isHermesFallbackEnabled(env)) {
+            console.error(`Feishu free chat failed: ${error.message}`);
+            return;
+          }
+
+          const hermesChat = options.hermesChat || runHermesChat;
+          Promise.resolve(hermesChat(text, env))
+            .then((replyText) => receiptSender(buildFeishuTextMessage(payload, replyText, env)))
+            .catch((fallbackError) => {
+              console.error(`Feishu free chat fallback failed: ${fallbackError.message}`);
+            });
         });
       return;
     }
@@ -789,6 +876,7 @@ function runWebhookInBackground(payload, env, options = {}) {
       options.dispatch || dispatchWorkflow,
       options.parser,
       options.scheduler,
+      options.hermesParser,
     ).catch((error) => {
       console.error(`Feishu webhook background job failed: ${error.message}`);
     });
@@ -812,7 +900,7 @@ function createServer(env = process.env, options = {}) {
       const rawBody = await readRequestBody(request);
       const payload = rawBody ? JSON.parse(rawBody) : {};
       if (payload?.challenge) {
-        const result = await handleFeishuWebhook(payload, env, options.dispatch || dispatchWorkflow, options.parser, options.scheduler);
+        const result = await handleFeishuWebhook(payload, env, options.dispatch || dispatchWorkflow, options.parser, options.scheduler, options.hermesParser);
         sendJson(response, result.statusCode, result.body);
         return;
       }
@@ -842,6 +930,7 @@ function createServer(env = process.env, options = {}) {
         options.dispatch || dispatchWorkflow,
         options.parser,
         options.scheduler,
+        options.hermesParser,
       );
       sendJson(response, result.statusCode, result.body);
     } catch (error) {
@@ -881,6 +970,8 @@ module.exports = {
   parseSmallTalkMessage,
   parseRunUiTestCommand,
   parseOpenClawCommandOutput,
+  runHermesChat,
+  runHermesParser,
   runOpenClawChat,
   runWebhookInBackground,
   runOpenClawParser,
