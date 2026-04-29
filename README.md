@@ -18,8 +18,8 @@ See the Chinese step-by-step task list:
 ## Minimum Demo Flow
 
 1. Send a command in Feishu.
-2. OpenClaw receives and parses the command.
-3. OpenClaw calls the GitHub API.
+2. The webhook bridge parses the command, optionally using OpenClaw for natural language.
+3. The bridge calls the GitHub API.
 4. GitHub Actions runs UI automation tests.
 5. Feishu receives the workflow result link.
 
@@ -48,7 +48,13 @@ See the Chinese step-by-step task list:
 ## Recommended Command Format
 
 ```text
-@龙虾 触发UI测试 仓库=my-app 环境=staging
+@OpenClaw UI 自动化助手 /run-ui-test main contracts
+```
+
+When OpenClaw parsing is enabled, natural language can also be used:
+
+```text
+帮我跑一下 main 分支的 UI 自动化冒烟测试
 ```
 
 ## Recommended Repository Structure
@@ -59,6 +65,7 @@ See the Chinese step-by-step task list:
 │   └── workflows/
 │       └── ui-tests.yml
 ├── scripts/
+│   ├── feishu-bridge.js
 │   └── trigger-ui-tests.js
 └── README.md
 ```

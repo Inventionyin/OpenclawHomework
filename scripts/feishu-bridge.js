@@ -1,4 +1,7 @@
 const http = require('node:http');
+const { execFile } = require('node:child_process');
+const { existsSync } = require('node:fs');
+const { join } = require('node:path');
 
 const {
   dispatchWorkflow,
@@ -43,13 +46,13 @@ function extractFeishuText(payload) {
 
 function parseRunUiTestCommand(text) {
   const parts = String(text ?? '').trim().split(/\s+/).filter(Boolean);
-  const command = parts[0];
-  if (command !== '/run-ui-test' && command !== 'run-ui-test') {
+  const commandIndex = parts.findIndex((part) => part === '/run-ui-test' || part === 'run-ui-test');
+  if (commandIndex === -1) {
     return null;
   }
 
-  const targetRef = parts[1] || 'main';
-  const runMode = parts[2] || 'contracts';
+  const targetRef = parts[commandIndex + 1] || 'main';
+  const runMode = parts[commandIndex + 2] || 'contracts';
   if (!VALID_RUN_MODES.has(runMode)) {
     throw new Error(`Unsupported run mode: ${runMode}. Use contracts, smoke, or all.`);
   }
@@ -58,6 +61,90 @@ function parseRunUiTestCommand(text) {
     targetRef,
     runMode,
   };
+}
+
+function normalizeOpenClawCommand(command) {
+  if (!command || typeof command !== 'object') {
+    return null;
+  }
+
+  if (command.intent && command.intent !== 'run-ui-test') {
+    return null;
+  }
+
+  const targetRef = String(command.targetRef || command.target_ref || command.ref || 'main').trim();
+  const runMode = String(command.runMode || command.run_mode || 'contracts').trim();
+  if (!VALID_RUN_MODES.has(runMode)) {
+    throw new Error(`Unsupported run mode from OpenClaw: ${runMode}`);
+  }
+
+  return {
+    targetRef: targetRef || 'main',
+    runMode,
+  };
+}
+
+function parseOpenClawCommandOutput(output) {
+  const text = String(output ?? '');
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    return null;
+  }
+
+  const parsed = JSON.parse(jsonMatch[0]);
+  return normalizeOpenClawCommand(parsed);
+}
+
+function buildOpenClawPrompt(text) {
+  return [
+    '你是飞书 UI 自动化指令解析器，只输出 JSON，不要解释。',
+    '目标：判断用户是否要触发 UI 自动化测试。',
+    '输出格式：{"intent":"run-ui-test","targetRef":"main","runMode":"contracts"}',
+    'runMode 只能是 contracts、smoke、all。',
+    '如果用户说冒烟测试，runMode 用 smoke；如果说全量测试，runMode 用 all；默认用 contracts。',
+    'targetRef 默认 main。',
+    `用户消息：${text}`,
+  ].join('\n');
+}
+
+function runOpenClawParser(text, env = process.env, execFileImpl = execFile) {
+  const openclawBin = env.OPENCLAW_BIN || 'openclaw';
+  const model = env.OPENCLAW_MODEL || 'xfyun/astron-code-latest';
+  const prompt = buildOpenClawPrompt(text);
+  const openclawArgs = ['infer', 'model', 'run', '--local', '--model', model, '--prompt', prompt];
+  let command = openclawBin;
+  let args = openclawArgs;
+
+  if (process.platform === 'win32' && !env.OPENCLAW_BIN) {
+    const openclawEntry = join(env.APPDATA || '', 'npm', 'node_modules', 'openclaw', 'openclaw.mjs');
+    if (existsSync(openclawEntry)) {
+      command = process.execPath;
+      args = [openclawEntry, ...openclawArgs];
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    execFileImpl(
+      command,
+      args,
+      {
+        timeout: Number(env.OPENCLAW_PARSE_TIMEOUT_MS || 300000),
+        windowsHide: true,
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(`OpenClaw parser failed: ${error.message}\n${stderr || ''}`.trim()));
+          return;
+        }
+
+        try {
+          resolve(parseOpenClawCommandOutput(stdout));
+        } catch (parseError) {
+          reject(parseError);
+        }
+      },
+    );
+  });
 }
 
 function extractSenderId(payload) {
@@ -107,8 +194,14 @@ async function handleFeishuWebhook(payload, env = process.env, dispatch = dispat
 
   const text = extractFeishuText(payload);
   let command;
+  let commandSource = 'direct';
   try {
     command = parseRunUiTestCommand(text);
+    if (!command && String(env.OPENCLAW_PARSE_ENABLED).toLowerCase() === 'true') {
+      const parser = arguments[3] || runOpenClawParser;
+      command = await parser(text, env);
+      commandSource = command ? 'openclaw' : commandSource;
+    }
   } catch (error) {
     return {
       statusCode: 400,
@@ -137,6 +230,7 @@ async function handleFeishuWebhook(payload, env = process.env, dispatch = dispat
       ok: true,
       message: `UI 自动化测试已触发：分支 ${command.targetRef}，模式 ${command.runMode}`,
       actionsUrl: result.actionsUrl,
+      commandSource,
       targetRepository: config.inputs.target_repository,
       targetRef: config.inputs.target_ref,
       runMode: config.inputs.run_mode,
@@ -207,5 +301,6 @@ module.exports = {
   extractFeishuText,
   handleFeishuWebhook,
   parseRunUiTestCommand,
+  parseOpenClawCommandOutput,
+  runOpenClawParser,
 };
-
