@@ -294,6 +294,40 @@ function extractFeishuChatId(payload) {
   return payload?.event?.message?.chat_id || payload?.message?.chat_id || payload?.chat_id || '';
 }
 
+function extractFeishuChatType(payload) {
+  return payload?.event?.message?.chat_type || payload?.message?.chat_type || payload?.chat_type || '';
+}
+
+function isFeishuGroupChat(payload) {
+  const chatType = extractFeishuChatType(payload);
+  return chatType && chatType !== 'p2p';
+}
+
+function hasFeishuMention(payload, text = extractFeishuText(payload)) {
+  const message = payload?.event?.message || payload?.message || {};
+  if (Array.isArray(message.mentions) && message.mentions.length > 0) {
+    return true;
+  }
+
+  return /^@\S+/.test(String(text ?? '').trim());
+}
+
+function shouldIgnorePassiveGroupMessage(payload, text, env = process.env) {
+  if (String(env.FEISHU_GROUP_PASSIVE_REPLY_ENABLED ?? 'false').toLowerCase() === 'true') {
+    return false;
+  }
+
+  if (!isFeishuGroupChat(payload) || hasFeishuMention(payload, text)) {
+    return false;
+  }
+
+  if (parseBindCommand(text) || parseRunUiTestCommand(text) || looksLikeAutomationRequest(text)) {
+    return false;
+  }
+
+  return true;
+}
+
 function buildStableHash(value) {
   return createHash('sha256').update(String(value)).digest('hex').slice(0, 24);
 }
@@ -926,6 +960,11 @@ function runWebhookInBackground(payload, env, options = {}) {
         .catch((error) => {
           console.error(`Feishu bind reply failed: ${error.message}`);
         });
+      return;
+    }
+
+    if (shouldIgnorePassiveGroupMessage(payload, text, env)) {
+      console.log('Ignored passive Feishu group message.');
       return;
     }
 
