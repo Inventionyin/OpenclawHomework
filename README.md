@@ -13,6 +13,7 @@ See the Chinese step-by-step task list:
 - [已有项目复用方案](docs/已有项目复用方案.md)
 - [飞书桥梁服务使用说明](docs/飞书桥梁服务使用说明.md)
 - [云服务器接手说明](docs/云服务器接手说明.md)
+- [OpenClaw 讯飞 CodingPlan 模型接入说明](docs/OpenClaw讯飞CodingPlan模型接入说明.md)
 
 ## Minimum Demo Flow
 
