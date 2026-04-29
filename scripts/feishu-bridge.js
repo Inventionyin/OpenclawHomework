@@ -1,6 +1,6 @@
 const http = require('node:http');
 const { execFile } = require('node:child_process');
-const { existsSync } = require('node:fs');
+const { existsSync, readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 
 const {
@@ -153,6 +153,68 @@ function runOpenClawParser(text, env = process.env, execFileImpl = execFile) {
   });
 }
 
+function buildOpenClawCommand(env, prompt) {
+  const openclawBin = env.OPENCLAW_BIN || 'openclaw';
+  const model = env.OPENCLAW_MODEL || 'xfyun/astron-code-latest';
+  const openclawArgs = ['infer', 'model', 'run', '--local', '--model', model, '--prompt', prompt];
+  let command = openclawBin;
+  let args = openclawArgs;
+
+  if (process.platform === 'win32' && !env.OPENCLAW_BIN) {
+    const openclawEntry = join(env.APPDATA || '', 'npm', 'node_modules', 'openclaw', 'openclaw.mjs');
+    if (existsSync(openclawEntry)) {
+      command = process.execPath;
+      args = [openclawEntry, ...openclawArgs];
+    }
+  }
+
+  return { command, args };
+}
+
+function parseOpenClawChatOutput(output) {
+  return String(output ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !/^model\.run\b/i.test(line) && !/^provider:/i.test(line) && !/^model:/i.test(line) && !/^outputs:/i.test(line))
+    .join('\n')
+    .trim();
+}
+
+function buildOpenClawChatPrompt(text) {
+  return [
+    '你是 OpenClaw UI 自动化助手，正在飞书里和用户对话。',
+    '回答要简洁、中文、像一个靠谱的项目助手。',
+    '你可以说明当前项目能触发 GitHub Actions 跑 UI 自动化、查看报告、回复帮助。',
+    '如果用户想跑测试，提醒他可以说：帮我跑一下 main 分支的 UI 自动化冒烟测试。',
+    `用户消息：${text}`,
+  ].join('\n');
+}
+
+function runOpenClawChat(text, env = process.env, execFileImpl = execFile) {
+  const prompt = buildOpenClawChatPrompt(text);
+  const { command, args } = buildOpenClawCommand(env, prompt);
+
+  return new Promise((resolve, reject) => {
+    execFileImpl(
+      command,
+      args,
+      {
+        timeout: Number(env.OPENCLAW_CHAT_TIMEOUT_MS || 300000),
+        windowsHide: true,
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(`OpenClaw chat failed: ${error.message}\n${stderr || ''}`.trim()));
+          return;
+        }
+
+        const answer = parseOpenClawChatOutput(stdout);
+        resolve(answer || '我在，但刚才没有生成有效回复。你可以发“帮助”查看可用指令。');
+      },
+    );
+  });
+}
+
 function extractSenderId(payload) {
   const senderId = payload?.event?.sender?.sender_id ?? {};
   return senderId.open_id || senderId.user_id || senderId.union_id || payload?.sender_id || '';
@@ -179,6 +241,62 @@ function parseSmallTalkMessage(text) {
   }
 
   return null;
+}
+
+function parseBindCommand(text) {
+  const normalized = String(text ?? '').trim().replace(/^@\S+\s*/, '');
+  return /^(绑定我|只允许我|限制为我|我的ID|我的id|whoami)$/i.test(normalized);
+}
+
+function getAllowedSenderIds(env = process.env) {
+  return String(env.FEISHU_ALLOWED_USER_IDS ?? '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function looksLikeAutomationRequest(text) {
+  return Boolean(parseRunUiTestCommand(text))
+    || /(UI|ui|自动化|测试|冒烟|全量|contracts|smoke|all|GitHub Actions|workflow|跑一下|运行)/.test(String(text ?? ''));
+}
+
+async function bindAllowedSender(payload, env = process.env, options = {}) {
+  const senderId = extractSenderId(payload);
+  if (!senderId) {
+    return '没有从飞书事件里拿到你的 sender id，暂时不能绑定。';
+  }
+
+  const allowedSenderIds = getAllowedSenderIds(env);
+  if (allowedSenderIds.length > 0 && !allowedSenderIds.includes(senderId)) {
+    return '当前已经绑定了其他飞书用户，你没有权限覆盖触发人设置。';
+  }
+
+  if (options.allowlistBinder) {
+    await options.allowlistBinder(senderId, env);
+  } else if (env.FEISHU_ENV_FILE) {
+    upsertEnvFileValue(env.FEISHU_ENV_FILE, 'FEISHU_ALLOWED_USER_IDS', senderId);
+  }
+
+  env.FEISHU_ALLOWED_USER_IDS = senderId;
+  return `已绑定当前飞书用户，后续只有你可以触发 UI 自动化测试。\nopen_id：${senderId}`;
+}
+
+function upsertEnvFileValue(filePath, key, value) {
+  const lines = existsSync(filePath) ? readFileSync(filePath, 'utf8').split(/\r?\n/) : [];
+  let found = false;
+  const next = lines.map((line) => {
+    if (line.startsWith(`${key}=`)) {
+      found = true;
+      return `${key}=${value}`;
+    }
+    return line;
+  }).filter((line, index, array) => line || index < array.length - 1);
+
+  if (!found) {
+    next.push(`${key}=${value}`);
+  }
+
+  writeFileSync(filePath, `${next.join('\n')}\n`);
 }
 
 function buildFeishuTextMessage(payload, text, env = process.env) {
@@ -208,6 +326,86 @@ function buildFeishuTextMessage(payload, text, env = process.env) {
     receiveId: extractSenderId(payload),
     msgType: 'text',
     content: JSON.stringify({ text }),
+  };
+}
+
+function buildFeishuCardMessage(payload, card, env = process.env) {
+  const base = buildFeishuTextMessage(payload, '', env);
+  return {
+    receiveIdType: base.receiveIdType,
+    receiveId: base.receiveId,
+    msgType: 'interactive',
+    content: JSON.stringify(card),
+  };
+}
+
+function buildRunArtifactsUrl(runUrl) {
+  return runUrl ? `${runUrl}#artifacts` : '';
+}
+
+function buildFeishuResultCard(job, run) {
+  const conclusion = run.conclusion || 'unknown';
+  const success = conclusion === 'success';
+  const runUrl = run.html_url || job.actionsUrl || '';
+  const artifactsUrl = buildRunArtifactsUrl(runUrl);
+  const title = success ? 'UI 自动化测试成功' : 'UI 自动化测试失败';
+
+  return {
+    config: {
+      wide_screen_mode: true,
+    },
+    header: {
+      template: success ? 'green' : 'red',
+      title: {
+        tag: 'plain_text',
+        content: title,
+      },
+    },
+    elements: [
+      {
+        tag: 'div',
+        text: {
+          tag: 'lark_md',
+          content: [
+            `**分支**：${job.targetRef}`,
+            `**模式**：${job.runMode}`,
+            `**结论**：${conclusion}`,
+          ].join('\n'),
+        },
+      },
+      {
+        tag: 'action',
+        actions: [
+          {
+            tag: 'button',
+            text: {
+              tag: 'plain_text',
+              content: 'GitHub Actions',
+            },
+            type: 'primary',
+            url: runUrl,
+          },
+          {
+            tag: 'button',
+            text: {
+              tag: 'plain_text',
+              content: 'Allure 报告',
+            },
+            type: 'default',
+            url: artifactsUrl || runUrl,
+          },
+        ],
+      },
+      {
+        tag: 'note',
+        elements: [
+          {
+            tag: 'plain_text',
+            content: success ? '打开 Allure 报告 artifact 可查看测试明细。' : '打开 GitHub Actions 可查看失败截图、trace 和日志 artifact。',
+          },
+        ],
+      },
+    ],
   };
 }
 
@@ -310,11 +508,19 @@ async function notifyFeishuRunResult(job, env = process.env, fetchImpl = fetch) 
     intervalMs: Number(env.GITHUB_RUN_NOTIFY_INTERVAL_MS || 10000),
   });
 
-  const text = formatRunResultMessage(job, completedRun);
-  await sendFeishuTextMessage(env, {
-    ...job.message,
-    content: JSON.stringify({ text }),
-  }, fetchImpl);
+  if (String(env.FEISHU_CARD_ENABLED ?? 'true').toLowerCase() !== 'false') {
+    await sendFeishuTextMessage(env, {
+      ...job.message,
+      msgType: 'interactive',
+      content: JSON.stringify(buildFeishuResultCard(job, completedRun)),
+    }, fetchImpl);
+  } else {
+    const text = formatRunResultMessage(job, completedRun);
+    await sendFeishuTextMessage(env, {
+      ...job.message,
+      content: JSON.stringify({ text }),
+    }, fetchImpl);
+  }
   return completedRun;
 }
 
@@ -325,11 +531,7 @@ function scheduleFeishuResultNotification(job, env = process.env) {
 }
 
 function isAuthorized(payload, env) {
-  const allowlist = String(env.FEISHU_ALLOWED_USER_IDS ?? '')
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-
+  const allowlist = getAllowedSenderIds(env);
   if (allowlist.length === 0) {
     return true;
   }
@@ -455,13 +657,34 @@ function isAsyncWebhookEnabled(env) {
 
 function runWebhookInBackground(payload, env, options = {}) {
   setTimeout(() => {
+    const text = extractFeishuText(payload);
+    const receiptSender = options.receiptSender || ((reply) => sendFeishuTextMessage(env, reply));
+
+    if (parseBindCommand(text)) {
+      bindAllowedSender(payload, env, options)
+        .then((replyText) => receiptSender(buildFeishuTextMessage(payload, replyText, env)))
+        .catch((error) => {
+          console.error(`Feishu bind reply failed: ${error.message}`);
+        });
+      return;
+    }
+
     const smallTalkReply = parseSmallTalkMessage(extractFeishuText(payload));
     if (smallTalkReply) {
       const message = buildFeishuTextMessage(payload, smallTalkReply, env);
-      const receiptSender = options.receiptSender || ((reply) => sendFeishuTextMessage(env, reply));
       Promise.resolve(receiptSender(message)).catch((error) => {
         console.error(`Feishu small talk reply failed: ${error.message}`);
       });
+      return;
+    }
+
+    if (String(env.OPENCLAW_CHAT_ENABLED ?? 'true').toLowerCase() !== 'false' && !looksLikeAutomationRequest(text)) {
+      const chat = options.chat || runOpenClawChat;
+      Promise.resolve(chat(text, env))
+        .then((replyText) => receiptSender(buildFeishuTextMessage(payload, replyText, env)))
+        .catch((error) => {
+          console.error(`Feishu free chat failed: ${error.message}`);
+        });
       return;
     }
 
@@ -471,7 +694,6 @@ function runWebhookInBackground(payload, env, options = {}) {
         '已收到 UI 自动化测试指令，正在后台解析并触发 GitHub Actions。',
         env,
       );
-      const receiptSender = options.receiptSender || ((message) => sendFeishuTextMessage(env, message));
       Promise.resolve(receiptSender(receipt)).catch((error) => {
         console.error(`Feishu receipt notification failed: ${error.message}`);
       });
@@ -550,14 +772,19 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildFeishuResultCard,
+  buildRunArtifactsUrl,
+  buildFeishuCardMessage,
   buildFeishuTextMessage,
   createServer,
   extractFeishuText,
   handleFeishuWebhook,
   notifyFeishuRunResult,
+  parseOpenClawChatOutput,
   parseSmallTalkMessage,
   parseRunUiTestCommand,
   parseOpenClawCommandOutput,
+  runOpenClawChat,
   runWebhookInBackground,
   runOpenClawParser,
   sendFeishuTextMessage,

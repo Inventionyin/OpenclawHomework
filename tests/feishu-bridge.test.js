@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const {
+  buildFeishuResultCard,
   buildFeishuTextMessage,
   createServer,
   extractFeishuText,
@@ -9,6 +10,9 @@ const {
   parseOpenClawCommandOutput,
   parseRunUiTestCommand,
   parseSmallTalkMessage,
+  buildRunArtifactsUrl,
+  parseOpenClawChatOutput,
+  runOpenClawChat,
   sendFeishuTextMessage,
   runOpenClawParser,
 } = require('../scripts/feishu-bridge');
@@ -58,6 +62,13 @@ test('parseSmallTalkMessage replies to greeting without triggering automation', 
   );
 });
 
+test('parseOpenClawChatOutput strips OpenClaw CLI prefix', () => {
+  assert.equal(
+    parseOpenClawChatOutput(['model.run via local', 'provider: xfyun', 'model: astron-code-latest', '你好，我可以帮你触发 UI 自动化。'].join('\n')),
+    '你好，我可以帮你触发 UI 自动化。',
+  );
+});
+
 test('extractFeishuText supports Feishu event message content', () => {
   const payload = {
     event: {
@@ -90,6 +101,33 @@ test('buildFeishuTextMessage uses chat id before sender id', () => {
     msgType: 'text',
     content: JSON.stringify({ text: '测试完成' }),
   });
+});
+
+test('buildRunArtifactsUrl creates GitHub artifacts shortcut', () => {
+  assert.equal(
+    buildRunArtifactsUrl('https://github.com/Inventionyin/OpenclawHomework/actions/runs/123'),
+    'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123#artifacts',
+  );
+});
+
+test('buildFeishuResultCard includes run and Allure report links', () => {
+  const card = buildFeishuResultCard(
+    {
+      targetRef: 'main',
+      runMode: 'smoke',
+    },
+    {
+      conclusion: 'success',
+      html_url: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123',
+    },
+  );
+
+  assert.equal(card.header.template, 'green');
+  const content = JSON.stringify(card);
+  assert.match(content, /UI 自动化测试成功/);
+  assert.match(content, /GitHub Actions/);
+  assert.match(content, /Allure 报告/);
+  assert.match(content, /#artifacts/);
 });
 
 test('sendFeishuTextMessage fetches tenant token and sends text message', async () => {
@@ -317,6 +355,173 @@ test('createServer replies to greeting without dispatching workflow', async () =
     assert.equal(dispatchCalled, false);
     assert.equal(reply.receiveId, 'chat-a');
     assert.match(JSON.parse(reply.content).text, /OpenClaw UI 自动化助手/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer answers free chat without dispatching workflow', async () => {
+  let reply;
+  let dispatchCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      OPENCLAW_CHAT_ENABLED: 'true',
+    },
+    {
+      dispatch: async () => {
+        dispatchCalled = true;
+        return {
+          actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+        };
+      },
+      receiptSender: async (message) => {
+        reply = message;
+      },
+      chat: async () => '我可以像助手一样回答问题，也可以触发 UI 自动化。',
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '这个项目现在完成到哪一步了' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 202);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(dispatchCalled, false);
+    assert.match(JSON.parse(reply.content).text, /像助手一样回答问题/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer binds current sender before enforcing allowlist', async () => {
+  let reply;
+  const env = {
+    GITHUB_TOKEN: 'ghp_example',
+    FEISHU_WEBHOOK_ASYNC: 'true',
+    FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+    FEISHU_APP_ID: 'cli_xxx',
+    FEISHU_APP_SECRET: 'secret_xxx',
+  };
+  const server = createServer(
+    env,
+    {
+      receiptSender: async (message) => {
+        reply = message;
+      },
+      allowlistBinder: async (senderId) => {
+        env.FEISHU_ALLOWED_USER_IDS = senderId;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '绑定我' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 202);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(env.FEISHU_ALLOWED_USER_IDS, 'user-a');
+    assert.match(JSON.parse(reply.content).text, /已绑定/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer does not let a second sender overwrite binding', async () => {
+  let reply;
+  let binderCalled = false;
+  const env = {
+    GITHUB_TOKEN: 'ghp_example',
+    FEISHU_WEBHOOK_ASYNC: 'true',
+    FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+    FEISHU_APP_ID: 'cli_xxx',
+    FEISHU_APP_SECRET: 'secret_xxx',
+    FEISHU_ALLOWED_USER_IDS: 'user-a',
+  };
+  const server = createServer(
+    env,
+    {
+      receiptSender: async (message) => {
+        reply = message;
+      },
+      allowlistBinder: async () => {
+        binderCalled = true;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-b',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '绑定我' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 202);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(binderCalled, false);
+    assert.equal(env.FEISHU_ALLOWED_USER_IDS, 'user-a');
+    assert.match(JSON.parse(reply.content).text, /没有权限覆盖/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

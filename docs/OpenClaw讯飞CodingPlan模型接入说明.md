@@ -114,7 +114,7 @@ OpenClaw -> 讯飞 CodingPlan 模型
 
 - 模型 provider 已接入 OpenClaw。
 - 本机桥梁服务已经能调用 OpenClaw 做自然语言解析。
-- 云服务器上默认仍建议保持固定格式指令，除非确认服务器也安装并配置了 OpenClaw。
+- 云服务器也已经安装并配置 OpenClaw，因此公网飞书回调可以直接使用自然语言指令。
 
 ## 5. 下一步可选增强
 
@@ -193,12 +193,13 @@ GitHub Actions success
 
 桥梁服务现在已经能在触发 GitHub Actions 后查询对应的 workflow run。
 
-如果服务器配置飞书应用凭证，还可以把最终结果主动发回飞书：
+服务器配置飞书应用凭证后，可以把最终结果主动发回飞书：
 
 ```text
 FEISHU_RESULT_NOTIFY_ENABLED=true
 FEISHU_APP_ID=...
 FEISHU_APP_SECRET=...
+FEISHU_CARD_ENABLED=true
 ```
 
 通知内容包含：
@@ -207,4 +208,13 @@ FEISHU_APP_SECRET=...
 - 分支
 - 测试模式
 - GitHub Actions run 链接
+- Allure 报告入口
 - 报告和失败日志查看提示
+
+普通聊天也可以启用：
+
+```text
+OPENCLAW_CHAT_ENABLED=true
+```
+
+这样用户发“你好”“帮助”以外的普通问题时，机器人会像项目助手一样回复；只有看起来像 UI 自动化请求的消息才会进入测试触发流程。

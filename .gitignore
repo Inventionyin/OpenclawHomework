@@ -6,4 +6,4 @@ test-results/
 allure-results/
 allure-report/
 .env
-
+.playwright-mcp/
