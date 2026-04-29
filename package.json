@@ -5,6 +5,7 @@
   "description": "OpenClaw Feishu to GitHub Actions UI automation homework orchestration.",
   "type": "commonjs",
   "scripts": {
+    "bridge:feishu": "node scripts/feishu-bridge.js",
     "test": "node --test \"tests/**/*.test.js\"",
     "trigger:ui": "node scripts/trigger-ui-tests.js"
   }
