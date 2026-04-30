@@ -444,7 +444,7 @@ function getFeishuDedupKeys(payload) {
     keys.push(`message:${messageId}`);
   }
 
-  if (text) {
+  if (!eventId && !messageId && text) {
     keys.push(`text:${buildStableHash([senderId, chatId, text].join('|'))}`);
   }
 

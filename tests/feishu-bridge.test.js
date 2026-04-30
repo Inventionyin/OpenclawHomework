@@ -183,7 +183,7 @@ test('buildRouteEnv does not reuse OpenClaw allowlist for Hermes route', () => {
   assert.equal(routeEnv.FEISHU_REQUIRE_BINDING, 'true');
 });
 
-test('getFeishuDedupKeys includes message id and text fallback', () => {
+test('getFeishuDedupKeys prefers Feishu ids when present', () => {
   const keys = getFeishuDedupKeys({
     header: {
       event_id: 'event-a',
@@ -202,8 +202,26 @@ test('getFeishuDedupKeys includes message id and text fallback', () => {
     },
   });
 
-  assert.deepEqual(keys.slice(0, 2), ['event:event-a', 'message:message-a']);
-  assert.match(keys[2], /^text:/);
+  assert.deepEqual(keys, ['event:event-a', 'message:message-a']);
+});
+
+test('getFeishuDedupKeys uses text fallback only when Feishu ids are missing', () => {
+  const keys = getFeishuDedupKeys({
+    event: {
+      sender: {
+        sender_id: {
+          open_id: 'user-a',
+        },
+      },
+      message: {
+        chat_id: 'chat-a',
+        content: JSON.stringify({ text: '你好' }),
+      },
+    },
+  });
+
+  assert.equal(keys.length, 1);
+  assert.match(keys[0], /^text:/);
 });
 
 test('isDuplicateFeishuEvent detects repeated message content', () => {
@@ -466,6 +484,47 @@ test('createServer ignores duplicate Feishu webhook events', async () => {
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+test('isDuplicateFeishuEvent allows repeated text when Feishu ids differ', () => {
+  const cache = new Map();
+  const firstPayload = {
+    header: {
+      event_id: 'event-a',
+    },
+    event: {
+      sender: {
+        sender_id: {
+          open_id: 'user-a',
+        },
+      },
+      message: {
+        message_id: 'message-a',
+        chat_id: 'chat-a',
+        content: JSON.stringify({ text: '你好' }),
+      },
+    },
+  };
+  const secondPayload = {
+    header: {
+      event_id: 'event-b',
+    },
+    event: {
+      sender: {
+        sender_id: {
+          open_id: 'user-a',
+        },
+      },
+      message: {
+        message_id: 'message-b',
+        chat_id: 'chat-a',
+        content: JSON.stringify({ text: '你好' }),
+      },
+    },
+  };
+
+  assert.equal(isDuplicateFeishuEvent(firstPayload, {}, cache), false);
+  assert.equal(isDuplicateFeishuEvent(secondPayload, {}, cache), false);
 });
 
 test('createServer sends immediate Feishu receipt in async mode when notification is configured', async () => {
