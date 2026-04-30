@@ -4,12 +4,12 @@ const { dirname, join } = require('node:path');
 const SECRET_PATTERNS = [
   /\bGITHUB_TOKEN\s*=/i,
   /\bghp_[A-Za-z0-9_]+/,
-  /\bpassword\s*=/i,
+  /\bpassword["']?\s*[:=]/i,
   /\bApp Secret\b/i,
-  /\bAPIKEY\s*[:=]/i,
-  /\bAPI_KEY\s*=/i,
-  /\bSECRET\s*=/i,
-  /\bTOKEN\s*=/i,
+  /\bAPIKEY["']?\s*[:=]/i,
+  /\bAPI_KEY["']?\s*[:=]/i,
+  /\bSECRET["']?\s*[:=]/i,
+  /\bTOKEN["']?\s*[:=]/i,
 ];
 
 function readTextFile(filePath, fallback = '') {
@@ -47,20 +47,35 @@ function rememberMemoryNote(filePath, note, now = new Date()) {
   writeFileSync(filePath, `${existing.trim()}\n${entry}`, 'utf8');
 }
 
+function stringifySafeJsonMemory(value) {
+  const text = JSON.stringify(value, null, 2);
+  if (!isSafeMemoryText(text)) {
+    return JSON.stringify({ redacted: true }, null, 2);
+  }
+  return text;
+}
+
+function redactUnsafeTextMemory(text) {
+  if (!isSafeMemoryText(text)) {
+    return '[redacted secret-like memory content]';
+  }
+  return text;
+}
+
 function buildMemoryContext(memoryDir = join(process.cwd(), 'data', 'memory')) {
   const userProfile = readJsonMemory(join(memoryDir, 'user-profile.json'), {});
   const projectState = readJsonMemory(join(memoryDir, 'project-state.json'), {});
-  const incidentLog = readTextFile(join(memoryDir, 'incident-log.md'), '').slice(0, 2500);
-  const runbookNotes = readTextFile(join(memoryDir, 'runbook-notes.md'), '').slice(0, 1500);
+  const incidentLog = redactUnsafeTextMemory(readTextFile(join(memoryDir, 'incident-log.md'), '').slice(0, 2500));
+  const runbookNotes = redactUnsafeTextMemory(readTextFile(join(memoryDir, 'runbook-notes.md'), '').slice(0, 1500));
 
   return [
     '# Memory Context',
     '',
     '## User Profile',
-    JSON.stringify(userProfile, null, 2),
+    stringifySafeJsonMemory(userProfile),
     '',
     '## Project State',
-    JSON.stringify(projectState, null, 2),
+    stringifySafeJsonMemory(projectState),
     '',
     '## Incident Log',
     incidentLog,
