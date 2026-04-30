@@ -111,6 +111,31 @@ test('buildFeishuTextMessage uses chat id before sender id', () => {
   });
 });
 
+test('buildFeishuTextMessage prefers current chat id over configured notify id', () => {
+  const payload = {
+    event: {
+      sender: {
+        sender_id: {
+          open_id: 'user-a',
+        },
+      },
+      message: {
+        chat_id: 'current-chat',
+      },
+    },
+  };
+
+  assert.deepEqual(buildFeishuTextMessage(payload, '测试完成', {
+    FEISHU_NOTIFY_RECEIVE_ID_TYPE: 'chat_id',
+    FEISHU_NOTIFY_RECEIVE_ID: 'stale-chat',
+  }), {
+    receiveIdType: 'chat_id',
+    receiveId: 'current-chat',
+    msgType: 'text',
+    content: JSON.stringify({ text: '测试完成' }),
+  });
+});
+
 test('getFeishuRouteMode supports default and named bot routes', () => {
   assert.equal(getFeishuRouteMode('/webhook/feishu'), 'openclaw');
   assert.equal(getFeishuRouteMode('/webhook/feishu/openclaw'), 'openclaw');
@@ -1699,5 +1724,90 @@ test('runOpenClawParser uses OpenClaw node entry on Windows when OPENCLAW_BIN is
     targetRef: 'main',
     runMode: 'smoke',
   });
+});
+
+test('runOpenClawChat serializes CLI calls to avoid session lock contention', async () => {
+  const started = [];
+  const finishers = [];
+
+  const first = runOpenClawChat(
+    '第一条消息',
+    {
+      OPENCLAW_BIN: 'openclaw',
+      OPENCLAW_CHAT_TIMEOUT_MS: '1000',
+    },
+    (command, args, options, callback) => {
+      started.push(args.at(-1));
+      finishers.push(() => callback(null, '第一条回复', ''));
+    },
+  );
+
+  const second = runOpenClawChat(
+    '第二条消息',
+    {
+      OPENCLAW_BIN: 'openclaw',
+      OPENCLAW_CHAT_TIMEOUT_MS: '1000',
+    },
+    (command, args, options, callback) => {
+      started.push(args.at(-1));
+      finishers.push(() => callback(null, '第二条回复', ''));
+    },
+  );
+
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(started.length, 1);
+
+  finishers[0]();
+  assert.equal(await first, '第一条回复');
+
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(started.length, 2);
+
+  finishers[1]();
+  assert.equal(await second, '第二条回复');
+});
+
+test('createServer ignores async Feishu payloads without a reply target', async () => {
+  let receiptCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      OPENCLAW_CHAT_ENABLED: 'true',
+    },
+    {
+      receiptSender: async () => {
+        receiptCalled = true;
+      },
+      chat: async () => '不应该回复',
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          message: {
+            content: JSON.stringify({ text: '你好' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(receiptCalled, false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 

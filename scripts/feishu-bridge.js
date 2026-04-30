@@ -11,6 +11,7 @@ const {
 } = require('./trigger-ui-tests');
 
 const VALID_RUN_MODES = new Set(['contracts', 'smoke', 'all']);
+let openClawCliQueue = Promise.resolve();
 const seenFeishuEventKeys = new Map();
 const scheduledFeishuNotificationKeys = new Map();
 
@@ -117,43 +118,45 @@ function buildOpenClawPrompt(text) {
 }
 
 function runOpenClawParser(text, env = process.env, execFileImpl = execFile) {
-  const openclawBin = env.OPENCLAW_BIN || 'openclaw';
-  const model = env.OPENCLAW_MODEL || 'xfyun/astron-code-latest';
-  const prompt = buildOpenClawPrompt(text);
-  const openclawArgs = ['infer', 'model', 'run', '--local', '--model', model, '--prompt', prompt];
-  let command = openclawBin;
-  let args = openclawArgs;
+  return enqueueOpenClawCliTask(() => {
+    const openclawBin = env.OPENCLAW_BIN || 'openclaw';
+    const model = env.OPENCLAW_MODEL || 'xfyun/astron-code-latest';
+    const prompt = buildOpenClawPrompt(text);
+    const openclawArgs = ['infer', 'model', 'run', '--local', '--model', model, '--prompt', prompt];
+    let command = openclawBin;
+    let args = openclawArgs;
 
-  if (process.platform === 'win32' && !env.OPENCLAW_BIN) {
-    const openclawEntry = join(env.APPDATA || '', 'npm', 'node_modules', 'openclaw', 'openclaw.mjs');
-    if (existsSync(openclawEntry)) {
-      command = process.execPath;
-      args = [openclawEntry, ...openclawArgs];
+    if (process.platform === 'win32' && !env.OPENCLAW_BIN) {
+      const openclawEntry = join(env.APPDATA || '', 'npm', 'node_modules', 'openclaw', 'openclaw.mjs');
+      if (existsSync(openclawEntry)) {
+        command = process.execPath;
+        args = [openclawEntry, ...openclawArgs];
+      }
     }
-  }
 
-  return new Promise((resolve, reject) => {
-    execFileImpl(
-      command,
-      args,
-      {
-        timeout: Number(env.OPENCLAW_PARSE_TIMEOUT_MS || 300000),
-        windowsHide: true,
-      },
-      (error, stdout, stderr) => {
-        if (error) {
-          reject(new Error(`OpenClaw parser failed: ${error.message}\n${stderr || ''}`.trim()));
-          return;
-        }
+    return new Promise((resolve, reject) => {
+      execFileImpl(
+        command,
+        args,
+        {
+          timeout: Number(env.OPENCLAW_PARSE_TIMEOUT_MS || 300000),
+          windowsHide: true,
+        },
+        (error, stdout, stderr) => {
+          if (error) {
+            reject(new Error(`OpenClaw parser failed: ${error.message}\n${stderr || ''}`.trim()));
+            return;
+          }
 
-        try {
-          resolve(parseOpenClawCommandOutput(stdout));
-        } catch (parseError) {
-          reject(parseError);
-        }
-      },
-    );
-  });
+          try {
+            resolve(parseOpenClawCommandOutput(stdout));
+          } catch (parseError) {
+            reject(parseError);
+          }
+        },
+      );
+    });
+  }, env);
 }
 
 function buildOpenClawCommand(env, prompt) {
@@ -172,6 +175,16 @@ function buildOpenClawCommand(env, prompt) {
   }
 
   return { command, args };
+}
+
+function enqueueOpenClawCliTask(task, env = process.env) {
+  if (String(env.OPENCLAW_CLI_QUEUE_ENABLED ?? 'true').toLowerCase() === 'false') {
+    return task();
+  }
+
+  const run = openClawCliQueue.catch(() => {}).then(task);
+  openClawCliQueue = run.catch(() => {});
+  return run;
 }
 
 function buildHermesCommand(env, prompt) {
@@ -261,10 +274,10 @@ function runHermesChat(text, env = process.env, execFileImpl = execFile) {
 }
 
 function runOpenClawChat(text, env = process.env, execFileImpl = execFile) {
-  const prompt = buildOpenClawChatPrompt(text, getAssistantName(env, 'OpenClaw'));
-  const { command, args } = buildOpenClawCommand(env, prompt);
+  return enqueueOpenClawCliTask(() => new Promise((resolve, reject) => {
+    const prompt = buildOpenClawChatPrompt(text, getAssistantName(env, 'OpenClaw'));
+    const { command, args } = buildOpenClawCommand(env, prompt);
 
-  return new Promise((resolve, reject) => {
     execFileImpl(
       command,
       args,
@@ -282,7 +295,7 @@ function runOpenClawChat(text, env = process.env, execFileImpl = execFile) {
         resolve(answer || '我在，但刚才没有生成有效回复。你可以发“帮助”查看可用指令。');
       },
     );
-  });
+  }), env);
 }
 
 function extractSenderId(payload) {
@@ -484,6 +497,26 @@ function upsertEnvFileValue(filePath, key, value) {
 }
 
 function buildFeishuTextMessage(payload, text, env = process.env) {
+  const chatId = extractFeishuChatId(payload);
+  if (chatId) {
+    return {
+      receiveIdType: 'chat_id',
+      receiveId: chatId,
+      msgType: 'text',
+      content: JSON.stringify({ text }),
+    };
+  }
+
+  const senderId = extractSenderId(payload);
+  if (senderId) {
+    return {
+      receiveIdType: 'open_id',
+      receiveId: senderId,
+      msgType: 'text',
+      content: JSON.stringify({ text }),
+    };
+  }
+
   const configuredReceiveId = env.FEISHU_NOTIFY_RECEIVE_ID || '';
   const configuredReceiveIdType = env.FEISHU_NOTIFY_RECEIVE_ID_TYPE || '';
   if (configuredReceiveId) {
@@ -495,22 +528,16 @@ function buildFeishuTextMessage(payload, text, env = process.env) {
     };
   }
 
-  const chatId = extractFeishuChatId(payload);
-  if (chatId) {
-    return {
-      receiveIdType: 'chat_id',
-      receiveId: chatId,
-      msgType: 'text',
-      content: JSON.stringify({ text }),
-    };
-  }
-
   return {
     receiveIdType: 'open_id',
-    receiveId: extractSenderId(payload),
+    receiveId: '',
     msgType: 'text',
     content: JSON.stringify({ text }),
   };
+}
+
+function hasFeishuReplyTarget(payload) {
+  return Boolean(extractFeishuChatId(payload) || extractSenderId(payload));
 }
 
 function buildFeishuCardMessage(payload, card, env = process.env) {
@@ -966,6 +993,11 @@ function runWebhookInBackground(payload, env, options = {}) {
   setTimeout(() => {
     const text = extractFeishuText(payload);
     const receiptSender = options.receiptSender || ((reply) => sendFeishuTextMessage(env, reply));
+
+    if (!hasFeishuReplyTarget(payload)) {
+      console.log('Ignored Feishu message without reply target.');
+      return;
+    }
 
     if (parseBindCommand(text)) {
       bindAllowedSender(payload, env, options)
