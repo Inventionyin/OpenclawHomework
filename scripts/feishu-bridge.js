@@ -1080,7 +1080,7 @@ function createServer(env = process.env, options = {}) {
 
       if (!shouldProcessFeishuMessagePayload(payload)) {
         console.log(`Ignored non-message Feishu event: ${extractFeishuEventType(payload) || 'unknown'}`);
-        sendJson(response, 202, {
+        sendJson(response, 200, {
           ok: true,
           ignored: true,
           message: '非消息类飞书事件已忽略',
@@ -1090,7 +1090,7 @@ function createServer(env = process.env, options = {}) {
 
       if (isDuplicateFeishuEvent(payload, routeEnv, dedupCache)) {
         console.log('Ignored duplicate Feishu webhook event.');
-        sendJson(response, 202, {
+        sendJson(response, 200, {
           ok: true,
           duplicate: true,
           message: '重复飞书事件已忽略',
@@ -1100,7 +1100,7 @@ function createServer(env = process.env, options = {}) {
 
       if (isAsyncWebhookEnabled(routeEnv)) {
         runWebhookInBackground(payload, routeEnv, routeOptions);
-        sendJson(response, 202, {
+        sendJson(response, 200, {
           ok: true,
           message: '飞书指令已收到，正在后台触发 UI 自动化测试',
         });

@@ -363,7 +363,7 @@ test('createServer acknowledges Feishu webhook before background dispatch comple
     });
     const body = await response.json();
 
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 200);
     assert.equal(body.ok, true);
     assert.equal(body.message, '飞书指令已收到，正在后台触发 UI 自动化测试');
 
@@ -427,8 +427,8 @@ test('createServer ignores duplicate Feishu webhook events', async () => {
       body: JSON.stringify(payload),
     });
 
-    assert.equal(firstResponse.status, 202);
-    assert.equal(secondResponse.status, 202);
+    assert.equal(firstResponse.status, 200);
+    assert.equal(secondResponse.status, 200);
     assert.equal((await secondResponse.json()).duplicate, true);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(dispatchCount, 1);
@@ -488,7 +488,7 @@ test('createServer sends immediate Feishu receipt in async mode when notificatio
       }),
     });
 
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(receipt.receiveIdType, 'chat_id');
     assert.equal(receipt.receiveId, 'chat-a');
@@ -599,7 +599,7 @@ test('createServer can skip immediate automation receipt', async () => {
       }),
     });
 
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(dispatchCalled, true);
     assert.equal(receipt, undefined);
@@ -655,7 +655,7 @@ test('createServer replies to greeting without dispatching workflow', async () =
       }),
     });
 
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(dispatchCalled, false);
     assert.equal(reply.receiveId, 'chat-a');
@@ -713,7 +713,7 @@ test('createServer ignores passive group greeting without mention', async () => 
       }),
     });
 
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(dispatchCalled, false);
     assert.equal(reply, undefined);
@@ -764,7 +764,7 @@ test('createServer replies to group greeting when mentioned', async () => {
       }),
     });
 
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.match(JSON.parse(reply.content).text, /OpenClaw UI 自动化助手/);
   } finally {
@@ -814,7 +814,7 @@ test('createServer replies to greeting as Hermes on Hermes route', async () => {
       }),
     });
 
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     const text = JSON.parse(reply.content).text;
     assert.match(text, /Hermes UI 自动化助手/);
@@ -870,7 +870,7 @@ test('createServer ignores Feishu message read events without replying', async (
       }),
     });
 
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(chatCalled, false);
     assert.equal(reply, undefined);
@@ -924,7 +924,7 @@ test('createServer prefers Feishu app id over URL route for bot identity', async
       }),
     });
 
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     const text = JSON.parse(reply.content).text;
     assert.match(text, /OpenClaw UI 自动化助手/);
@@ -1003,7 +1003,7 @@ test('createServer answers free chat without dispatching workflow', async () => 
       }),
     });
 
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(dispatchCalled, false);
     assert.match(JSON.parse(reply.content).text, /像助手一样回答问题/);
@@ -1055,7 +1055,7 @@ test('createServer falls back to Hermes chat when OpenClaw chat fails', async ()
       }),
     });
 
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.match(JSON.parse(reply.content).text, /Hermes 已接管/);
   } finally {
@@ -1108,7 +1108,7 @@ test('createServer uses Hermes as primary chat on Hermes route', async () => {
       }),
     });
 
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(openClawChatCalled, true);
     assert.match(JSON.parse(reply.content).text, /Hermes 主机器人/);
@@ -1161,7 +1161,7 @@ test('createServer binds current sender before enforcing allowlist', async () =>
       }),
     });
 
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(env.FEISHU_ALLOWED_USER_IDS, 'user-a');
     assert.match(JSON.parse(reply.content).text, /已绑定/);
@@ -1216,7 +1216,7 @@ test('createServer does not let a second sender overwrite binding', async () => 
       }),
     });
 
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(binderCalled, false);
     assert.equal(env.FEISHU_ALLOWED_USER_IDS, 'user-a');
@@ -1278,7 +1278,7 @@ test('createServer binds Hermes sender to separate Hermes allowlist', async () =
       }),
     });
 
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(boundKey, 'HERMES_FEISHU_ALLOWED_USER_IDS');
     assert.equal(env.HERMES_FEISHU_ALLOWED_USER_IDS, 'hermes-user');
@@ -1382,7 +1382,7 @@ test('createServer persists Hermes binding into process env for later requests',
       }),
     });
 
-    assert.equal(bindResponse.status, 202);
+    assert.equal(bindResponse.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.match(JSON.parse(bindReply.content).text, /已绑定/);
     assert.equal(process.env.HERMES_FEISHU_ALLOWED_USER_IDS, 'hermes-user');
@@ -1406,7 +1406,7 @@ test('createServer persists Hermes binding into process env for later requests',
       }),
     });
 
-    assert.equal(runResponse.status, 202);
+    assert.equal(runResponse.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(dispatchCalled, true);
     assert.doesNotMatch(JSON.parse(automationReply.content).text, /还没有绑定/);
@@ -1471,7 +1471,7 @@ test('createServer requires binding before automation when configured', async ()
       }),
     });
 
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(dispatchCalled, false);
     assert.match(JSON.parse(reply.content).text, /绑定我/);
@@ -1700,3 +1700,4 @@ test('runOpenClawParser uses OpenClaw node entry on Windows when OPENCLAW_BIN is
     runMode: 'smoke',
   });
 });
+
