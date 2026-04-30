@@ -1582,6 +1582,55 @@ test('createServer replies to explicit ops commands in passive group chats', asy
   }
 });
 
+test('createServer ignores passive group memory questions without mention', async () => {
+  let reply;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+    },
+    {
+      receiptSender: async (message) => {
+        reply = message;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            chat_type: 'group',
+            content: JSON.stringify({ text: '项目状态' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(reply, undefined);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('createServer does not invoke chat fallback when sending primary chat reply fails', async () => {
   let sendCount = 0;
   let hermesChatCalled = false;

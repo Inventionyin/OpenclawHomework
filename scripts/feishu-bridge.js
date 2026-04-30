@@ -363,7 +363,7 @@ function shouldIgnorePassiveGroupMessage(payload, text, env = process.env, route
     return false;
   }
 
-  if (route.agent === 'ops-agent' || route.agent === 'memory-agent') {
+  if (route.agent === 'ops-agent') {
     return false;
   }
 
