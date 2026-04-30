@@ -9,6 +9,13 @@ const {
   parseCliArgs,
   waitForWorkflowCompletion,
 } = require('./trigger-ui-tests');
+const { routeAgentIntent } = require('./agents/router');
+const {
+  buildChatAgentPrompt,
+  buildDocAgentReply,
+  buildMemoryAgentReply,
+  buildOpsAgentReply,
+} = require('./agents/agent-handlers');
 
 const VALID_RUN_MODES = new Set(['contracts', 'smoke', 'all']);
 let openClawCliQueue = Promise.resolve();
@@ -1013,6 +1020,43 @@ function runWebhookInBackground(payload, env, options = {}) {
       return;
     }
 
+    const route = routeAgentIntent(text);
+    if (route.requiresAuth && !isAuthorized(payload, env)) {
+      Promise.resolve(receiptSender(buildFeishuTextMessage(payload, getUnauthorizedMessage(env), env))).catch((error) => {
+        console.error(`Feishu unauthorized reply failed: ${error.message}`);
+      });
+      return;
+    }
+
+    if (route.agent === 'doc-agent') {
+      const message = buildFeishuTextMessage(payload, buildDocAgentReply(text), env);
+      Promise.resolve(receiptSender(message)).catch((error) => {
+        console.error(`Feishu doc agent reply failed: ${error.message}`);
+      });
+      return;
+    }
+
+    if (route.agent === 'memory-agent') {
+      const message = buildFeishuTextMessage(payload, buildMemoryAgentReply(route), env);
+      Promise.resolve(receiptSender(message)).catch((error) => {
+        console.error(`Feishu memory agent reply failed: ${error.message}`);
+      });
+      return;
+    }
+
+    if (route.agent === 'ops-agent') {
+      Promise.resolve(buildOpsAgentReply(route))
+        .then((replyText) => receiptSender(buildFeishuTextMessage(payload, replyText, env)))
+        .catch((error) => {
+          console.error(`Feishu ops agent reply failed: ${error.message}`);
+          return receiptSender(buildFeishuTextMessage(payload, '服务器状态暂时不可用。', env));
+        })
+        .catch((error) => {
+          console.error(`Feishu ops fallback reply failed: ${error.message}`);
+        });
+      return;
+    }
+
     const smallTalkReply = parseSmallTalkMessage(extractFeishuText(payload), env);
     if (smallTalkReply) {
       const message = buildFeishuTextMessage(payload, smallTalkReply, env);
@@ -1022,9 +1066,10 @@ function runWebhookInBackground(payload, env, options = {}) {
       return;
     }
 
-    if (String(env.OPENCLAW_CHAT_ENABLED ?? 'true').toLowerCase() !== 'false' && !looksLikeAutomationRequest(text)) {
+    if (route.agent === 'chat-agent' && String(env.OPENCLAW_CHAT_ENABLED ?? 'true').toLowerCase() !== 'false' && !looksLikeAutomationRequest(text)) {
       const chat = options.chat || runOpenClawChat;
-      Promise.resolve(chat(text, env))
+      const prompt = buildChatAgentPrompt(text);
+      Promise.resolve(chat(prompt, env))
         .then((replyText) => receiptSender(buildFeishuTextMessage(payload, replyText, env)))
         .catch((error) => {
           if (!isHermesFallbackEnabled(env)) {
@@ -1033,7 +1078,7 @@ function runWebhookInBackground(payload, env, options = {}) {
           }
 
           const hermesChat = options.hermesChat || runHermesChat;
-          Promise.resolve(hermesChat(text, env))
+          Promise.resolve(hermesChat(prompt, env))
             .then((replyText) => receiptSender(buildFeishuTextMessage(payload, replyText, env)))
             .catch((fallbackError) => {
               console.error(`Feishu free chat fallback failed: ${fallbackError.message}`);

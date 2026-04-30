@@ -1037,6 +1037,187 @@ test('createServer answers free chat without dispatching workflow', async () => 
   }
 });
 
+test('createServer routes doc questions without dispatching workflow or chat', async () => {
+  let reply;
+  let dispatchCalled = false;
+  let chatCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      OPENCLAW_CHAT_ENABLED: 'true',
+    },
+    {
+      dispatch: async () => {
+        dispatchCalled = true;
+        return {
+          actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+        };
+      },
+      receiptSender: async (message) => {
+        reply = message;
+      },
+      chat: async () => {
+        chatCalled = true;
+        return '不应该走普通聊天';
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '老师任务还差哪些' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(dispatchCalled, false);
+    assert.equal(chatCalled, false);
+    assert.match(JSON.parse(reply.content).text, /已完成/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer blocks unauthorized ops commands without dispatching workflow or chat', async () => {
+  let reply;
+  let dispatchCalled = false;
+  let chatCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_USER_IDS: 'user-b',
+      OPENCLAW_CHAT_ENABLED: 'true',
+    },
+    {
+      dispatch: async () => {
+        dispatchCalled = true;
+        return {
+          actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+        };
+      },
+      receiptSender: async (message) => {
+        reply = message;
+      },
+      chat: async () => {
+        chatCalled = true;
+        return '不应该走普通聊天';
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '/status' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(dispatchCalled, false);
+    assert.equal(chatCalled, false);
+    assert.match(JSON.parse(reply.content).text, /未授权|绑定/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer free chat prompt omits full memory by default', async () => {
+  let capturedPrompt;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      OPENCLAW_CHAT_ENABLED: 'true',
+    },
+    {
+      receiptSender: async () => {},
+      chat: async (prompt) => {
+        capturedPrompt = prompt;
+        return '普通聊天回复';
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '今天适合先看哪块代码' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.match(capturedPrompt, /用户消息：今天适合先看哪块代码/);
+    assert.doesNotMatch(capturedPrompt, /# Memory Context/);
+    assert.doesNotMatch(capturedPrompt, /## User Profile/);
+    assert.doesNotMatch(capturedPrompt, /## Project State/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('createServer falls back to Hermes chat when OpenClaw chat fails', async () => {
   let reply;
   const server = createServer(
@@ -1074,7 +1255,7 @@ test('createServer falls back to Hermes chat when OpenClaw chat fails', async ()
           },
           message: {
             chat_id: 'chat-a',
-            content: JSON.stringify({ text: '这个项目还差什么' }),
+            content: JSON.stringify({ text: '今天适合先看哪块代码' }),
           },
         },
       }),
@@ -1127,7 +1308,7 @@ test('createServer uses Hermes as primary chat on Hermes route', async () => {
           },
           message: {
             chat_id: 'chat-a',
-            content: JSON.stringify({ text: '这个项目还差什么' }),
+            content: JSON.stringify({ text: '今天适合先看哪块代码' }),
           },
         },
       }),
