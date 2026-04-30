@@ -33,6 +33,10 @@ test('isSafeMemoryText rejects common secret patterns', () => {
   assert.equal(isSafeMemoryText('secret: abc123'), false);
   assert.equal(isSafeMemoryText('API_KEY: abc123'), false);
   assert.equal(isSafeMemoryText('apikey: abc123'), false);
+  assert.equal(isSafeMemoryText('GITHUB_TOKEN: abc123'), false);
+  assert.equal(isSafeMemoryText('MY_TOKEN: abc123'), false);
+  assert.equal(isSafeMemoryText('OPENAI_API_KEY: sk-test'), false);
+  assert.equal(isSafeMemoryText('FEISHU_APP_SECRET: abc123'), false);
 });
 
 test('rememberMemoryNote appends safe notes only', () => {
@@ -76,6 +80,21 @@ test('buildMemoryContext redacts secret-like memory content', () => {
     assert.match(context, /\[redacted secret-like memory content\]/);
     assert.doesNotMatch(context, /abc123/);
     assert.match(context, /safe note/);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('buildMemoryContext redacts prefixed env-style secret labels', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'memory-store-test-'));
+  try {
+    writeFileSync(join(tempDir, 'user-profile.json'), '{"language":"zh-CN"}', 'utf8');
+    writeFileSync(join(tempDir, 'project-state.json'), '{"repository":"repo"}', 'utf8');
+    writeFileSync(join(tempDir, 'incident-log.md'), '# Incident Log\n\nGITHUB_TOKEN: abc123', 'utf8');
+
+    const context = buildMemoryContext(tempDir);
+    assert.match(context, /\[redacted secret-like memory content\]/);
+    assert.doesNotMatch(context, /GITHUB_TOKEN: abc123/);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

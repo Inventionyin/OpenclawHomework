@@ -4,12 +4,8 @@ const { dirname, join } = require('node:path');
 const SECRET_PATTERNS = [
   /\bGITHUB_TOKEN\s*=/i,
   /\bghp_[A-Za-z0-9_]+/,
-  /\bpassword["']?\s*[:=]/i,
   /\bApp Secret\b/i,
-  /\bAPIKEY["']?\s*[:=]/i,
-  /\bAPI_KEY["']?\s*[:=]/i,
-  /\bSECRET["']?\s*[:=]/i,
-  /\bTOKEN["']?\s*[:=]/i,
+  /\b[A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|APIKEY)["']?\s*[:=]/i,
 ];
 
 function readTextFile(filePath, fallback = '') {
