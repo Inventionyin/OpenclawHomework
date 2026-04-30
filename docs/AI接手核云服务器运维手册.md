@@ -127,8 +127,9 @@ docs/skills/handoff.md
 - 记忆文件只能保存非敏感事实。
 - 不要把服务器密码、Token、App Secret、模型 API Key 写入记忆。
 - 普通聊天默认不携带完整记忆。
-- `doc-agent` 和 `memory-agent` 需要授权用户。
-- 群聊里没有 @ 机器人时，文档和记忆问题默认忽略，避免把项目状态发到群里。
+- `ui-test-agent`、`ops-agent`、`doc-agent`、`memory-agent` 都需要授权用户。
+- 群聊里没有 @ 机器人时，普通聊天、文档和记忆问题默认忽略，避免把项目状态发到群里。
+- 群聊未 @ 时，只允许明确的 UI 测试触发、显式运维命令和 `绑定我` 这类必要指令通过。
 - 否定句或教程句里的 `/run-ui-test` 不会触发 GitHub Actions。
 
 ## 3. 服务器信息
