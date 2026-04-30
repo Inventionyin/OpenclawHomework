@@ -188,6 +188,22 @@ curl -sS -X POST https://hermes.evanshine.me/webhook/feishu \
 {"challenge":"hermes-check"}
 ```
 
+watchdog 定时器：
+
+```bash
+cd /opt/OpenclawHomework
+bash scripts/install-watchdog.sh \
+  --unit-name hermes-homework-watchdog \
+  --bridge-service hermes-feishu-bridge \
+  --env-file /etc/hermes-feishu-bridge.env \
+  --state-file /var/lib/hermes-homework-watchdog/state.json
+
+systemctl list-timers '*homework-watchdog*' --no-pager
+journalctl -u hermes-homework-watchdog -n 100 --no-pager
+```
+
+它会每 5 分钟检查 Hermes 桥梁服务健康状态；健康检查失败时重启服务，并扫描 Nginx access log 里的飞书回调风暴。
+
 ## 8. 旧服务器清理动作
 
 旧服务器现在应该只保留 OpenClaw 主链路。
@@ -230,3 +246,10 @@ curl -sS https://openclaw.evanshine.me/health
 ```
 
 两边现在都能独立运行，后续如果出现问题，也可以分开排查，不会再像之前那样互相串扰。
+
+建议长期保持：
+
+- OpenClaw 服务器只跑 `openclaw-feishu-bridge` 和 `openclaw-homework-watchdog`。
+- Hermes 服务器只跑 `hermes-feishu-bridge` 和 `hermes-homework-watchdog`。
+- 飞书后台只订阅 `接收消息 im.message.receive_v1`。
+- 不要把两个机器人的事件订阅 URL 指向同一台服务器。

@@ -285,14 +285,22 @@ journalctl -u hermes-feishu-bridge -n 100 --no-pager
 journalctl -u hermes-feishu-bridge -f
 ```
 
-检查 OpenClaw 旧服务器 watchdog：
+检查桥梁服务 watchdog：
 
 ```bash
-systemctl list-timers openclaw-hermes-watchdog.timer --no-pager
-journalctl -u openclaw-hermes-watchdog -n 100 --no-pager
-openclaw-hermes-doctor check
-openclaw-hermes-doctor smoke
+systemctl list-timers '*homework-watchdog*' --no-pager
+systemctl status openclaw-homework-watchdog.timer --no-pager -l
+systemctl status hermes-homework-watchdog.timer --no-pager -l
+journalctl -u openclaw-homework-watchdog -n 100 --no-pager
+journalctl -u hermes-homework-watchdog -n 100 --no-pager
 ```
+
+watchdog 的作用：
+
+- 每 5 分钟检查本机 `http://127.0.0.1:8788/health`。
+- 如果健康检查失败，自动重启对应的 `openclaw-feishu-bridge` 或 `hermes-feishu-bridge`。
+- 扫描最近 10 分钟 Nginx 飞书 webhook POST，如果发现大量请求或非 `200` 回调，记录告警原因。
+- 如果环境变量 `WATCHDOG_FEISHU_NOTIFY_ENABLED=true`，会给指定飞书用户/群发守护告警，并按冷却时间避免告警刷屏。
 
 检查 Nginx：
 
@@ -349,6 +357,40 @@ npm test
 systemctl restart hermes-feishu-bridge
 curl -sS http://127.0.0.1:8788/health
 ```
+
+安装或更新 watchdog 定时器：
+
+OpenClaw 服务器：
+
+```bash
+cd /opt/OpenclawHomework
+bash scripts/install-watchdog.sh \
+  --unit-name openclaw-homework-watchdog \
+  --bridge-service openclaw-feishu-bridge \
+  --env-file /etc/openclaw-feishu-bridge.env \
+  --state-file /var/lib/openclaw-homework-watchdog/state.json
+```
+
+Hermes 服务器：
+
+```bash
+cd /opt/OpenclawHomework
+bash scripts/install-watchdog.sh \
+  --unit-name hermes-homework-watchdog \
+  --bridge-service hermes-feishu-bridge \
+  --env-file /etc/hermes-feishu-bridge.env \
+  --state-file /var/lib/hermes-homework-watchdog/state.json
+```
+
+验证：
+
+```bash
+systemctl list-timers '*homework-watchdog*' --no-pager
+systemctl start openclaw-homework-watchdog.service
+systemctl start hermes-homework-watchdog.service
+```
+
+注意：上面两个 `systemctl start` 要分别在对应服务器执行，不要在 OpenClaw 服务器启动 Hermes 的 watchdog。
 
 如果本地到 GitHub 网络不通，可以让服务器使用临时 GitHub Token 推送。注意不要把 Token 写入命令历史或日志；用完后建议用户撤销临时 Token。
 
@@ -415,6 +457,7 @@ https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml
 - `FEISHU_RUN_NOTIFICATION_DEDUP_TTL_MS=300000` 会避免同一聊天、同一分支、同一模式的报告 5 分钟内重复发送。
 - 飞书后台只保留 `接收消息 im.message.receive_v1`；不要订阅 `消息已读 im.message.message_read_v1`。
 - 飞书事件回调必须返回 HTTP `200`，不要返回 `202`。飞书可能把非 `200` 当成投递失败并持续重试，造成夜间消息轰炸。
+- `server-watchdog.js` 会扫描 Nginx access log；如果最近 10 分钟出现飞书 webhook 非 `200` 或请求风暴，会在日志里留下原因，配置通知后也会按冷却时间告警。
 
 如果仍重复，检查：
 
@@ -422,6 +465,8 @@ https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml
 journalctl -u openclaw-feishu-bridge -n 200 --no-pager | grep -Ei 'duplicate|notification|workflow|Feishu'
 journalctl -u hermes-feishu-bridge -n 200 --no-pager | grep -Ei 'duplicate|notification|workflow|Feishu'
 tail -n 200 /var/log/nginx/access.log | grep 'POST /webhook/feishu'
+journalctl -u openclaw-homework-watchdog -n 100 --no-pager
+journalctl -u hermes-homework-watchdog -n 100 --no-pager
 ```
 
 ### 11.2 Hermes 显示已绑定但仍说未授权
