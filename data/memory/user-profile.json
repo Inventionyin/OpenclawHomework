@@ -1,0 +1,10 @@
+{
+  "language": "zh-CN",
+  "style": "直接、稳、少废话，优先执行并验证",
+  "preferences": [
+    "用中文说明当前状态",
+    "不要把密钥、Token、密码写入仓库或最终回复",
+    "修改代码后必须运行测试",
+    "遇到服务器问题先查 health、systemd、journalctl"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "repository": "https://github.com/Inventionyin/OpenclawHomework",
+  "localPath": "D:\\OtherProject\\OpenclawHomework",
+  "servers": {
+    "openclaw": {
+      "host": "38.76.178.91",
+      "domain": "openclaw.evanshine.me",
+      "service": "openclaw-feishu-bridge",
+      "watchdog": "openclaw-homework-watchdog"
+    },
+    "hermes": {
+      "host": "38.76.188.94",
+      "domain": "hermes.evanshine.me",
+      "service": "hermes-feishu-bridge",
+      "watchdog": "hermes-homework-watchdog"
+    }
+  },
+  "capabilities": [
+    "Feishu webhook receives OpenClaw and Hermes bot messages",
+    "GitHub Actions workflow_dispatch triggers UI automation",
+    "Allure and GitHub Actions report links are sent back to Feishu",
+    "OpenClaw CLI calls are serialized to avoid session file locks",
+    "Watchdog timers check bridge health and Feishu callback storms"
+  ],
+  "securityRules": [
+    "No arbitrary shell from Feishu",
+    "No secrets in memory files",
+    "Ops commands must be whitelisted"
+  ]
+}
