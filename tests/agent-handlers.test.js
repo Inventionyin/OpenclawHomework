@@ -84,6 +84,17 @@ test('buildOpsAgentReply rejects unknown ops actions', async () => {
   assert.match(reply, /不支持的运维指令/);
 });
 
+test('buildOpsAgentReply does not echo secret-like unknown ops actions', async () => {
+  const reply = await buildOpsAgentReply({ action: 'Authorization: Bearer abc.def.secret' }, {
+    runOpsCheck: async () => {
+      throw new Error('runOpsCheck should not be called for unknown ops actions');
+    },
+  });
+
+  assert.match(reply, /不支持的运维指令/);
+  assert.doesNotMatch(reply, /Authorization|Bearer|abc\.def\.secret/);
+});
+
 test('buildOpsAgentReply redacts secret-like fields', async () => {
   const reply = await buildOpsAgentReply({ action: 'status' }, {
     runOpsCheck: async () => ({

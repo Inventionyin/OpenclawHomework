@@ -75,7 +75,7 @@ async function defaultRunOpsCheck() {
 
 async function buildOpsAgentReply(route, options = {}) {
   if (!ALLOWED_OPS_ACTIONS.has(route.action)) {
-    return `不支持的运维指令：${route.action}`;
+    return '不支持的运维指令。';
   }
 
   let result;
