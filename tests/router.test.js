@@ -64,3 +64,39 @@ test('routeAgentIntent keeps memory and explicit UI test boundaries', () => {
   });
   assert.equal(routeAgentIntent('帮我跑测试').agent, 'ui-test-agent');
 });
+
+test('routeAgentIntent prioritizes imperative test runs over fuzzy docs', () => {
+  assert.deepEqual(routeAgentIntent('帮我跑测试并更新文档'), {
+    agent: 'ui-test-agent',
+    action: 'run',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('请执行冒烟测试'), {
+    agent: 'ui-test-agent',
+    action: 'run',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('触发 UI 自动化测试'), {
+    agent: 'ui-test-agent',
+    action: 'run',
+    requiresAuth: true,
+  });
+});
+
+test('routeAgentIntent does not run tests for questions negations or failure discussion', () => {
+  assert.deepEqual(routeAgentIntent('如何运行测试'), {
+    agent: 'doc-agent',
+    action: 'answer',
+    requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('不要运行测试'), {
+    agent: 'chat-agent',
+    action: 'chat',
+    requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('contract test failure 怎么办'), {
+    agent: 'chat-agent',
+    action: 'chat',
+    requiresAuth: false,
+  });
+});

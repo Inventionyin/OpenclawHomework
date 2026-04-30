@@ -10,6 +10,23 @@ function extractCommandText(text) {
   return text.slice(commandMatch.index).trim();
 }
 
+function looksLikeTestHowToQuestion(text) {
+  return /(如何|怎么|怎样|在哪|哪里).{0,30}(运行|跑|触发|执行)?.{0,20}(测试|UI\s*自动化|冒烟|全量|smoke\s+test|contracts?\s+test)/i.test(text);
+}
+
+function looksLikeTestNegation(text) {
+  return /(不要|别|不用|无需|不要再|先别).{0,20}(运行|跑|触发|执行).{0,30}(测试|UI\s*自动化|冒烟|全量)/i.test(text);
+}
+
+function looksLikeTestRunRequest(text) {
+  if (looksLikeTestHowToQuestion(text) || looksLikeTestNegation(text)) {
+    return false;
+  }
+
+  return /(帮我|请|麻烦|帮忙|给我)?.{0,12}(跑|运行|触发|执行).{0,40}(测试|UI\s*自动化|冒烟|全量)/.test(text)
+    || /^(帮我|请|麻烦|帮忙|给我).{0,20}(冒烟|全量|smoke|contracts?).{0,10}(测试|test)$/i.test(text);
+}
+
 function routeAgentIntent(text) {
   const normalized = normalizeText(text);
 
@@ -39,15 +56,11 @@ function routeAgentIntent(text) {
     return { agent: 'memory-agent', action: 'show', requiresAuth: true };
   }
 
-  if (/(老师任务|还差|接手|交接|文档|handoff|完成度)/i.test(normalized)) {
+  if (looksLikeTestHowToQuestion(normalized)) {
     return { agent: 'doc-agent', action: 'answer', requiresAuth: false };
   }
 
-  if (/^(\/run-ui-test|run-ui-test)\b/i.test(normalized)
-    || /(跑|运行|触发|执行).{0,40}测试/.test(normalized)
-    || /UI\s*自动化/i.test(normalized)
-    || /(冒烟|全量)\s*测试/.test(normalized)
-    || /\b(smoke|contracts?)\s+test\b/i.test(normalized)) {
+  if (/^(\/run-ui-test|run-ui-test)\b/i.test(normalized) || looksLikeTestRunRequest(normalized)) {
     return {
       agent: 'ui-test-agent',
       action: 'run',
@@ -55,11 +68,18 @@ function routeAgentIntent(text) {
     };
   }
 
+  if (/(老师任务|还差|接手|交接|文档|handoff|完成度)/i.test(normalized)) {
+    return { agent: 'doc-agent', action: 'answer', requiresAuth: false };
+  }
+
   return { agent: 'chat-agent', action: 'chat', requiresAuth: false };
 }
 
 module.exports = {
   extractCommandText,
+  looksLikeTestHowToQuestion,
+  looksLikeTestNegation,
+  looksLikeTestRunRequest,
   normalizeText,
   routeAgentIntent,
 };
