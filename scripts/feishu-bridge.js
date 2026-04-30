@@ -21,6 +21,9 @@ const {
   buildMemoryAgentReply,
   buildOpsAgentReply,
 } = require('./agents/agent-handlers');
+const {
+  runPeerSshAction,
+} = require('./peer-client');
 
 const VALID_RUN_MODES = new Set(['contracts', 'smoke', 'all']);
 let openClawCliQueue = Promise.resolve();
@@ -1162,9 +1165,15 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
   }
 
   if (route.agent === 'ops-agent') {
+    const runOpsCheck = options.runOpsCheck || ((action) => {
+      if (String(action).startsWith('peer-')) {
+        return runPeerSshAction(action, env);
+      }
+      return undefined;
+    });
     return {
       handled: true,
-      replyText: await buildOpsAgentReply(route),
+      replyText: await buildOpsAgentReply(route, { runOpsCheck }),
     };
   }
 

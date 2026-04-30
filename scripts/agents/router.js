@@ -7,7 +7,7 @@ function stripMention(text) {
 }
 
 function extractCommandText(text) {
-  const commandMatch = text.match(/\/(?:status|health|watchdog|logs|memory|run-ui-test)\b/i);
+  const commandMatch = text.match(/\/(?:status|health|watchdog|logs|peer(?:[-\s](?:status|health|logs|restart|repair))?|memory|run-ui-test)\b/i);
   if (!commandMatch) {
     return text;
   }
@@ -55,6 +55,10 @@ function routeAgentIntent(text) {
   }
   if (/^\/logs\b/i.test(normalized)) {
     return { agent: 'ops-agent', action: 'logs', requiresAuth: true };
+  }
+  const peerMatch = normalized.match(/^\/peer(?:[-\s](status|health|logs|restart|repair))\b/i);
+  if (peerMatch) {
+    return { agent: 'ops-agent', action: `peer-${peerMatch[1].toLowerCase()}`, requiresAuth: true };
   }
 
   const rememberMatch = normalized.match(/^\/memory\s+remember\s+(.+)$/i);

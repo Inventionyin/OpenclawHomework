@@ -80,6 +80,7 @@ https://hermes.evanshine.me/webhook/feishu
 - OpenClaw 和 Hermes 已经拆成两台核云服务器。
 - 两个机器人使用不同飞书 App 凭证和不同 systemd 服务。
 - 两个机器人有独立触发授权名单和独立环境文件。
+- 两台服务器现在配置了受限互修通道：OpenClaw 可以通过白名单 SSH forced command 操作 Hermes，Hermes 可以通过同样方式操作 OpenClaw。这个通道不是共享数据库，也不是任意 shell。
 - 飞书事件建议只保留 `接收消息 im.message.receive_v1`，不要订阅 `消息已读 im.message.message_read_v1`。
 - 机器人收到自动化指令后，先回复“收到了，正在运行 UI 自动化测试。报告生成后我会发给你。”，最终只发一次报告卡片。
 - 飞书消息先经过轻量 Agent Router，再决定是聊天、触发 UI 测试、查看运维状态、回答文档问题，还是读取/写入安全记忆。
@@ -128,6 +129,7 @@ docs/skills/handoff.md
 - 不要把服务器密码、Token、App Secret、模型 API Key 写入记忆。
 - 普通聊天默认不携带完整记忆。
 - `ui-test-agent`、`ops-agent`、`doc-agent`、`memory-agent` 都需要授权用户。
+- `ops-agent` 支持 `/peer-status`、`/peer-health`、`/peer-logs`、`/peer-restart`、`/peer-repair`。这些命令只会走受限 peer-control 白名单，不能执行任意 shell。
 - 群聊里没有 @ 机器人时，普通聊天、文档和记忆问题默认忽略，避免把项目状态发到群里。
 - 群聊未 @ 时，只允许明确的 UI 测试触发、显式运维命令和 `绑定我` 这类必要指令通过。
 - 否定句或教程句里的 `/run-ui-test` 不会触发 GitHub Actions。
@@ -218,6 +220,12 @@ HERMES_BIN=hermes
 HERMES_PROVIDER=custom
 HERMES_MODEL=astron-code-latest
 
+PEER_NAME=对端名称
+PEER_SSH_HOST=对端服务器 IP
+PEER_SSH_USER=root
+PEER_SSH_PORT=22
+PEER_SSH_KEY=/root/.ssh/对应的 peer 私钥
+
 FEISHU_RESULT_NOTIFY_ENABLED=true
 FEISHU_CARD_ENABLED=true
 FEISHU_WEBHOOK_ASYNC=true
@@ -227,6 +235,13 @@ FEISHU_DEDUP_ENABLED=true
 FEISHU_DEDUP_TTL_MS=300000
 FEISHU_RUN_NOTIFICATION_DEDUP_TTL_MS=300000
 ```
+
+互修通道说明：
+
+- 对端 `authorized_keys` 使用 `command="..."` 强制运行 `node /opt/OpenclawHomework/scripts/peer-control.js`。
+- 允许动作只有 `status`、`health`、`logs`、`restart`、`repair`。
+- `repair` 会在对端执行：`git pull --ff-only`、`npm test`、重启对端桥梁服务、检查 `/health`。
+- 不要把这个通道改成普通无限制 root SSH，除非用户明确要求并理解风险。
 
 修改后重启对应服务器上的服务：
 

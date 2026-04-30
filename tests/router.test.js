@@ -15,6 +15,8 @@ test('routeAgentIntent routes safe ops commands', () => {
   assert.deepEqual(routeAgentIntent('/health'), { agent: 'ops-agent', action: 'health', requiresAuth: true });
   assert.deepEqual(routeAgentIntent('/watchdog'), { agent: 'ops-agent', action: 'watchdog', requiresAuth: true });
   assert.deepEqual(routeAgentIntent('/logs'), { agent: 'ops-agent', action: 'logs', requiresAuth: true });
+  assert.deepEqual(routeAgentIntent('/peer-status'), { agent: 'ops-agent', action: 'peer-status', requiresAuth: true });
+  assert.deepEqual(routeAgentIntent('/peer repair'), { agent: 'ops-agent', action: 'peer-repair', requiresAuth: true });
   assert.deepEqual(routeAgentIntent('@OpenClaw UI 自动化助手 /status'), {
     agent: 'ops-agent',
     action: 'status',

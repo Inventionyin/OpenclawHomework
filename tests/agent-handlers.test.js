@@ -74,6 +74,30 @@ test('buildOpsAgentReply formats whitelisted check results', async () => {
   assert.equal(receivedAction, 'status');
 });
 
+test('buildOpsAgentReply supports whitelisted peer repair actions', async () => {
+  let receivedAction;
+  const reply = await buildOpsAgentReply({ action: 'peer-repair' }, {
+    runOpsCheck: async (action) => {
+      receivedAction = action;
+      return {
+        service: 'openclaw-feishu-bridge',
+        active: 'active',
+        health: '{"ok":true}',
+        watchdog: 'peer',
+        commit: 'abc1234',
+        target: 'OpenClaw',
+        operation: 'peer-repair',
+        detail: 'restart ok; tests ok',
+      };
+    },
+  });
+
+  assert.equal(receivedAction, 'peer-repair');
+  assert.match(reply, /目标：OpenClaw/);
+  assert.match(reply, /操作：peer-repair/);
+  assert.match(reply, /restart ok; tests ok/);
+});
+
 test('buildOpsAgentReply rejects unknown ops actions', async () => {
   const reply = await buildOpsAgentReply({ action: 'rm -rf /' }, {
     runOpsCheck: async () => {

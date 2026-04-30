@@ -12,7 +12,17 @@ const OPS_SECRET_PATTERNS = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/i,
 ];
 
-const ALLOWED_OPS_ACTIONS = new Set(['status', 'health', 'watchdog', 'logs']);
+const ALLOWED_OPS_ACTIONS = new Set([
+  'status',
+  'health',
+  'watchdog',
+  'logs',
+  'peer-status',
+  'peer-health',
+  'peer-logs',
+  'peer-restart',
+  'peer-repair',
+]);
 
 function trimForReply(value, limit = 1200) {
   const text = String(value ?? '').trim();
@@ -91,12 +101,15 @@ async function buildOpsAgentReply(route, options = {}) {
   const safeResult = result && typeof result === 'object' ? result : {};
   return [
     '服务器状态摘要：',
+    safeResult.target ? `目标：${sanitizeReplyField(safeResult.target || 'unknown')}` : null,
+    safeResult.operation ? `操作：${sanitizeReplyField(safeResult.operation || 'unknown')}` : null,
     `服务：${sanitizeReplyField(safeResult.service || 'unknown')}`,
     `服务状态：${sanitizeReplyField(safeResult.active || 'unknown')}`,
     `健康检查：${sanitizeReplyField(safeResult.health || 'unknown')}`,
     `watchdog：${sanitizeReplyField(safeResult.watchdog || 'unknown')}`,
     `代码版本：${sanitizeReplyField(safeResult.commit || 'unknown')}`,
-  ].join('\n');
+    safeResult.detail ? `详情：${sanitizeReplyField(safeResult.detail, 1000)}` : null,
+  ].filter(Boolean).join('\n');
 }
 
 function buildChatAgentPrompt(text, memoryContext = '') {
