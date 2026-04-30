@@ -12,7 +12,14 @@ test('routeAgentIntent routes UI automation requests', () => {
 
 test('routeAgentIntent routes safe ops commands', () => {
   assert.deepEqual(routeAgentIntent('/status'), { agent: 'ops-agent', action: 'status', requiresAuth: true });
+  assert.deepEqual(routeAgentIntent('/health'), { agent: 'ops-agent', action: 'health', requiresAuth: true });
   assert.deepEqual(routeAgentIntent('/watchdog'), { agent: 'ops-agent', action: 'watchdog', requiresAuth: true });
+  assert.deepEqual(routeAgentIntent('/logs'), { agent: 'ops-agent', action: 'logs', requiresAuth: true });
+  assert.deepEqual(routeAgentIntent('@OpenClaw UI 自动化助手 /status'), {
+    agent: 'ops-agent',
+    action: 'status',
+    requiresAuth: true,
+  });
 });
 
 test('routeAgentIntent routes memory commands', () => {
@@ -28,6 +35,7 @@ test('routeAgentIntent routes memory commands', () => {
 test('routeAgentIntent routes documentation questions', () => {
   assert.equal(routeAgentIntent('老师任务还差哪些').agent, 'doc-agent');
   assert.equal(routeAgentIntent('怎么让新 AI 接手').agent, 'doc-agent');
+  assert.equal(routeAgentIntent('GitHub Actions workflow 文档在哪').agent, 'doc-agent');
 });
 
 test('routeAgentIntent defaults to chat agent', () => {
@@ -36,4 +44,23 @@ test('routeAgentIntent defaults to chat agent', () => {
     action: 'chat',
     requiresAuth: false,
   });
+  assert.deepEqual(routeAgentIntent('系统运行正常吗'), {
+    agent: 'chat-agent',
+    action: 'chat',
+    requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('这个 UI 怎么设计'), {
+    agent: 'chat-agent',
+    action: 'chat',
+    requiresAuth: false,
+  });
+});
+
+test('routeAgentIntent keeps memory and explicit UI test boundaries', () => {
+  assert.deepEqual(routeAgentIntent('记住 workflow 今天失败了'), {
+    agent: 'memory-agent',
+    action: 'show',
+    requiresAuth: true,
+  });
+  assert.equal(routeAgentIntent('帮我跑测试').agent, 'ui-test-agent');
 });

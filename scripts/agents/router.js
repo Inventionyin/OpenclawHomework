@@ -1,18 +1,17 @@
 function normalizeText(text) {
-  return String(text ?? '').trim().replace(/^@\S+\s*/, '');
+  return extractCommandText(String(text ?? '').trim()).replace(/^@\S+\s*/, '');
+}
+
+function extractCommandText(text) {
+  const commandMatch = text.match(/\/(?:status|health|watchdog|logs|memory|run-ui-test)\b/i);
+  if (!commandMatch) {
+    return text;
+  }
+  return text.slice(commandMatch.index).trim();
 }
 
 function routeAgentIntent(text) {
   const normalized = normalizeText(text);
-
-  if (/^(\/run-ui-test|run-ui-test)\b/i.test(normalized)
-    || /(UI|ui|自动化|冒烟|全量|contracts|smoke|GitHub Actions|workflow|跑一下|运行).*(测试|test)?/.test(normalized)) {
-    return {
-      agent: 'ui-test-agent',
-      action: 'run',
-      requiresAuth: true,
-    };
-  }
 
   if (/^\/status\b/i.test(normalized)) {
     return { agent: 'ops-agent', action: 'status', requiresAuth: true };
@@ -44,10 +43,23 @@ function routeAgentIntent(text) {
     return { agent: 'doc-agent', action: 'answer', requiresAuth: false };
   }
 
+  if (/^(\/run-ui-test|run-ui-test)\b/i.test(normalized)
+    || /(跑|运行|触发|执行).{0,40}测试/.test(normalized)
+    || /UI\s*自动化/i.test(normalized)
+    || /(冒烟|全量)\s*测试/.test(normalized)
+    || /\b(smoke|contracts?)\s+test\b/i.test(normalized)) {
+    return {
+      agent: 'ui-test-agent',
+      action: 'run',
+      requiresAuth: true,
+    };
+  }
+
   return { agent: 'chat-agent', action: 'chat', requiresAuth: false };
 }
 
 module.exports = {
+  extractCommandText,
   normalizeText,
   routeAgentIntent,
 };
