@@ -7,3 +7,4 @@ allure-results/
 allure-report/
 .env
 .playwright-mcp/
+.worktrees/
