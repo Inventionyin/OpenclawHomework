@@ -5,9 +5,11 @@ const { join } = require('node:path');
 const test = require('node:test');
 
 const {
+  buildChatAgentPrompt,
   buildDocAgentReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,
+  sanitizeReplyField,
 } = require('../scripts/agents/agent-handlers');
 
 test('buildDocAgentReply answers project progress from memory', () => {
@@ -88,6 +90,15 @@ test('buildOpsAgentReply redacts secret-like fields', async () => {
   assert.match(reply, /\[redacted secret-like output\]/);
 });
 
+test('sanitizeReplyField redacts ops-specific secret formats', () => {
+  assert.equal(sanitizeReplyField('Authorization: Bearer abc.def.secret'), '[redacted secret-like output]');
+  assert.equal(sanitizeReplyField('token=sk-proj-abc123456789'), '[redacted secret-like output]');
+  assert.equal(
+    sanitizeReplyField('-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----'),
+    '[redacted secret-like output]',
+  );
+});
+
 test('buildOpsAgentReply trims long fields', async () => {
   const longHealth = 'x'.repeat(2000);
   const reply = await buildOpsAgentReply({ action: 'status' }, {
@@ -102,4 +113,30 @@ test('buildOpsAgentReply trims long fields', async () => {
 
   assert.doesNotMatch(reply, new RegExp(longHealth));
   assert.match(reply, /x{500}\.\.\./);
+});
+
+test('buildOpsAgentReply returns safe reply when ops check fails', async () => {
+  const reply = await buildOpsAgentReply({ action: 'status' }, {
+    runOpsCheck: async () => {
+      throw new Error('Authorization: Bearer abc.def.secret');
+    },
+  });
+
+  assert.match(reply, /服务器状态暂时不可用/);
+  assert.doesNotMatch(reply, /abc\.def\.secret/);
+});
+
+test('buildOpsAgentReply tolerates empty ops check result', async () => {
+  const reply = await buildOpsAgentReply({ action: 'status' }, {
+    runOpsCheck: async () => null,
+  });
+
+  assert.match(reply, /服务器状态摘要/);
+  assert.match(reply, /unknown/);
+});
+
+test('buildChatAgentPrompt does not include memory unless provided', () => {
+  const reply = buildChatAgentPrompt('你好');
+  assert.doesNotMatch(reply, /Memory Context/);
+  assert.doesNotMatch(reply, /38\.76\./);
 });

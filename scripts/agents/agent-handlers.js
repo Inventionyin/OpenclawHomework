@@ -5,13 +5,25 @@ const {
   rememberMemoryNote,
 } = require('./memory-store');
 
+const OPS_SECRET_PATTERNS = [
+  /\bauthorization\s*:\s*bearer\s+\S+/i,
+  /\bbearer\s+[A-Za-z0-9._~+/=-]{10,}/i,
+  /\bsk-(?:proj-)?[A-Za-z0-9_-]{8,}/i,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/i,
+];
+
 function trimForReply(value, limit = 1200) {
   const text = String(value ?? '').trim();
   return text.length > limit ? `${text.slice(0, limit)}...` : text;
 }
 
+function isSafeOpsText(value) {
+  const text = String(value ?? '');
+  return isSafeMemoryText(text) && !OPS_SECRET_PATTERNS.some((pattern) => pattern.test(text));
+}
+
 function sanitizeReplyField(value, limit = 500) {
-  if (!isSafeMemoryText(value)) {
+  if (!isSafeOpsText(value)) {
     return '[redacted secret-like output]';
   }
   return trimForReply(value, limit);
@@ -60,24 +72,38 @@ async function defaultRunOpsCheck() {
 }
 
 async function buildOpsAgentReply(route, options = {}) {
-  const result = await (options.runOpsCheck || defaultRunOpsCheck)(route.action);
+  let result;
+  try {
+    result = await (options.runOpsCheck || defaultRunOpsCheck)(route.action);
+  } catch (error) {
+    return [
+      '服务器状态暂时不可用。',
+      `原因：${sanitizeReplyField(error.message || error)}`,
+    ].join('\n');
+  }
+
+  const safeResult = result && typeof result === 'object' ? result : {};
   return [
     '服务器状态摘要：',
-    `服务：${sanitizeReplyField(result.service)}`,
-    `服务状态：${sanitizeReplyField(result.active)}`,
-    `健康检查：${sanitizeReplyField(result.health)}`,
-    `watchdog：${sanitizeReplyField(result.watchdog)}`,
-    `代码版本：${sanitizeReplyField(result.commit)}`,
+    `服务：${sanitizeReplyField(safeResult.service || 'unknown')}`,
+    `服务状态：${sanitizeReplyField(safeResult.active || 'unknown')}`,
+    `健康检查：${sanitizeReplyField(safeResult.health || 'unknown')}`,
+    `watchdog：${sanitizeReplyField(safeResult.watchdog || 'unknown')}`,
+    `代码版本：${sanitizeReplyField(safeResult.commit || 'unknown')}`,
   ].join('\n');
 }
 
-function buildChatAgentPrompt(text, memoryContext = buildMemoryContext()) {
-  return [
-    memoryContext,
-    '',
+function buildChatAgentPrompt(text, memoryContext = '') {
+  const parts = [
     '请基于以上记忆，用中文简洁回答用户。不要编造服务器状态；需要实时状态时提示用户使用 /status。',
     `用户消息：${text}`,
-  ].join('\n');
+  ];
+
+  if (memoryContext) {
+    parts.unshift(memoryContext, '');
+  }
+
+  return parts.join('\n');
 }
 
 module.exports = {
@@ -85,6 +111,7 @@ module.exports = {
   buildDocAgentReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,
+  isSafeOpsText,
   sanitizeReplyField,
   trimForReply,
 };
