@@ -234,6 +234,15 @@ FEISHU_ENV_FILE=/etc/openclaw-feishu-bridge.env
 FEISHU_DEDUP_ENABLED=true
 FEISHU_DEDUP_TTL_MS=300000
 FEISHU_RUN_NOTIFICATION_DEDUP_TTL_MS=300000
+
+EMAIL_NOTIFY_ENABLED=true
+SMTP_HOST=smtp.qq.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=发件邮箱
+SMTP_PASS=邮箱 SMTP 授权码
+EMAIL_FROM=发件邮箱
+EMAIL_TO=收件邮箱，多个用逗号分隔
 ```
 
 互修通道说明：
@@ -242,6 +251,8 @@ FEISHU_RUN_NOTIFICATION_DEDUP_TTL_MS=300000
 - 允许动作只有 `status`、`health`、`logs`、`restart`、`repair`。
 - `repair` 会在对端执行：`git pull --ff-only`、`npm test`、重启对端桥梁服务、检查 `/health`。
 - 不要把这个通道改成普通无限制 root SSH，除非用户明确要求并理解风险。
+- 邮件通知在 GitHub Actions 完成后由桥梁服务发送。邮件失败只写日志，不应阻断飞书报告。
+- SMTP 密码或授权码只放服务器环境文件，不要写入仓库。
 
 修改后重启对应服务器上的服务：
 

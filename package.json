@@ -9,5 +9,8 @@
     "test": "node --test tests/*.test.js",
     "trigger:ui": "node scripts/trigger-ui-tests.js",
     "watchdog": "node scripts/server-watchdog.js"
+  },
+  "dependencies": {
+    "nodemailer": "^8.0.7"
   }
 }

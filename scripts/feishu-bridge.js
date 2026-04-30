@@ -785,33 +785,130 @@ function formatRunResultMessage(job, run) {
   ].join('\n');
 }
 
-async function notifyFeishuRunResult(job, env = process.env, fetchImpl = fetch) {
+function shouldNotifyEmail(env = process.env) {
+  return String(env.EMAIL_NOTIFY_ENABLED || '').toLowerCase() === 'true';
+}
+
+function buildEmailRunResultSubject(job, run) {
+  const conclusion = run.conclusion || 'unknown';
+  const targetRef = job.targetRef || job.config?.inputs?.target_ref || 'unknown-ref';
+  const runMode = job.runMode || job.config?.inputs?.run_mode || 'unknown-mode';
+  return `[UI 自动化] ${conclusion} - ${targetRef} / ${runMode}`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildEmailRunResultMessage(job, run) {
+  const text = formatRunResultMessage(job, run);
+  const runUrl = run.html_url || job.actionsUrl || '';
+  const artifactsUrl = buildRunArtifactsUrl(runUrl);
+  const lines = [
+    text,
+    artifactsUrl ? `Allure / Playwright artifact：${artifactsUrl}` : '',
+  ].filter(Boolean);
+
+  const htmlLines = lines.map((line) => escapeHtml(line));
+  const links = [
+    runUrl ? `<p><a href="${escapeHtml(runUrl)}">GitHub Actions Run</a></p>` : '',
+    artifactsUrl ? `<p><a href="${escapeHtml(artifactsUrl)}">Allure / Playwright Artifacts</a></p>` : '',
+  ].filter(Boolean).join('\n');
+
+  return {
+    text: lines.join('\n'),
+    html: [
+      '<h2>UI 自动化测试结果</h2>',
+      '<pre style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap;">',
+      htmlLines.join('\n'),
+      '</pre>',
+      links,
+    ].join('\n'),
+  };
+}
+
+function parseEmailRecipients(value) {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+async function sendEmailRunResultNotification(job, run, env = process.env, options = {}) {
+  if (!shouldNotifyEmail(env)) {
+    return { sent: false, reason: 'disabled' };
+  }
+
+  const recipients = parseEmailRecipients(env.EMAIL_TO);
+  if (!recipients.length) {
+    return { sent: false, reason: 'missing_recipients' };
+  }
+
+  if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
+    return { sent: false, reason: 'missing_smtp_config' };
+  }
+
+  const createTransport = options.createTransport || require('nodemailer').createTransport;
+  const transport = createTransport({
+    host: env.SMTP_HOST,
+    port: Number(env.SMTP_PORT || 465),
+    secure: String(env.SMTP_SECURE ?? 'true').toLowerCase() !== 'false',
+    auth: {
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASS,
+    },
+  });
+  const message = buildEmailRunResultMessage(job, run);
+  const result = await transport.sendMail({
+    from: env.EMAIL_FROM || env.SMTP_USER,
+    to: recipients,
+    subject: buildEmailRunResultSubject(job, run),
+    text: message.text,
+    html: message.html,
+  });
+
+  return { sent: true, result };
+}
+
+async function notifyFeishuRunResult(job, env = process.env, fetchImpl = fetch, options = {}) {
+  const feishuSender = options.feishuSender || ((senderEnv, message) => sendFeishuTextMessage(senderEnv, message, fetchImpl));
   if (!job.run?.id) {
-    await sendFeishuTextMessage(env, {
+    await feishuSender(env, {
       ...job.message,
       content: JSON.stringify({ text: `UI 自动化测试已启动，请查看：${job.actionsUrl}` }),
-    }, fetchImpl);
+    });
     return null;
   }
 
-  const completedRun = await waitForWorkflowCompletion(job.config, job.run.id, fetchImpl, {
+  const waitForCompletion = options.waitForCompletion || waitForWorkflowCompletion;
+  const completedRun = await waitForCompletion(job.config, job.run.id, fetchImpl, {
     attempts: Number(env.GITHUB_RUN_NOTIFY_ATTEMPTS || 60),
     intervalMs: Number(env.GITHUB_RUN_NOTIFY_INTERVAL_MS || 10000),
   });
 
   if (String(env.FEISHU_CARD_ENABLED ?? 'true').toLowerCase() !== 'false') {
-    await sendFeishuTextMessage(env, {
+    await feishuSender(env, {
       ...job.message,
       msgType: 'interactive',
       content: JSON.stringify(buildFeishuResultCard(job, completedRun)),
-    }, fetchImpl);
+    });
   } else {
     const text = formatRunResultMessage(job, completedRun);
-    await sendFeishuTextMessage(env, {
+    await feishuSender(env, {
       ...job.message,
       content: JSON.stringify({ text }),
-    }, fetchImpl);
+    });
   }
+
+  const emailSender = options.emailSender || sendEmailRunResultNotification;
+  await Promise.resolve(emailSender(job, completedRun, env)).catch((error) => {
+    console.error(`Email result notification failed: ${error.message}`);
+  });
   return completedRun;
 }
 
@@ -1446,6 +1543,8 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildEmailRunResultMessage,
+  buildEmailRunResultSubject,
   buildFeishuResultCard,
   buildRunArtifactsUrl,
   buildFeishuCardMessage,
@@ -1468,5 +1567,7 @@ module.exports = {
   runOpenClawChat,
   runWebhookInBackground,
   runOpenClawParser,
+  sendEmailRunResultNotification,
   sendFeishuTextMessage,
+  shouldNotifyEmail,
 };

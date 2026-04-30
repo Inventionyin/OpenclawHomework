@@ -7,6 +7,8 @@ const test = require('node:test');
 const {
   buildFeishuResultCard,
   buildFeishuTextMessage,
+  buildEmailRunResultMessage,
+  buildEmailRunResultSubject,
   createServer,
   extractFeishuText,
   getFeishuDedupKeys,
@@ -22,6 +24,8 @@ const {
   runHermesChat,
   runOpenClawChat,
   sendFeishuTextMessage,
+  sendEmailRunResultNotification,
+  notifyFeishuRunResult,
   runOpenClawParser,
 } = require('../scripts/feishu-bridge');
 
@@ -269,6 +273,128 @@ test('buildFeishuResultCard includes run and Allure report links', () => {
   assert.match(content, /GitHub Actions/);
   assert.match(content, /Allure 报告/);
   assert.match(content, /#artifacts/);
+});
+
+test('buildEmailRunResultSubject and message include run result links', () => {
+  const job = {
+    actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123',
+    targetRef: 'main',
+    runMode: 'smoke',
+  };
+  const run = {
+    conclusion: 'success',
+    html_url: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123',
+  };
+
+  assert.equal(
+    buildEmailRunResultSubject(job, run),
+    '[UI 自动化] success - main / smoke',
+  );
+  const message = buildEmailRunResultMessage(job, run);
+  assert.match(message.text, /UI 自动化测试成功/);
+  assert.match(message.text, /Allure \/ Playwright/);
+  assert.match(message.text, /#artifacts/);
+  assert.match(message.html, /UI 自动化测试成功/);
+  assert.match(message.html, /actions\/runs\/123#artifacts/);
+});
+
+test('sendEmailRunResultNotification sends email when SMTP env is enabled', async () => {
+  const sent = [];
+  const result = await sendEmailRunResultNotification(
+    {
+      actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123',
+      targetRef: 'main',
+      runMode: 'contracts',
+    },
+    {
+      conclusion: 'failure',
+      html_url: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123',
+    },
+    {
+      EMAIL_NOTIFY_ENABLED: 'true',
+      SMTP_HOST: 'smtp.example.com',
+      SMTP_PORT: '465',
+      SMTP_SECURE: 'true',
+      SMTP_USER: 'bot@example.com',
+      SMTP_PASS: 'smtp-password',
+      EMAIL_FROM: 'bot@example.com',
+      EMAIL_TO: 'a@example.com, b@example.com',
+    },
+    {
+      createTransport: (config) => {
+        assert.equal(config.host, 'smtp.example.com');
+        assert.equal(config.port, 465);
+        assert.equal(config.secure, true);
+        assert.equal(config.auth.user, 'bot@example.com');
+        return {
+          sendMail: async (mail) => {
+            sent.push(mail);
+            return { messageId: 'message-1' };
+          },
+        };
+      },
+    },
+  );
+
+  assert.equal(result.sent, true);
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0].to, ['a@example.com', 'b@example.com']);
+  assert.match(sent[0].subject, /failure/);
+  assert.match(sent[0].text, /UI 自动化测试失败/);
+});
+
+test('notifyFeishuRunResult sends email after completed run notification', async () => {
+  const feishuMessages = [];
+  const emailJobs = [];
+  const completedRun = {
+    id: 123,
+    conclusion: 'success',
+    html_url: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123',
+  };
+  const job = {
+    actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123',
+    config: {
+      owner: 'Inventionyin',
+      repo: 'OpenclawHomework',
+      inputs: {
+        target_ref: 'main',
+        run_mode: 'smoke',
+      },
+    },
+    message: {
+      receiveIdType: 'chat_id',
+      receiveId: 'chat-a',
+      msgType: 'text',
+      content: JSON.stringify({ text: 'started' }),
+    },
+    run: {
+      id: 123,
+    },
+    runMode: 'smoke',
+    targetRef: 'main',
+  };
+
+  const result = await notifyFeishuRunResult(job, {
+    FEISHU_CARD_ENABLED: 'false',
+    EMAIL_NOTIFY_ENABLED: 'true',
+  }, async () => {
+    throw new Error('fetch should not be used with injected wait function');
+  }, {
+    waitForCompletion: async () => completedRun,
+    feishuSender: async (env, message) => {
+      feishuMessages.push(message);
+    },
+    emailSender: async (scheduledJob, run) => {
+      emailJobs.push({ scheduledJob, run });
+      return { sent: true };
+    },
+  });
+
+  assert.equal(result, completedRun);
+  assert.equal(feishuMessages.length, 1);
+  assert.equal(emailJobs.length, 1);
+  assert.equal(emailJobs[0].scheduledJob.targetRef, 'main');
+  assert.equal(emailJobs[0].run.conclusion, 'success');
 });
 
 test('sendFeishuTextMessage fetches tenant token and sends text message', async () => {
