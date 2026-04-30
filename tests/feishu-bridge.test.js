@@ -46,6 +46,11 @@ test('parseRunUiTestCommand allows bot mention before command', () => {
   });
 });
 
+test('parseRunUiTestCommand rejects negated embedded commands', () => {
+  assert.equal(parseRunUiTestCommand('不要 /run-ui-test main smoke'), null);
+  assert.equal(parseRunUiTestCommand('如何使用 /run-ui-test main smoke'), null);
+});
+
 test('parseOpenClawCommandOutput extracts JSON command from model output', () => {
   const output = [
     'model.run via local',
@@ -1100,6 +1105,65 @@ test('createServer routes doc questions without dispatching workflow or chat', a
   }
 });
 
+test('createServer blocks unauthorized doc questions that include memory context', async () => {
+  let reply;
+  let dispatchCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_USER_IDS: 'user-b',
+    },
+    {
+      dispatch: async () => {
+        dispatchCalled = true;
+        return {
+          actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+        };
+      },
+      receiptSender: async (message) => {
+        reply = message;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '老师任务还差哪些' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(dispatchCalled, false);
+    const text = JSON.parse(reply.content).text;
+    assert.match(text, /未授权|绑定/);
+    assert.doesNotMatch(text, /Memory Context|Project State|已完成的主线能力/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('createServer blocks unauthorized ops commands without dispatching workflow or chat', async () => {
   let reply;
   let dispatchCalled = false;
@@ -1283,6 +1347,67 @@ test('createServer keeps chat-agent test failure questions out of workflow dispa
     assert.equal(parserCalled, false);
     assert.equal(dispatchCalled, false);
     assert.match(JSON.parse(reply.content).text, /失败截图/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer does not dispatch negated run-ui-test command', async () => {
+  let dispatchCalled = false;
+  let parserCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+      OPENCLAW_CHAT_ENABLED: 'false',
+      OPENCLAW_PARSE_ENABLED: 'true',
+    },
+    {
+      dispatch: async () => {
+        dispatchCalled = true;
+        return {
+          actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+        };
+      },
+      parser: async () => {
+        parserCalled = true;
+        return { targetRef: 'main', runMode: 'smoke' };
+      },
+      receiptSender: async () => {},
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '不要 /run-ui-test main smoke' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(parserCalled, false);
+    assert.equal(dispatchCalled, false);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

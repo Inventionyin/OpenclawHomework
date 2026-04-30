@@ -33,7 +33,11 @@ test('routeAgentIntent routes memory commands', () => {
 });
 
 test('routeAgentIntent routes documentation questions', () => {
-  assert.equal(routeAgentIntent('老师任务还差哪些').agent, 'doc-agent');
+  assert.deepEqual(routeAgentIntent('老师任务还差哪些'), {
+    agent: 'doc-agent',
+    action: 'answer',
+    requiresAuth: true,
+  });
   assert.equal(routeAgentIntent('怎么让新 AI 接手').agent, 'doc-agent');
   assert.equal(routeAgentIntent('GitHub Actions workflow 文档在哪').agent, 'doc-agent');
 });
@@ -87,12 +91,22 @@ test('routeAgentIntent does not run tests for questions negations or failure dis
   assert.deepEqual(routeAgentIntent('如何运行测试'), {
     agent: 'doc-agent',
     action: 'answer',
-    requiresAuth: false,
+    requiresAuth: true,
   });
   assert.deepEqual(routeAgentIntent('不要运行测试'), {
     agent: 'chat-agent',
     action: 'chat',
     requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('不要 /run-ui-test main smoke'), {
+    agent: 'chat-agent',
+    action: 'chat',
+    requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('如何使用 /run-ui-test main smoke'), {
+    agent: 'doc-agent',
+    action: 'answer',
+    requiresAuth: true,
   });
   assert.deepEqual(routeAgentIntent('contract test failure 怎么办'), {
     agent: 'chat-agent',

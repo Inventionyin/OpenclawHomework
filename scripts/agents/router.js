@@ -1,5 +1,9 @@
 function normalizeText(text) {
-  return extractCommandText(String(text ?? '').trim()).replace(/^@\S+\s*/, '');
+  return extractCommandText(stripMention(String(text ?? '').trim()));
+}
+
+function stripMention(text) {
+  return String(text ?? '').trim().replace(/^@\S+\s*/, '');
 }
 
 function extractCommandText(text) {
@@ -11,11 +15,11 @@ function extractCommandText(text) {
 }
 
 function looksLikeTestHowToQuestion(text) {
-  return /(如何|怎么|怎样|在哪|哪里).{0,30}(运行|跑|触发|执行)?.{0,20}(测试|UI\s*自动化|冒烟|全量|smoke\s+test|contracts?\s+test)/i.test(text);
+  return /(如何|怎么|怎样|在哪|哪里).{0,30}(使用|运行|跑|触发|执行)?.{0,20}(\/run-ui-test|run-ui-test|测试|UI\s*自动化|冒烟|全量|smoke\s+test|contracts?\s+test)/i.test(text);
 }
 
 function looksLikeTestNegation(text) {
-  return /(不要|别|不用|无需|不要再|先别).{0,20}(运行|跑|触发|执行).{0,30}(测试|UI\s*自动化|冒烟|全量)/i.test(text);
+  return /(不要|别|不用|无需|不要再|先别).{0,30}(\/run-ui-test|run-ui-test|运行|跑|触发|执行).{0,30}(测试|UI\s*自动化|冒烟|全量|smoke|contracts?)?/i.test(text);
 }
 
 function looksLikeTestRunRequest(text) {
@@ -28,6 +32,15 @@ function looksLikeTestRunRequest(text) {
 }
 
 function routeAgentIntent(text) {
+  const original = stripMention(text);
+  if (looksLikeTestHowToQuestion(original)) {
+    return { agent: 'doc-agent', action: 'answer', requiresAuth: true };
+  }
+
+  if (looksLikeTestNegation(original)) {
+    return { agent: 'chat-agent', action: 'chat', requiresAuth: false };
+  }
+
   const normalized = normalizeText(text);
 
   if (/^\/status\b/i.test(normalized)) {
@@ -57,7 +70,7 @@ function routeAgentIntent(text) {
   }
 
   if (looksLikeTestHowToQuestion(normalized)) {
-    return { agent: 'doc-agent', action: 'answer', requiresAuth: false };
+    return { agent: 'doc-agent', action: 'answer', requiresAuth: true };
   }
 
   if (/^(\/run-ui-test|run-ui-test)\b/i.test(normalized) || looksLikeTestRunRequest(normalized)) {
@@ -69,7 +82,7 @@ function routeAgentIntent(text) {
   }
 
   if (/(老师任务|还差|接手|交接|文档|handoff|完成度)/i.test(normalized)) {
-    return { agent: 'doc-agent', action: 'answer', requiresAuth: false };
+    return { agent: 'doc-agent', action: 'answer', requiresAuth: true };
   }
 
   return { agent: 'chat-agent', action: 'chat', requiresAuth: false };
@@ -82,4 +95,5 @@ module.exports = {
   looksLikeTestRunRequest,
   normalizeText,
   routeAgentIntent,
+  stripMention,
 };

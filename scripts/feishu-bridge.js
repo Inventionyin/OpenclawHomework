@@ -9,7 +9,11 @@ const {
   parseCliArgs,
   waitForWorkflowCompletion,
 } = require('./trigger-ui-tests');
-const { routeAgentIntent } = require('./agents/router');
+const {
+  looksLikeTestHowToQuestion,
+  looksLikeTestNegation,
+  routeAgentIntent,
+} = require('./agents/router');
 const {
   buildChatAgentPrompt,
   buildDocAgentReply,
@@ -57,6 +61,11 @@ function extractFeishuText(payload) {
 }
 
 function parseRunUiTestCommand(text) {
+  const commandText = String(text ?? '').trim().replace(/^@\S+\s*/, '');
+  if (looksLikeTestHowToQuestion(commandText) || looksLikeTestNegation(commandText)) {
+    return null;
+  }
+
   const parts = String(text ?? '').trim().split(/\s+/).filter(Boolean);
   const commandIndex = parts.findIndex((part) => part === '/run-ui-test' || part === 'run-ui-test');
   if (commandIndex === -1) {
