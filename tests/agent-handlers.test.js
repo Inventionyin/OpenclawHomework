@@ -74,6 +74,16 @@ test('buildOpsAgentReply formats whitelisted check results', async () => {
   assert.equal(receivedAction, 'status');
 });
 
+test('buildOpsAgentReply rejects unknown ops actions', async () => {
+  const reply = await buildOpsAgentReply({ action: 'rm -rf /' }, {
+    runOpsCheck: async () => {
+      throw new Error('runOpsCheck should not be called for unknown ops actions');
+    },
+  });
+
+  assert.match(reply, /不支持的运维指令/);
+});
+
 test('buildOpsAgentReply redacts secret-like fields', async () => {
   const reply = await buildOpsAgentReply({ action: 'status' }, {
     runOpsCheck: async () => ({

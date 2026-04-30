@@ -12,6 +12,8 @@ const OPS_SECRET_PATTERNS = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/i,
 ];
 
+const ALLOWED_OPS_ACTIONS = new Set(['status', 'health', 'watchdog', 'logs']);
+
 function trimForReply(value, limit = 1200) {
   const text = String(value ?? '').trim();
   return text.length > limit ? `${text.slice(0, limit)}...` : text;
@@ -72,6 +74,10 @@ async function defaultRunOpsCheck() {
 }
 
 async function buildOpsAgentReply(route, options = {}) {
+  if (!ALLOWED_OPS_ACTIONS.has(route.action)) {
+    return `不支持的运维指令：${route.action}`;
+  }
+
   let result;
   try {
     result = await (options.runOpsCheck || defaultRunOpsCheck)(route.action);
@@ -107,6 +113,7 @@ function buildChatAgentPrompt(text, memoryContext = '') {
 }
 
 module.exports = {
+  ALLOWED_OPS_ACTIONS,
   buildChatAgentPrompt,
   buildDocAgentReply,
   buildMemoryAgentReply,
