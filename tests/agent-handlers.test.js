@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { mkdtempSync, rmSync, writeFileSync } = require('node:fs');
+const { mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const test = require('node:test');
@@ -38,6 +38,7 @@ test('buildMemoryAgentReply stores safe note', () => {
       noteFile: file,
     });
     assert.match(reply, /已记住/);
+    assert.match(readFileSync(file, 'utf8'), /OpenClaw 已加串行队列/);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -51,17 +52,54 @@ test('buildMemoryAgentReply rejects secret-like notes', () => {
 });
 
 test('buildOpsAgentReply formats whitelisted check results', async () => {
+  let receivedAction;
   const reply = await buildOpsAgentReply({ action: 'status' }, {
-    runOpsCheck: async () => ({
-      service: 'openclaw-feishu-bridge',
-      active: 'active',
-      health: '{"ok":true}',
-      watchdog: 'active',
-      commit: 'abc1234 test commit',
-    }),
+    runOpsCheck: async (action) => {
+      receivedAction = action;
+      return {
+        service: 'openclaw-feishu-bridge',
+        active: 'active',
+        health: '{"ok":true}',
+        watchdog: 'active',
+        commit: 'abc1234 test commit',
+      };
+    },
   });
 
   assert.match(reply, /openclaw-feishu-bridge/);
   assert.match(reply, /active/);
   assert.match(reply, /abc1234/);
+  assert.equal(receivedAction, 'status');
+});
+
+test('buildOpsAgentReply redacts secret-like fields', async () => {
+  const reply = await buildOpsAgentReply({ action: 'status' }, {
+    runOpsCheck: async () => ({
+      service: 'openclaw-feishu-bridge',
+      active: 'active',
+      health: 'GITHUB_TOKEN: abc123',
+      watchdog: 'active',
+      commit: 'def5678 test commit',
+    }),
+  });
+
+  assert.doesNotMatch(reply, /abc123/);
+  assert.doesNotMatch(reply, /GITHUB_TOKEN/);
+  assert.match(reply, /\[redacted secret-like output\]/);
+});
+
+test('buildOpsAgentReply trims long fields', async () => {
+  const longHealth = 'x'.repeat(2000);
+  const reply = await buildOpsAgentReply({ action: 'status' }, {
+    runOpsCheck: async () => ({
+      service: 'openclaw-feishu-bridge',
+      active: 'active',
+      health: longHealth,
+      watchdog: 'active',
+      commit: 'abc1234 test commit',
+    }),
+  });
+
+  assert.doesNotMatch(reply, new RegExp(longHealth));
+  assert.match(reply, /x{500}\.\.\./);
 });

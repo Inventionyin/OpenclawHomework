@@ -1,12 +1,20 @@
 const { join } = require('node:path');
 const {
   buildMemoryContext,
+  isSafeMemoryText,
   rememberMemoryNote,
 } = require('./memory-store');
 
 function trimForReply(value, limit = 1200) {
   const text = String(value ?? '').trim();
   return text.length > limit ? `${text.slice(0, limit)}...` : text;
+}
+
+function sanitizeReplyField(value, limit = 500) {
+  if (!isSafeMemoryText(value)) {
+    return '[redacted secret-like output]';
+  }
+  return trimForReply(value, limit);
 }
 
 function buildDocAgentReply(text, memoryContext = buildMemoryContext()) {
@@ -55,11 +63,11 @@ async function buildOpsAgentReply(route, options = {}) {
   const result = await (options.runOpsCheck || defaultRunOpsCheck)(route.action);
   return [
     '服务器状态摘要：',
-    `服务：${result.service}`,
-    `服务状态：${result.active}`,
-    `健康检查：${result.health}`,
-    `watchdog：${result.watchdog}`,
-    `代码版本：${result.commit}`,
+    `服务：${sanitizeReplyField(result.service)}`,
+    `服务状态：${sanitizeReplyField(result.active)}`,
+    `健康检查：${sanitizeReplyField(result.health)}`,
+    `watchdog：${sanitizeReplyField(result.watchdog)}`,
+    `代码版本：${sanitizeReplyField(result.commit)}`,
   ].join('\n');
 }
 
@@ -77,5 +85,6 @@ module.exports = {
   buildDocAgentReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,
+  sanitizeReplyField,
   trimForReply,
 };
