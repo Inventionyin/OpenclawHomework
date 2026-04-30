@@ -49,6 +49,7 @@ test('parseRunUiTestCommand allows bot mention before command', () => {
 test('parseRunUiTestCommand rejects negated embedded commands', () => {
   assert.equal(parseRunUiTestCommand('不要 /run-ui-test main smoke'), null);
   assert.equal(parseRunUiTestCommand('如何使用 /run-ui-test main smoke'), null);
+  assert.equal(parseRunUiTestCommand('请问 /run-ui-test main smoke 怎么用'), null);
 });
 
 test('parseOpenClawCommandOutput extracts JSON command from model output', () => {
@@ -1413,6 +1414,67 @@ test('createServer does not dispatch negated run-ui-test command', async () => {
   }
 });
 
+test('createServer does not dispatch trailing how-to run-ui-test command', async () => {
+  let dispatchCalled = false;
+  let parserCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+      OPENCLAW_CHAT_ENABLED: 'false',
+      OPENCLAW_PARSE_ENABLED: 'true',
+    },
+    {
+      dispatch: async () => {
+        dispatchCalled = true;
+        return {
+          actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+        };
+      },
+      parser: async () => {
+        parserCalled = true;
+        return { targetRef: 'main', runMode: 'smoke' };
+      },
+      receiptSender: async () => {},
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '请问 /run-ui-test main smoke 怎么用' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(parserCalled, false);
+    assert.equal(dispatchCalled, false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('createServer does not dispatch chat-agent messages when chat is disabled', async () => {
   let receiptCalled = false;
   let dispatchCalled = false;
@@ -1626,6 +1688,58 @@ test('createServer ignores passive group memory questions without mention', asyn
     assert.equal(response.status, 200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(reply, undefined);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer ignores passive group memory questions in synchronous mode', async () => {
+  let dispatchCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'false',
+      OPENCLAW_PARSE_ENABLED: 'true',
+    },
+    {
+      dispatch: async () => {
+        dispatchCalled = true;
+        return {
+          actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+        };
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            chat_type: 'group',
+            content: JSON.stringify({ text: '项目状态' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(dispatchCalled, false);
+    assert.equal(body.ignored, true);
+    assert.doesNotMatch(body.message, /Memory Context|Project State|当前记忆摘要/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

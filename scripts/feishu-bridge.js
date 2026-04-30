@@ -1228,7 +1228,18 @@ function createServer(env = process.env, options = {}) {
         return;
       }
 
-      const route = routeAgentIntent(extractFeishuText(payload));
+      const text = extractFeishuText(payload);
+      const route = routeAgentIntent(text);
+      if (shouldIgnorePassiveGroupMessage(payload, text, routeEnv, route)) {
+        console.log('Ignored passive Feishu group message.');
+        sendJson(response, 200, {
+          ok: true,
+          ignored: true,
+          message: '被动群聊消息已忽略',
+        });
+        return;
+      }
+
       const routed = await buildRoutedAgentReply(payload, routeEnv, routeOptions, route);
       if (routed.handled) {
         sendJson(response, 200, {

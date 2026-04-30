@@ -108,6 +108,11 @@ test('routeAgentIntent does not run tests for questions negations or failure dis
     action: 'answer',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('请问 /run-ui-test main smoke 怎么用'), {
+    agent: 'doc-agent',
+    action: 'answer',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('contract test failure 怎么办'), {
     agent: 'chat-agent',
     action: 'chat',
