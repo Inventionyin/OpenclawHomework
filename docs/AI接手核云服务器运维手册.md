@@ -82,6 +82,54 @@ https://hermes.evanshine.me/webhook/feishu
 - 两个机器人有独立触发授权名单和独立环境文件。
 - 飞书事件建议只保留 `接收消息 im.message.receive_v1`，不要订阅 `消息已读 im.message.message_read_v1`。
 - 机器人收到自动化指令后，先回复“收到了，正在运行 UI 自动化测试。报告生成后我会发给你。”，最终只发一次报告卡片。
+- 飞书消息先经过轻量 Agent Router，再决定是聊天、触发 UI 测试、查看运维状态、回答文档问题，还是读取/写入安全记忆。
+
+## Agent Router 和记忆
+
+当前桥梁服务采用轻量 Agent Router：
+
+```text
+飞书消息
+  -> Router
+  -> chat/ui-test/ops/doc/memory agent
+  -> 白名单工具或安全回复
+```
+
+它不是把 OpenClaw/Hermes CLI 开成多个并发进程，而是在同一个 Node 桥梁服务内做逻辑分流。这样可以减少 session file locked、重复回复和误触发 GitHub Actions 的风险。
+
+记忆文件在：
+
+```text
+data/memory/
+```
+
+技能说明在：
+
+```text
+docs/skills/
+```
+
+新 AI 接手时可以先读：
+
+```text
+data/memory/user-profile.json
+data/memory/project-state.json
+data/memory/incident-log.md
+data/memory/runbook-notes.md
+docs/skills/ui-automation.md
+docs/skills/server-ops.md
+docs/skills/feishu-debug.md
+docs/skills/handoff.md
+```
+
+安全规则：
+
+- 记忆文件只能保存非敏感事实。
+- 不要把服务器密码、Token、App Secret、模型 API Key 写入记忆。
+- 普通聊天默认不携带完整记忆。
+- `doc-agent` 和 `memory-agent` 需要授权用户。
+- 群聊里没有 @ 机器人时，文档和记忆问题默认忽略，避免把项目状态发到群里。
+- 否定句或教程句里的 `/run-ui-test` 不会触发 GitHub Actions。
 
 ## 3. 服务器信息
 
@@ -150,7 +198,7 @@ PORT=8788
 GITHUB_OWNER=Inventionyin
 GITHUB_REPO=OpenclawHomework
 GITHUB_WORKFLOW_ID=ui-tests.yml
-GITHUB_TOKEN=...
+GITHUB_TOKEN 在服务器环境文件中配置，检查时不要回显真实值
 
 FEISHU_APP_ID=...
 FEISHU_APP_SECRET=...
