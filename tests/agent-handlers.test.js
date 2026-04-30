@@ -92,6 +92,8 @@ test('buildOpsAgentReply redacts secret-like fields', async () => {
 
 test('sanitizeReplyField redacts ops-specific secret formats', () => {
   assert.equal(sanitizeReplyField('Authorization: Bearer abc.def.secret'), '[redacted secret-like output]');
+  assert.equal(sanitizeReplyField('Authorization: Basic dXNlcjpwYXNz'), '[redacted secret-like output]');
+  assert.equal(sanitizeReplyField('Authorization: token abcdefghijkl'), '[redacted secret-like output]');
   assert.equal(sanitizeReplyField('token=sk-proj-abc123456789'), '[redacted secret-like output]');
   assert.equal(
     sanitizeReplyField('-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----'),

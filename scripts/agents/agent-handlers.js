@@ -6,7 +6,7 @@ const {
 } = require('./memory-store');
 
 const OPS_SECRET_PATTERNS = [
-  /\bauthorization\s*:\s*bearer\s+\S+/i,
+  /\bauthorization\s*:\s*\S+/i,
   /\bbearer\s+[A-Za-z0-9._~+/=-]{10,}/i,
   /\bsk-(?:proj-)?[A-Za-z0-9_-]{8,}/i,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/i,
