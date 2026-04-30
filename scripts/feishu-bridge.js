@@ -367,7 +367,7 @@ function shouldIgnorePassiveGroupMessage(payload, text, env = process.env, route
     return false;
   }
 
-  if (parseBindCommand(text) || parseRunUiTestCommand(text) || looksLikeAutomationRequest(text)) {
+  if (parseBindCommand(text) || route.agent === 'ui-test-agent') {
     return false;
   }
 
