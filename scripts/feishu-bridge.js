@@ -345,12 +345,16 @@ function hasFeishuMention(payload, text = extractFeishuText(payload)) {
   return /^@\S+/.test(String(text ?? '').trim());
 }
 
-function shouldIgnorePassiveGroupMessage(payload, text, env = process.env) {
+function shouldIgnorePassiveGroupMessage(payload, text, env = process.env, route = routeAgentIntent(text)) {
   if (String(env.FEISHU_GROUP_PASSIVE_REPLY_ENABLED ?? 'false').toLowerCase() === 'true') {
     return false;
   }
 
   if (!isFeishuGroupChat(payload) || hasFeishuMention(payload, text)) {
+    return false;
+  }
+
+  if (route.agent === 'ops-agent' || route.agent === 'memory-agent') {
     return false;
   }
 
@@ -996,6 +1000,85 @@ function isAsyncWebhookEnabled(env) {
   return String(env.FEISHU_WEBHOOK_ASYNC ?? 'true').toLowerCase() !== 'false';
 }
 
+async function buildRoutedChatReply(text, env, options = {}) {
+  if (String(env.OPENCLAW_CHAT_ENABLED ?? 'true').toLowerCase() === 'false') {
+    return null;
+  }
+
+  const prompt = buildChatAgentPrompt(text);
+  const chat = options.chat || runOpenClawChat;
+  try {
+    return await chat(prompt, env);
+  } catch (error) {
+    if (!isHermesFallbackEnabled(env)) {
+      throw error;
+    }
+
+    const hermesChat = options.hermesChat || runHermesChat;
+    return hermesChat(prompt, env);
+  }
+}
+
+async function buildRoutedAgentReply(payload, env, options = {}, route = routeAgentIntent(extractFeishuText(payload))) {
+  if (route.agent === 'ui-test-agent') {
+    return {
+      handled: false,
+      replyText: '',
+    };
+  }
+
+  const text = extractFeishuText(payload);
+  if (route.requiresAuth && !isAuthorized(payload, env)) {
+    return {
+      handled: true,
+      replyText: getUnauthorizedMessage(env),
+    };
+  }
+
+  if (route.agent === 'doc-agent') {
+    return {
+      handled: true,
+      replyText: buildDocAgentReply(text),
+    };
+  }
+
+  if (route.agent === 'memory-agent') {
+    return {
+      handled: true,
+      replyText: buildMemoryAgentReply(route),
+    };
+  }
+
+  if (route.agent === 'ops-agent') {
+    return {
+      handled: true,
+      replyText: await buildOpsAgentReply(route),
+    };
+  }
+
+  if (route.agent === 'chat-agent') {
+    return {
+      handled: true,
+      replyText: await buildRoutedChatReply(text, env, options),
+    };
+  }
+
+  return {
+    handled: false,
+    replyText: '',
+  };
+}
+
+function sendRoutedFeishuReply(receiptSender, payload, replyText, env, label) {
+  if (!replyText) {
+    return Promise.resolve();
+  }
+
+  return Promise.resolve(receiptSender(buildFeishuTextMessage(payload, replyText, env))).catch((error) => {
+    console.error(`Feishu ${label} reply failed: ${error.message}`);
+  });
+}
+
 function runWebhookInBackground(payload, env, options = {}) {
   setTimeout(() => {
     const text = extractFeishuText(payload);
@@ -1015,45 +1098,9 @@ function runWebhookInBackground(payload, env, options = {}) {
       return;
     }
 
-    if (shouldIgnorePassiveGroupMessage(payload, text, env)) {
-      console.log('Ignored passive Feishu group message.');
-      return;
-    }
-
     const route = routeAgentIntent(text);
-    if (route.requiresAuth && !isAuthorized(payload, env)) {
-      Promise.resolve(receiptSender(buildFeishuTextMessage(payload, getUnauthorizedMessage(env), env))).catch((error) => {
-        console.error(`Feishu unauthorized reply failed: ${error.message}`);
-      });
-      return;
-    }
-
-    if (route.agent === 'doc-agent') {
-      const message = buildFeishuTextMessage(payload, buildDocAgentReply(text), env);
-      Promise.resolve(receiptSender(message)).catch((error) => {
-        console.error(`Feishu doc agent reply failed: ${error.message}`);
-      });
-      return;
-    }
-
-    if (route.agent === 'memory-agent') {
-      const message = buildFeishuTextMessage(payload, buildMemoryAgentReply(route), env);
-      Promise.resolve(receiptSender(message)).catch((error) => {
-        console.error(`Feishu memory agent reply failed: ${error.message}`);
-      });
-      return;
-    }
-
-    if (route.agent === 'ops-agent') {
-      Promise.resolve(buildOpsAgentReply(route))
-        .then((replyText) => receiptSender(buildFeishuTextMessage(payload, replyText, env)))
-        .catch((error) => {
-          console.error(`Feishu ops agent reply failed: ${error.message}`);
-          return receiptSender(buildFeishuTextMessage(payload, '服务器状态暂时不可用。', env));
-        })
-        .catch((error) => {
-          console.error(`Feishu ops fallback reply failed: ${error.message}`);
-        });
+    if (shouldIgnorePassiveGroupMessage(payload, text, env, route)) {
+      console.log('Ignored passive Feishu group message.');
       return;
     }
 
@@ -1066,23 +1113,11 @@ function runWebhookInBackground(payload, env, options = {}) {
       return;
     }
 
-    if (route.agent === 'chat-agent' && String(env.OPENCLAW_CHAT_ENABLED ?? 'true').toLowerCase() !== 'false' && !looksLikeAutomationRequest(text)) {
-      const chat = options.chat || runOpenClawChat;
-      const prompt = buildChatAgentPrompt(text);
-      Promise.resolve(chat(prompt, env))
-        .then((replyText) => receiptSender(buildFeishuTextMessage(payload, replyText, env)))
+    if (route.agent !== 'ui-test-agent') {
+      Promise.resolve(buildRoutedAgentReply(payload, env, options, route))
+        .then(({ replyText }) => sendRoutedFeishuReply(receiptSender, payload, replyText, env, 'routed agent'))
         .catch((error) => {
-          if (!isHermesFallbackEnabled(env)) {
-            console.error(`Feishu free chat failed: ${error.message}`);
-            return;
-          }
-
-          const hermesChat = options.hermesChat || runHermesChat;
-          Promise.resolve(hermesChat(prompt, env))
-            .then((replyText) => receiptSender(buildFeishuTextMessage(payload, replyText, env)))
-            .catch((fallbackError) => {
-              console.error(`Feishu free chat fallback failed: ${fallbackError.message}`);
-            });
+          console.error(`Feishu routed agent failed: ${error.message}`);
         });
       return;
     }
@@ -1180,6 +1215,16 @@ function createServer(env = process.env, options = {}) {
         sendJson(response, 200, {
           ok: true,
           message: '飞书指令已收到，正在后台触发 UI 自动化测试',
+        });
+        return;
+      }
+
+      const route = routeAgentIntent(extractFeishuText(payload));
+      const routed = await buildRoutedAgentReply(payload, routeEnv, routeOptions, route);
+      if (routed.handled) {
+        sendJson(response, 200, {
+          ok: true,
+          message: routed.replyText || '消息已处理',
         });
         return;
       }

@@ -1218,6 +1218,349 @@ test('createServer free chat prompt omits full memory by default', async () => {
   }
 });
 
+test('createServer keeps chat-agent test failure questions out of workflow dispatch', async () => {
+  let reply;
+  let dispatchCalled = false;
+  let chatCalled = false;
+  let parserCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      OPENCLAW_CHAT_ENABLED: 'true',
+      OPENCLAW_PARSE_ENABLED: 'true',
+    },
+    {
+      dispatch: async () => {
+        dispatchCalled = true;
+        return {
+          actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+        };
+      },
+      parser: async () => {
+        parserCalled = true;
+        return { targetRef: 'main', runMode: 'smoke' };
+      },
+      receiptSender: async (message) => {
+        reply = message;
+      },
+      chat: async () => {
+        chatCalled = true;
+        return '先看失败截图和 Allure 报告。';
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '测试失败怎么办' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(chatCalled, true);
+    assert.equal(parserCalled, false);
+    assert.equal(dispatchCalled, false);
+    assert.match(JSON.parse(reply.content).text, /失败截图/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer does not dispatch chat-agent messages when chat is disabled', async () => {
+  let receiptCalled = false;
+  let dispatchCalled = false;
+  let parserCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      OPENCLAW_CHAT_ENABLED: 'false',
+      OPENCLAW_PARSE_ENABLED: 'true',
+    },
+    {
+      dispatch: async () => {
+        dispatchCalled = true;
+        return {
+          actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+        };
+      },
+      parser: async () => {
+        parserCalled = true;
+        return { targetRef: 'main', runMode: 'smoke' };
+      },
+      receiptSender: async () => {
+        receiptCalled = true;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '测试失败怎么办' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(receiptCalled, false);
+    assert.equal(parserCalled, false);
+    assert.equal(dispatchCalled, false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer routes doc questions in synchronous mode without dispatching workflow', async () => {
+  let dispatchCalled = false;
+  let parserCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'false',
+      OPENCLAW_PARSE_ENABLED: 'true',
+    },
+    {
+      dispatch: async () => {
+        dispatchCalled = true;
+        return {
+          actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+        };
+      },
+      parser: async () => {
+        parserCalled = true;
+        return { targetRef: 'main', runMode: 'smoke' };
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '老师任务还差哪些' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(dispatchCalled, false);
+    assert.equal(parserCalled, false);
+    assert.match(body.message, /已完成/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer replies to explicit ops commands in passive group chats', async () => {
+  let reply;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+    },
+    {
+      receiptSender: async (message) => {
+        reply = message;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            chat_type: 'group',
+            content: JSON.stringify({ text: '/status' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.match(JSON.parse(reply.content).text, /服务器状态摘要/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer does not invoke chat fallback when sending primary chat reply fails', async () => {
+  let sendCount = 0;
+  let hermesChatCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      OPENCLAW_CHAT_ENABLED: 'true',
+      HERMES_FALLBACK_ENABLED: 'true',
+    },
+    {
+      receiptSender: async () => {
+        sendCount += 1;
+        throw new Error('send failed after accept');
+      },
+      chat: async () => '主模型回复',
+      hermesChat: async () => {
+        hermesChatCalled = true;
+        return '不应该作为发送失败的 fallback';
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '今天适合先看哪块代码' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(sendCount, 1);
+    assert.equal(hermesChatCalled, false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer does not send duplicate ops fallback when sending ops reply fails', async () => {
+  let sendCount = 0;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+    },
+    {
+      receiptSender: async () => {
+        sendCount += 1;
+        throw new Error('send failed after accept');
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '/status' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(sendCount, 1);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('createServer falls back to Hermes chat when OpenClaw chat fails', async () => {
   let reply;
   const server = createServer(
