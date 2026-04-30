@@ -696,6 +696,77 @@ test('createServer replies to greeting without dispatching workflow', async () =
   }
 });
 
+test('createServer logs Feishu timing stages for async chat replies', async () => {
+  const logs = [];
+  const originalLog = console.log;
+  let reply;
+  console.log = (...args) => {
+    logs.push(args.join(' '));
+  };
+
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      OPENCLAW_CHAT_ENABLED: 'true',
+      FEISHU_ASSISTANT_NAME: 'Hermes',
+      FEISHU_TIMING_LOG_ENABLED: 'true',
+    },
+    {
+      chat: async () => '我是 Hermes，收到。',
+      receiptSender: async (message) => {
+        reply = message;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          header: {
+            event_type: 'im.message.receive_v1',
+          },
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '今天随便聊两句' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(reply.receiveId, 'chat-a');
+
+    const timingLogs = logs.filter((line) => line.includes('[Feishu timing]'));
+    assert(timingLogs.some((line) => /stage=received\b/.test(line)));
+    assert(timingLogs.some((line) => /stage=route\b/.test(line) && /agent=chat-agent\b/.test(line)));
+    assert(timingLogs.some((line) => /stage=model:start\b/.test(line)));
+    assert(timingLogs.some((line) => /stage=model:finish\b/.test(line)));
+    assert(timingLogs.some((line) => /stage=send:start\b/.test(line)));
+    assert(timingLogs.some((line) => /stage=send:finish\b/.test(line)));
+    assert(timingLogs.some((line) => /stage=finish\b/.test(line)));
+  } finally {
+    console.log = originalLog;
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('createServer ignores passive group greeting without mention', async () => {
   let reply;
   let dispatchCalled = false;

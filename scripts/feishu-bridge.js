@@ -3,6 +3,7 @@ const { execFile } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const { existsSync, readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
+const { performance } = require('node:perf_hooks');
 
 const {
   dispatchWorkflow,
@@ -215,6 +216,54 @@ function buildHermesCommand(env, prompt) {
 
 function getAssistantName(env = process.env, fallback = 'OpenClaw') {
   return String(env.FEISHU_ASSISTANT_NAME || env.ASSISTANT_NAME || fallback).trim() || fallback;
+}
+
+function nowMs() {
+  return performance.now();
+}
+
+function elapsedMs(startedAt) {
+  return Math.max(0, Math.round(nowMs() - Number(startedAt || nowMs())));
+}
+
+function createFeishuTimingContext(startedAt = nowMs()) {
+  return { startedAt };
+}
+
+function sanitizeTimingValue(value) {
+  return String(value ?? '')
+    .replace(/[\r\n\t ]+/g, '_')
+    .replace(/[^\w:./@-]/g, '_')
+    .slice(0, 80);
+}
+
+function logFeishuTiming(env, timingContext, stage, fields = {}) {
+  if (String(env.FEISHU_TIMING_LOG_ENABLED ?? 'false').toLowerCase() !== 'true') {
+    return;
+  }
+
+  const startedAt = timingContext?.startedAt || nowMs();
+  const parts = [
+    'assistant=' + sanitizeTimingValue(getAssistantName(env)),
+    'stage=' + sanitizeTimingValue(stage),
+    'elapsed_ms=' + elapsedMs(startedAt),
+  ];
+
+  for (const [key, value] of Object.entries(fields)) {
+    if (value === undefined || value === null || value === '') {
+      continue;
+    }
+    parts.push(`${sanitizeTimingValue(key)}=${sanitizeTimingValue(value)}`);
+  }
+
+  console.log(`[Feishu timing] ${parts.join(' ')}`);
+}
+
+function logTimedModelFinish(env, timingContext, stage, modelStartedAt, fields = {}) {
+  logFeishuTiming(env, timingContext, stage, {
+    ...fields,
+    model_elapsed_ms: elapsedMs(modelStartedAt),
+  });
 }
 
 function parseOpenClawChatOutput(output) {
@@ -819,7 +868,7 @@ function buildDispatchConfig(command, env) {
   return config;
 }
 
-async function handleFeishuWebhook(payload, env = process.env, dispatch = dispatchWorkflow, parserOverride, schedulerOverride, fallbackParserOverride, parserSourceOverride, fallbackParserSourceOverride) {
+async function handleFeishuWebhook(payload, env = process.env, dispatch = dispatchWorkflow, parserOverride, schedulerOverride, fallbackParserOverride, parserSourceOverride, fallbackParserSourceOverride, timingContext) {
   if (payload?.challenge) {
     return {
       statusCode: 200,
@@ -846,17 +895,46 @@ async function handleFeishuWebhook(payload, env = process.env, dispatch = dispat
     command = parseRunUiTestCommand(text);
     if (!command && String(env.OPENCLAW_PARSE_ENABLED).toLowerCase() === 'true') {
       const parser = parserOverride || runOpenClawParser;
+      const parserSource = parserSourceOverride || 'openclaw';
+      const parserStartedAt = nowMs();
+      logFeishuTiming(env, timingContext, 'model:start', {
+        agent: 'ui-test-agent',
+        source: parserSource,
+        purpose: 'parser',
+      });
       try {
         command = await parser(text, env);
-        commandSource = command ? (parserSourceOverride || 'openclaw') : commandSource;
+        logTimedModelFinish(env, timingContext, 'model:finish', parserStartedAt, {
+          agent: 'ui-test-agent',
+          source: parserSource,
+          purpose: 'parser',
+        });
+        commandSource = command ? parserSource : commandSource;
       } catch (parserError) {
+        logTimedModelFinish(env, timingContext, 'model:error', parserStartedAt, {
+          agent: 'ui-test-agent',
+          source: parserSource,
+          purpose: 'parser',
+        });
         if (!isHermesFallbackEnabled(env)) {
           throw parserError;
         }
 
         const hermesParser = fallbackParserOverride || runHermesParser;
+        const fallbackSource = fallbackParserSourceOverride || 'hermes';
+        const fallbackStartedAt = nowMs();
+        logFeishuTiming(env, timingContext, 'model:start', {
+          agent: 'ui-test-agent',
+          source: fallbackSource,
+          purpose: 'parser',
+        });
         command = await hermesParser(text, env);
-        commandSource = command ? (fallbackParserSourceOverride || 'hermes') : commandSource;
+        logTimedModelFinish(env, timingContext, 'model:finish', fallbackStartedAt, {
+          agent: 'ui-test-agent',
+          source: fallbackSource,
+          purpose: 'parser',
+        });
+        commandSource = command ? fallbackSource : commandSource;
       }
     }
   } catch (error) {
@@ -1016,15 +1094,40 @@ async function buildRoutedChatReply(text, env, options = {}) {
 
   const prompt = buildChatAgentPrompt(text);
   const chat = options.chat || runOpenClawChat;
+  const timingContext = options.timingContext;
+  const modelStartedAt = nowMs();
+  logFeishuTiming(env, timingContext, 'model:start', {
+    agent: 'chat-agent',
+    source: getAssistantName(env),
+  });
   try {
-    return await chat(prompt, env);
+    const reply = await chat(prompt, env);
+    logTimedModelFinish(env, timingContext, 'model:finish', modelStartedAt, {
+      agent: 'chat-agent',
+      source: getAssistantName(env),
+    });
+    return reply;
   } catch (error) {
+    logTimedModelFinish(env, timingContext, 'model:error', modelStartedAt, {
+      agent: 'chat-agent',
+      source: getAssistantName(env),
+    });
     if (!isHermesFallbackEnabled(env)) {
       throw error;
     }
 
     const hermesChat = options.hermesChat || runHermesChat;
-    return hermesChat(prompt, env);
+    const fallbackStartedAt = nowMs();
+    logFeishuTiming(env, timingContext, 'model:start', {
+      agent: 'chat-agent',
+      source: 'fallback',
+    });
+    const reply = await hermesChat(prompt, env);
+    logTimedModelFinish(env, timingContext, 'model:finish', fallbackStartedAt, {
+      agent: 'chat-agent',
+      source: 'fallback',
+    });
+    return reply;
   }
 }
 
@@ -1078,12 +1181,30 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
   };
 }
 
-function sendRoutedFeishuReply(receiptSender, payload, replyText, env, label) {
+function sendTimedFeishuMessage(receiptSender, message, env, timingContext, label) {
+  const sendStartedAt = nowMs();
+  logFeishuTiming(env, timingContext, 'send:start', { label });
+  return Promise.resolve(receiptSender(message)).then((result) => {
+    logFeishuTiming(env, timingContext, 'send:finish', {
+      label,
+      send_elapsed_ms: elapsedMs(sendStartedAt),
+    });
+    return result;
+  }).catch((error) => {
+    logFeishuTiming(env, timingContext, 'send:error', {
+      label,
+      send_elapsed_ms: elapsedMs(sendStartedAt),
+    });
+    throw error;
+  });
+}
+
+function sendRoutedFeishuReply(receiptSender, payload, replyText, env, label, timingContext) {
   if (!replyText) {
     return Promise.resolve();
   }
 
-  return Promise.resolve(receiptSender(buildFeishuTextMessage(payload, replyText, env))).catch((error) => {
+  return sendTimedFeishuMessage(receiptSender, buildFeishuTextMessage(payload, replyText, env), env, timingContext, label).catch((error) => {
     console.error(`Feishu ${label} reply failed: ${error.message}`);
   });
 }
@@ -1092,6 +1213,7 @@ function runWebhookInBackground(payload, env, options = {}) {
   setTimeout(() => {
     const text = extractFeishuText(payload);
     const receiptSender = options.receiptSender || ((reply) => sendFeishuTextMessage(env, reply));
+    const timingContext = options.timingContext || createFeishuTimingContext();
 
     if (!hasFeishuReplyTarget(payload)) {
       console.log('Ignored Feishu message without reply target.');
@@ -1100,7 +1222,8 @@ function runWebhookInBackground(payload, env, options = {}) {
 
     if (parseBindCommand(text)) {
       bindAllowedSender(payload, env, options)
-        .then((replyText) => receiptSender(buildFeishuTextMessage(payload, replyText, env)))
+        .then((replyText) => sendTimedFeishuMessage(receiptSender, buildFeishuTextMessage(payload, replyText, env), env, timingContext, 'bind'))
+        .then(() => logFeishuTiming(env, timingContext, 'finish', { outcome: 'bind' }))
         .catch((error) => {
           console.error(`Feishu bind reply failed: ${error.message}`);
         });
@@ -1108,23 +1231,32 @@ function runWebhookInBackground(payload, env, options = {}) {
     }
 
     const route = routeAgentIntent(text);
+    logFeishuTiming(env, timingContext, 'route', {
+      agent: route.agent,
+      action: route.action,
+      requires_auth: route.requiresAuth,
+    });
     if (shouldIgnorePassiveGroupMessage(payload, text, env, route)) {
       console.log('Ignored passive Feishu group message.');
+      logFeishuTiming(env, timingContext, 'finish', { outcome: 'ignored_passive_group' });
       return;
     }
 
     const smallTalkReply = parseSmallTalkMessage(extractFeishuText(payload), env);
     if (smallTalkReply) {
       const message = buildFeishuTextMessage(payload, smallTalkReply, env);
-      Promise.resolve(receiptSender(message)).catch((error) => {
-        console.error(`Feishu small talk reply failed: ${error.message}`);
-      });
+      sendTimedFeishuMessage(receiptSender, message, env, timingContext, 'small-talk')
+        .then(() => logFeishuTiming(env, timingContext, 'finish', { outcome: 'small_talk' }))
+        .catch((error) => {
+          console.error(`Feishu small talk reply failed: ${error.message}`);
+        });
       return;
     }
 
     if (route.agent !== 'ui-test-agent') {
-      Promise.resolve(buildRoutedAgentReply(payload, env, options, route))
-        .then(({ replyText }) => sendRoutedFeishuReply(receiptSender, payload, replyText, env, 'routed agent'))
+      Promise.resolve(buildRoutedAgentReply(payload, env, { ...options, timingContext }, route))
+        .then(({ replyText }) => sendRoutedFeishuReply(receiptSender, payload, replyText, env, 'routed-agent', timingContext))
+        .then(() => logFeishuTiming(env, timingContext, 'finish', { outcome: 'routed_agent' }))
         .catch((error) => {
           console.error(`Feishu routed agent failed: ${error.message}`);
         });
@@ -1132,9 +1264,11 @@ function runWebhookInBackground(payload, env, options = {}) {
     }
 
     if (!isAuthorized(payload, env)) {
-      Promise.resolve(receiptSender(buildFeishuTextMessage(payload, getUnauthorizedMessage(env), env))).catch((error) => {
-        console.error(`Feishu unauthorized reply failed: ${error.message}`);
-      });
+      sendTimedFeishuMessage(receiptSender, buildFeishuTextMessage(payload, getUnauthorizedMessage(env), env), env, timingContext, 'unauthorized')
+        .then(() => logFeishuTiming(env, timingContext, 'finish', { outcome: 'unauthorized' }))
+        .catch((error) => {
+          console.error(`Feishu unauthorized reply failed: ${error.message}`);
+        });
       return;
     }
 
@@ -1144,7 +1278,7 @@ function runWebhookInBackground(payload, env, options = {}) {
         '收到了，正在运行 UI 自动化测试。报告生成后我会发给你。',
         env,
       );
-      Promise.resolve(receiptSender(receipt)).catch((error) => {
+      sendTimedFeishuMessage(receiptSender, receipt, env, timingContext, 'automation-receipt').catch((error) => {
         console.error(`Feishu receipt notification failed: ${error.message}`);
       });
     }
@@ -1158,7 +1292,11 @@ function runWebhookInBackground(payload, env, options = {}) {
       options.hermesParser,
       options.parserSource,
       options.fallbackParserSource,
-    ).catch((error) => {
+      timingContext,
+    ).then(() => {
+      logFeishuTiming(env, timingContext, 'finish', { outcome: 'ui_test' });
+    }).catch((error) => {
+      logFeishuTiming(env, timingContext, 'finish', { outcome: 'error' });
       console.error(`Feishu webhook background job failed: ${error.message}`);
     });
   }, 0);
@@ -1167,6 +1305,7 @@ function runWebhookInBackground(payload, env, options = {}) {
 function createServer(env = process.env, options = {}) {
   const dedupCache = options.dedupCache || new Map();
   return http.createServer(async (request, response) => {
+    const timingContext = createFeishuTimingContext();
     if (request.method === 'GET' && request.url === '/health') {
       sendJson(response, 200, { ok: true });
       return;
@@ -1184,16 +1323,22 @@ function createServer(env = process.env, options = {}) {
       const effectiveRouteMode = getFeishuPayloadMode(payload, env, routeMode);
       const routeOptions = buildRouteOptions(effectiveRouteMode, options);
       const routeEnv = buildRouteEnv(effectiveRouteMode, env);
+      const timedRouteOptions = { ...routeOptions, timingContext };
+      logFeishuTiming(routeEnv, timingContext, 'received', {
+        mode: effectiveRouteMode,
+        event_type: extractFeishuEventType(payload) || 'unknown',
+      });
       if (payload?.challenge) {
         const result = await handleFeishuWebhook(
           payload,
           routeEnv,
-          routeOptions.dispatch || dispatchWorkflow,
-          routeOptions.parser,
-          routeOptions.scheduler,
-          routeOptions.hermesParser,
-          routeOptions.parserSource,
-          routeOptions.fallbackParserSource,
+          timedRouteOptions.dispatch || dispatchWorkflow,
+          timedRouteOptions.parser,
+          timedRouteOptions.scheduler,
+          timedRouteOptions.hermesParser,
+          timedRouteOptions.parserSource,
+          timedRouteOptions.fallbackParserSource,
+          timingContext,
         );
         sendJson(response, result.statusCode, result.body);
         return;
@@ -1220,7 +1365,7 @@ function createServer(env = process.env, options = {}) {
       }
 
       if (isAsyncWebhookEnabled(routeEnv)) {
-        runWebhookInBackground(payload, routeEnv, routeOptions);
+        runWebhookInBackground(payload, routeEnv, timedRouteOptions);
         sendJson(response, 200, {
           ok: true,
           message: '飞书指令已收到，正在后台触发 UI 自动化测试',
@@ -1230,8 +1375,14 @@ function createServer(env = process.env, options = {}) {
 
       const text = extractFeishuText(payload);
       const route = routeAgentIntent(text);
+      logFeishuTiming(routeEnv, timingContext, 'route', {
+        agent: route.agent,
+        action: route.action,
+        requires_auth: route.requiresAuth,
+      });
       if (shouldIgnorePassiveGroupMessage(payload, text, routeEnv, route)) {
         console.log('Ignored passive Feishu group message.');
+        logFeishuTiming(routeEnv, timingContext, 'finish', { outcome: 'ignored_passive_group' });
         sendJson(response, 200, {
           ok: true,
           ignored: true,
@@ -1240,8 +1391,9 @@ function createServer(env = process.env, options = {}) {
         return;
       }
 
-      const routed = await buildRoutedAgentReply(payload, routeEnv, routeOptions, route);
+      const routed = await buildRoutedAgentReply(payload, routeEnv, timedRouteOptions, route);
       if (routed.handled) {
+        logFeishuTiming(routeEnv, timingContext, 'finish', { outcome: 'routed_agent_sync' });
         sendJson(response, 200, {
           ok: true,
           message: routed.replyText || '消息已处理',
@@ -1252,13 +1404,15 @@ function createServer(env = process.env, options = {}) {
       const result = await handleFeishuWebhook(
         payload,
         routeEnv,
-        routeOptions.dispatch || dispatchWorkflow,
-        routeOptions.parser,
-        routeOptions.scheduler,
-        routeOptions.hermesParser,
-        routeOptions.parserSource,
-        routeOptions.fallbackParserSource,
+        timedRouteOptions.dispatch || dispatchWorkflow,
+        timedRouteOptions.parser,
+        timedRouteOptions.scheduler,
+        timedRouteOptions.hermesParser,
+        timedRouteOptions.parserSource,
+        timedRouteOptions.fallbackParserSource,
+        timingContext,
       );
+      logFeishuTiming(routeEnv, timingContext, 'finish', { outcome: 'ui_test_sync' });
       sendJson(response, result.statusCode, result.body);
     } catch (error) {
       sendJson(response, 500, {
