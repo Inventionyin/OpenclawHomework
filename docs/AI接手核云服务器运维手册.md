@@ -414,12 +414,14 @@ https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml
 - `FEISHU_DEDUP_ENABLED=true` 会忽略短时间重复投递的同一飞书事件。
 - `FEISHU_RUN_NOTIFICATION_DEDUP_TTL_MS=300000` 会避免同一聊天、同一分支、同一模式的报告 5 分钟内重复发送。
 - 飞书后台只保留 `接收消息 im.message.receive_v1`；不要订阅 `消息已读 im.message.message_read_v1`。
+- 飞书事件回调必须返回 HTTP `200`，不要返回 `202`。飞书可能把非 `200` 当成投递失败并持续重试，造成夜间消息轰炸。
 
 如果仍重复，检查：
 
 ```bash
 journalctl -u openclaw-feishu-bridge -n 200 --no-pager | grep -Ei 'duplicate|notification|workflow|Feishu'
 journalctl -u hermes-feishu-bridge -n 200 --no-pager | grep -Ei 'duplicate|notification|workflow|Feishu'
+tail -n 200 /var/log/nginx/access.log | grep 'POST /webhook/feishu'
 ```
 
 ### 11.2 Hermes 显示已绑定但仍说未授权
