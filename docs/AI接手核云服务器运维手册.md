@@ -35,6 +35,8 @@ https://openclaw.evanshine.me/webhook/feishu/openclaw
 https://hermes.evanshine.me/health
 https://hermes.evanshine.me/webhook/feishu
 
+如果域名解析异常，先用服务器本机 health 判断服务是否存活，再检查 DNS。不要把“域名解析不到”和“桥梁服务挂了”混为一谈。
+
 当前系统作用：
 飞书 OpenClaw/Hermes 机器人接收消息 -> Node 桥梁服务解析指令 -> GitHub API 触发 GitHub Actions -> Actions 拉取电商前端和 UItest -> 执行 UI 自动化 -> 飞书返回报告卡片。
 
@@ -84,6 +86,29 @@ https://hermes.evanshine.me/webhook/feishu
 - 飞书事件建议只保留 `接收消息 im.message.receive_v1`，不要订阅 `消息已读 im.message.message_read_v1`。
 - 机器人收到自动化指令后，先回复“收到了，正在运行 UI 自动化测试。报告生成后我会发给你。”，最终只发一次报告卡片。
 - 飞书消息先经过轻量 Agent Router，再决定是聊天、触发 UI 测试、查看运维状态、回答文档问题，还是读取/写入安全记忆。
+
+## 2.1 2026-05-02 官方组件版本记录
+
+最后核验时间：2026-05-02。
+
+作业桥梁服务：
+
+```text
+OpenClaw 服务器 /opt/OpenclawHomework：4a5b6bf，工作区干净，openclaw-feishu-bridge active，/health 正常。
+Hermes 服务器 /opt/OpenclawHomework：4a5b6bf，工作区干净，hermes-feishu-bridge active，/health 正常。
+```
+
+官方 CLI/Agent：
+
+```text
+OpenClaw 服务器：OpenClaw 2026.4.15 (041266a)
+OpenClaw 服务器：Hermes Agent v0.12.0 (2026.4.30)，/usr/local/lib/hermes-agent commit f98b5d00a
+Hermes 服务器：Hermes Agent v0.12.0 (2026.4.30)，/usr/local/lib/hermes-agent commit f98b5d00a
+```
+
+OpenClaw 官方 npm 最新版当时显示为 `2026.4.29`，但在本地 Windows 和 OpenClaw 服务器的干净临时目录中安装均失败。Yarn 报错指向依赖链里的 `workspace:^` 版本无法解析，npm 只返回 exit code 1。结论：暂缓升级 OpenClaw，保留已安装且可运行的 `2026.4.15`，等官方 npm 包修复后再升级。
+
+Hermes 官方更新已完成。`hermes update` 后如果 `/usr/local/lib/hermes-agent/ui-tui/package-lock.json` 出现纯 lockfile 脏改，可以先备份该文件，再恢复到 git 版本，避免影响下次官方更新。
 
 ## Agent Router 和记忆
 
@@ -304,6 +329,24 @@ curl -sS https://openclaw.evanshine.me/health
 curl -sS https://hermes.evanshine.me/health
 ```
 
+如果公网 health 失败，先分两步判断：
+
+```bash
+# 在服务器上检查桥梁服务本身
+curl -sS http://127.0.0.1:8788/health
+
+# 在本地绕过 DNS 直连对应 IP，验证 Nginx 和证书入口
+curl -k --resolve openclaw.evanshine.me:443:38.76.178.91 https://openclaw.evanshine.me/health
+curl -k --resolve hermes.evanshine.me:443:38.76.188.94 https://hermes.evanshine.me/health
+```
+
+如果本机 health 和 `--resolve` 都正常，但普通域名访问失败，优先检查 DNS A 记录是否还存在：
+
+```text
+openclaw.evanshine.me -> 38.76.178.91
+hermes.evanshine.me -> 38.76.188.94
+```
+
 飞书 challenge 检查：
 
 ```bash
@@ -466,6 +509,53 @@ systemctl start hermes-homework-watchdog.service
 ```
 
 注意：上面两个 `systemctl start` 要分别在对应服务器执行，不要在 OpenClaw 服务器启动 Hermes 的 watchdog。
+
+## 8.1 官方 OpenClaw/Hermes 更新流程
+
+更新官方组件前，先记录当前版本和服务状态：
+
+```bash
+openclaw --version || true
+hermes --version || true
+cd /opt/OpenclawHomework && git rev-parse --short HEAD && git status --short
+systemctl is-active openclaw-feishu-bridge || systemctl is-active hermes-feishu-bridge
+curl -sS http://127.0.0.1:8788/health
+```
+
+Hermes 更新：
+
+```bash
+mkdir -p /root/openclaw-homework-backups
+hermes update
+hermes --version
+cd /usr/local/lib/hermes-agent
+git status --short
+```
+
+如果 Hermes 更新后只剩 `ui-tui/package-lock.json` 这类官方 lockfile 脏改，先备份再恢复：
+
+```bash
+cp ui-tui/package-lock.json /root/openclaw-homework-backups/hermes-ui-tui-package-lock-after-update-$(date +%Y%m%d-%H%M%S).json
+git checkout -- ui-tui/package-lock.json
+```
+
+OpenClaw 更新必须先在临时目录验证 npm 包能装：
+
+```bash
+tmp=$(mktemp -d)
+npm install --prefix "$tmp" openclaw@latest --no-audit --no-fund
+"$tmp/node_modules/.bin/openclaw" --version
+rm -rf "$tmp"
+```
+
+只有临时安装成功后，才执行全局升级：
+
+```bash
+npm install -g openclaw@latest --no-audit --no-fund
+openclaw --version
+```
+
+如果临时安装失败，保持服务器现有 OpenClaw 版本，不要卸载旧版本。
 
 如果本地到 GitHub 网络不通，可以让服务器使用临时 GitHub Token 推送。注意不要把 Token 写入命令历史或日志；用完后建议用户撤销临时 Token。
 
