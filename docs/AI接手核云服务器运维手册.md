@@ -94,19 +94,19 @@ https://hermes.evanshine.me/webhook/feishu
 作业桥梁服务：
 
 ```text
-OpenClaw 服务器 /opt/OpenclawHomework：4a5b6bf，工作区干净，openclaw-feishu-bridge active，/health 正常。
-Hermes 服务器 /opt/OpenclawHomework：4a5b6bf，工作区干净，hermes-feishu-bridge active，/health 正常。
+OpenClaw 服务器 /opt/OpenclawHomework：757276b，工作区干净，openclaw-feishu-bridge active，/health 正常。
+Hermes 服务器 /opt/OpenclawHomework：757276b，工作区干净，hermes-feishu-bridge active，/health 正常。
 ```
 
 官方 CLI/Agent：
 
 ```text
-OpenClaw 服务器：OpenClaw 2026.4.15 (041266a)
+OpenClaw 服务器：Node v22.22.2，OpenClaw 2026.4.29 (a448042)
 OpenClaw 服务器：Hermes Agent v0.12.0 (2026.4.30)，/usr/local/lib/hermes-agent commit f98b5d00a
 Hermes 服务器：Hermes Agent v0.12.0 (2026.4.30)，/usr/local/lib/hermes-agent commit f98b5d00a
 ```
 
-OpenClaw 官方 npm 最新版当时显示为 `2026.4.29`，但在本地 Windows 和 OpenClaw 服务器的干净临时目录中安装均失败。Yarn 报错指向依赖链里的 `workspace:^` 版本无法解析，npm 只返回 exit code 1。结论：暂缓升级 OpenClaw，保留已安装且可运行的 `2026.4.15`，等官方 npm 包修复后再升级。
+OpenClaw 更新经验：`2026.4.29` 依赖较大，本地短超时安装会误判为失败；Yarn v1 会因为依赖链中的 `workspace:^` 报错，不建议用 Yarn 安装。先用 npm 在临时目录长超时验证安装，再全局安装。OpenClaw 新依赖 `undici@8.1.0` 要求 Node `>=22.19.0`，OpenClaw 服务器已先升级到 Node `v22.22.2` 后再升级 OpenClaw。
 
 Hermes 官方更新已完成。`hermes update` 后如果 `/usr/local/lib/hermes-agent/ui-tui/package-lock.json` 出现纯 lockfile 脏改，可以先备份该文件，再恢复到 git 版本，避免影响下次官方更新。
 
