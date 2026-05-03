@@ -134,7 +134,8 @@ Hermes 服务器：
 - 已安装 @clawemail/claw-setup，版本 0.3.2
 - 已通过 hermes-email-setup.sh 配置 Hermes 原生邮件网关
 - hermes-gateway.service 已启用并运行
-- Hermes 邮件网关使用 watchee@claw.163.com
+- Hermes 邮件网关使用 shine1@claw.163.com
+- Hermes 邮件网关 home email 为 1693457391@qq.com
 - Hermes 侧 mail-cli 尚未单独认证；这是 CLI 工具状态，不影响 hermes-gateway.service 邮件网关运行
 ```
 
@@ -142,7 +143,8 @@ Hermes 服务器：
 
 - `mail-cli` 是 ClawEmail 的命令行工具，OpenClaw 服务器已认证。
 - `hermes-gateway.service` 是 Hermes 官方原生消息网关，Hermes 服务器当前用它接入 ClawEmail。
-- 两边现在用了同一个 ClawEmail 邮箱 `watchee@claw.163.com`。如果以后要长期稳定区分身份，建议给 Hermes 单独申请一个 ClawEmail 地址，避免邮件会话和身份混淆。
+- OpenClaw 和 Hermes 现在已经使用不同的 ClawEmail 地址：OpenClaw 为 `watchee@claw.163.com`，Hermes 为 `shine1@claw.163.com`。
+- Hermes 的 `mail-cli` 管理 API 仍未认证，所以 Hermes 当前可以通过邮件网关收发消息，但还不能用 `mail-cli clawemail create/list` 管理子邮箱。要让 Hermes 管理子邮箱，需要再配置 `mail-cli auth apikey set ...` 或使用官方提供的 mail-cli 认证方式。
 
 OpenClaw 服务器检查命令：
 
