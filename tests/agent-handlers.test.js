@@ -182,6 +182,26 @@ test('buildOpsAgentReply tolerates empty ops check result', async () => {
   assert.match(reply, /unknown/);
 });
 
+test('buildOpsAgentReply uses provided local ops runner for watchdog action', async () => {
+  let receivedAction;
+  const reply = await buildOpsAgentReply({ action: 'watchdog' }, {
+    runOpsCheck: async (action) => {
+      receivedAction = action;
+      return {
+        service: 'openclaw-feishu-bridge',
+        active: 'active',
+        health: '{"ok":true}',
+        watchdog: 'active',
+        commit: 'abc1234',
+      };
+    },
+  });
+
+  assert.equal(receivedAction, 'watchdog');
+  assert.match(reply, /watchdog：active/);
+  assert.doesNotMatch(reply, /not configured in local mode/);
+});
+
 test('buildChatAgentPrompt does not include memory unless provided', () => {
   const reply = buildChatAgentPrompt('你好');
   assert.doesNotMatch(reply, /Memory Context/);

@@ -24,6 +24,9 @@ const {
 const {
   runPeerSshAction,
 } = require('./peer-client');
+const {
+  redactPeerOutput,
+} = require('./peer-control');
 
 const VALID_RUN_MODES = new Set(['contracts', 'smoke', 'all']);
 let openClawCliQueue = Promise.resolve();
@@ -364,6 +367,101 @@ function runOpenClawChat(text, env = process.env, execFileImpl = execFile) {
       },
     );
   }), env);
+}
+
+function execFilePromise(command, args = [], options = {}, execFileImpl = execFile) {
+  return new Promise((resolve, reject) => {
+    execFileImpl(command, args, {
+      timeout: 30000,
+      windowsHide: true,
+      ...options,
+    }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(redactPeerOutput(`${error.message}\n${stderr || ''}`.trim())));
+        return;
+      }
+      resolve(String(stdout ?? ''));
+    });
+  });
+}
+
+function getLocalBridgeService(env = process.env) {
+  if (env.LOCAL_BRIDGE_SERVICE) {
+    return env.LOCAL_BRIDGE_SERVICE;
+  }
+
+  const assistantName = getAssistantName(env, 'OpenClaw').toLowerCase();
+  if (assistantName.includes('hermes')) {
+    return 'hermes-feishu-bridge';
+  }
+  return 'openclaw-feishu-bridge';
+}
+
+function getLocalWatchdogTimer(env = process.env, service = getLocalBridgeService(env)) {
+  if (env.LOCAL_WATCHDOG_TIMER) {
+    return env.LOCAL_WATCHDOG_TIMER;
+  }
+
+  if (service.startsWith('hermes-')) {
+    return 'hermes-homework-watchdog.timer';
+  }
+  return 'openclaw-homework-watchdog.timer';
+}
+
+async function checkLocalHealth(healthUrl, fetchImpl = fetch) {
+  const response = await fetchImpl(healthUrl, { method: 'GET' });
+  const body = await response.text();
+  if (!response.ok) {
+    throw new Error(`Health check failed: ${response.status} ${response.statusText} ${body}`);
+  }
+  return body;
+}
+
+async function runLocalOpsAction(action, env = process.env, options = {}) {
+  const service = getLocalBridgeService(env);
+  const watchdogTimer = getLocalWatchdogTimer(env, service);
+  const projectDir = env.LOCAL_PROJECT_DIR || '/opt/OpenclawHomework';
+  const healthUrl = env.LOCAL_HEALTH_URL || `http://127.0.0.1:${Number(env.PORT || 8788)}/health`;
+  const logLines = Number(env.LOCAL_LOG_LINES || 80);
+  const execFileImpl = options.execFile || execFile;
+  const fetchImpl = options.fetchImpl || fetch;
+
+  const [active, commit, health, watchdog] = await Promise.all([
+    execFilePromise('systemctl', ['is-active', service], {}, execFileImpl)
+      .then((value) => value.trim())
+      .catch((error) => `error: ${error.message}`),
+    execFilePromise('git', ['-C', projectDir, 'rev-parse', '--short', 'HEAD'], {}, execFileImpl)
+      .then((value) => value.trim())
+      .catch(() => 'unknown'),
+    checkLocalHealth(healthUrl, fetchImpl)
+      .then((value) => redactPeerOutput(value))
+      .catch((error) => `error: ${redactPeerOutput(error.message)}`),
+    execFilePromise('systemctl', ['is-active', watchdogTimer], {}, execFileImpl)
+      .then((value) => value.trim())
+      .catch((error) => `error: ${error.message}`),
+  ]);
+
+  if (action === 'logs') {
+    const detail = await execFilePromise('journalctl', ['-u', service, '-n', String(logLines), '--no-pager'], {}, execFileImpl)
+      .then((value) => redactPeerOutput(value).slice(-2000))
+      .catch((error) => `error: ${redactPeerOutput(error.message)}`);
+    return {
+      service,
+      active,
+      health,
+      watchdog,
+      commit,
+      detail,
+    };
+  }
+
+  return {
+    service,
+    active,
+    health,
+    watchdog,
+    commit,
+  };
 }
 
 function extractSenderId(payload) {
@@ -1266,7 +1364,10 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
       if (String(action).startsWith('peer-')) {
         return runPeerSshAction(action, env);
       }
-      return undefined;
+      return runLocalOpsAction(action, env, {
+        execFile: options.execFile,
+        fetchImpl: options.fetchImpl,
+      });
     });
     return {
       handled: true,
@@ -1565,6 +1666,7 @@ module.exports = {
   runHermesChat,
   runHermesParser,
   runOpenClawChat,
+  runLocalOpsAction,
   runWebhookInBackground,
   runOpenClawParser,
   sendEmailRunResultNotification,

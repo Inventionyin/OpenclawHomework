@@ -29,6 +29,21 @@ const {
   runOpenClawParser,
 } = require('../scripts/feishu-bridge');
 
+async function waitForCondition(checker, options = {}) {
+  const timeoutMs = Number(options.timeoutMs || 2000);
+  const intervalMs = Number(options.intervalMs || 25);
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (checker()) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+
+  throw new Error('Timed out waiting for async condition');
+}
+
 test('parseRunUiTestCommand parses branch and run mode', () => {
   assert.deepEqual(parseRunUiTestCommand('/run-ui-test develop smoke'), {
     targetRef: 'develop',
@@ -1018,6 +1033,7 @@ test('createServer replies to group greeting when mentioned', async () => {
       FEISHU_RESULT_NOTIFY_ENABLED: 'true',
       FEISHU_APP_ID: 'cli_xxx',
       FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
     },
     {
       receiptSender: async (message) => {
@@ -1860,6 +1876,7 @@ test('createServer replies to explicit ops commands in passive group chats', asy
       FEISHU_RESULT_NOTIFY_ENABLED: 'true',
       FEISHU_APP_ID: 'cli_xxx',
       FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
     },
     {
       receiptSender: async (message) => {
@@ -1893,8 +1910,120 @@ test('createServer replies to explicit ops commands in passive group chats', asy
     });
 
     assert.equal(response.status, 200);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await waitForCondition(() => Boolean(reply), { timeoutMs: 2000 });
     assert.match(JSON.parse(reply.content).text, /服务器状态摘要/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer uses local ops runner for direct status command in async mode', async () => {
+  let reply;
+  let receivedAction;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+    },
+    {
+      runOpsCheck: async (action) => {
+        receivedAction = action;
+        return {
+          service: 'openclaw-feishu-bridge',
+          active: 'active',
+          health: '{"ok":true}',
+          watchdog: 'active',
+          commit: 'abc1234',
+        };
+      },
+      receiptSender: async (message) => {
+        reply = message;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '/status' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    assert.equal(receivedAction, 'status');
+    assert.match(JSON.parse(reply.content).text, /openclaw-feishu-bridge/);
+    assert.doesNotMatch(JSON.parse(reply.content).text, /not configured in local mode/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer uses built-in local ops runner when no custom ops hook is provided', async () => {
+  let reply;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+    },
+    {
+      receiptSender: async (message) => {
+        reply = message;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '/status' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await waitForCondition(() => Boolean(reply), { timeoutMs: 2000 });
+    assert.match(JSON.parse(reply.content).text, /服务器状态摘要/);
+    assert.doesNotMatch(JSON.parse(reply.content).text, /not configured in local mode/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -1942,7 +2071,7 @@ test('createServer ignores passive group memory questions without mention', asyn
     });
 
     assert.equal(response.status, 200);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await new Promise((resolve) => setTimeout(resolve, 250));
     assert.equal(reply, undefined);
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -2215,7 +2344,7 @@ test('createServer does not invoke chat fallback when sending primary chat reply
     });
 
     assert.equal(response.status, 200);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await new Promise((resolve) => setTimeout(resolve, 250));
     assert.equal(sendCount, 1);
     assert.equal(hermesChatCalled, false);
   } finally {
@@ -2232,6 +2361,7 @@ test('createServer does not send duplicate ops fallback when sending ops reply f
       FEISHU_RESULT_NOTIFY_ENABLED: 'true',
       FEISHU_APP_ID: 'cli_xxx',
       FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
     },
     {
       receiptSender: async () => {
@@ -2265,7 +2395,7 @@ test('createServer does not send duplicate ops fallback when sending ops reply f
     });
 
     assert.equal(response.status, 200);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await waitForCondition(() => sendCount === 1, { timeoutMs: 2000 });
     assert.equal(sendCount, 1);
   } finally {
     await new Promise((resolve) => server.close(resolve));
