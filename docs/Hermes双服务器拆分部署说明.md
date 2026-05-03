@@ -263,6 +263,53 @@ for port in (25, 587):
 PY
 ```
 
+## 7.2 evanshine.me 自建邮箱核心
+
+Hermes 服务器还部署了 `evanshine.me` 的自建邮箱核心，使用 `docker-mailserver`。这个服务用于后续给 Hermes/OpenClaw/测试报告提供正式域名邮箱身份。
+
+部署信息：
+
+```text
+目录：/opt/mailserver
+容器：mailserver
+主机名：mail.evanshine.me
+开放端口：25, 465, 587, 993
+账号密码：/root/mailserver-credentials.txt
+DNS 清单：/root/evanshine-mail-dns-records.txt
+```
+
+已创建邮箱：
+
+```text
+admin@evanshine.me
+hermes@evanshine.me
+openclaw@evanshine.me
+ops@evanshine.me
+test@evanshine.me
+report@evanshine.me
+```
+
+常用命令：
+
+```bash
+cd /opt/mailserver
+docker-compose ps
+docker exec mailserver supervisorctl status
+docker exec mailserver setup email list
+docker logs --tail 120 mailserver
+```
+
+添加邮箱：
+
+```bash
+cd /opt/mailserver
+docker exec mailserver setup email add user@evanshine.me '强密码'
+```
+
+删除邮箱前要先备份 `/opt/mailserver/docker-data/dms/mail-data/`，不要随手删。
+
+Cloudflare 必须添加的 DNS 记录见 `/root/evanshine-mail-dns-records.txt`。邮件相关记录全部保持 DNS only / 灰云。
+
 ## 8. 旧服务器清理动作
 
 旧服务器现在应该只保留 OpenClaw 主链路。

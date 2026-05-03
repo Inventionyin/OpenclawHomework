@@ -182,6 +182,77 @@ Hermes 邮件网关的关键配置在：
 - 如果 `hermes-gateway.service` 循环重启，先看 `/root/.hermes/logs/gateway.log` 里的 IMAP/SMTP 错误，不要先怀疑模型。
 - 如果网关因为邮件连接失败反复重启，生产飞书桥梁服务通常不受影响；优先确认 `hermes-feishu-bridge` 和 `/health`。
 
+## 2.3 2026-05-03 evanshine.me 自建邮箱系统
+
+Hermes 服务器已经部署轻量自建邮箱核心，使用 `docker-mailserver`，不影响 OpenClaw 服务器。
+
+当前状态：
+
+```text
+服务器：Hermes 服务器 38.76.188.94
+部署目录：/opt/mailserver
+容器名：mailserver
+镜像：ghcr.io/docker-mailserver/docker-mailserver:latest
+邮件主机名：mail.evanshine.me
+域名：evanshine.me
+已启用端口：25, 465, 587, 993
+证书：当前为自签名证书；DNS 生效后可换 Let's Encrypt
+账号密码：/root/mailserver-credentials.txt，权限 600，不要复制到仓库
+DNS 清单：/root/evanshine-mail-dns-records.txt，权限 600
+```
+
+已创建邮箱：
+
+```text
+admin@evanshine.me
+hermes@evanshine.me
+openclaw@evanshine.me
+ops@evanshine.me
+test@evanshine.me
+report@evanshine.me
+```
+
+服务器检查命令：
+
+```bash
+cd /opt/mailserver
+docker-compose ps
+docker ps --filter name=mailserver
+docker exec mailserver supervisorctl status
+docker exec mailserver setup email list
+for a in admin hermes openclaw ops test report; do docker exec mailserver doveadm user "$a@evanshine.me"; done
+```
+
+端口检查：
+
+```bash
+for p in 25 465 587 993; do timeout 5 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/$p" && echo "$p OK" || echo "$p FAIL"; done
+```
+
+Cloudflare DNS 必须添加：
+
+```text
+A     mail              38.76.188.94       DNS only / 灰云
+MX    @                 mail.evanshine.me  priority 10
+TXT   @                 v=spf1 mx -all
+TXT   mail._domainkey   见 /root/evanshine-mail-dns-records.txt
+TXT   _dmarc            v=DMARC1; p=none; rua=mailto:admin@evanshine.me; adkim=s; aspf=s
+```
+
+还需要在核云或服务器商后台设置 PTR 反向解析：
+
+```text
+38.76.188.94 -> mail.evanshine.me
+```
+
+注意：
+
+- Cloudflare 上邮件相关记录全部用灰云，不要橙云。
+- 当前只部署邮件核心，没有部署 Webmail。
+- `mail.evanshine.me` 的 DNS 还没生效前，外部无法按域名收信。
+- 自签名证书适合先调通服务；正式给客户端长期使用时建议换 Let's Encrypt 证书。
+- 邮件系统出问题时，先确认 `hermes-feishu-bridge` 和 `hermes-gateway` 是否仍正常，避免把邮件容器问题误判为 Hermes 主链路问题。
+
 ## Agent Router 和记忆
 
 当前桥梁服务采用轻量 Agent Router：
