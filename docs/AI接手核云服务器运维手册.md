@@ -196,7 +196,8 @@ Hermes 服务器已经部署轻量自建邮箱核心，使用 `docker-mailserver
 邮件主机名：mail.evanshine.me
 域名：evanshine.me
 已启用端口：25, 465, 587, 993
-证书：当前为自签名证书；DNS 生效后可换 Let's Encrypt
+证书：Let's Encrypt，路径 /etc/letsencrypt/live/mail.evanshine.me/
+证书到期：2026-08-01
 账号密码：/root/mailserver-credentials.txt，权限 600，不要复制到仓库
 DNS 清单：/root/evanshine-mail-dns-records.txt，权限 600
 ```
@@ -249,9 +250,24 @@ TXT   _dmarc            v=DMARC1; p=none; rua=mailto:admin@evanshine.me; adkim=s
 
 - Cloudflare 上邮件相关记录全部用灰云，不要橙云。
 - 当前只部署邮件核心，没有部署 Webmail。
-- `mail.evanshine.me` 的 DNS 还没生效前，外部无法按域名收信。
-- 自签名证书适合先调通服务；正式给客户端长期使用时建议换 Let's Encrypt 证书。
+- `mail.evanshine.me` 的 A/MX/SPF/DKIM/DMARC 已配置并验证过。
+- QQ 邮箱发到 `admin@evanshine.me` 已成功收信。
+- `admin@evanshine.me` 发到 QQ 已成功过一次，后续一次测试遇到 QQ MX 25 连接超时，队列已清空。这属于对端或网络临时投递问题，不是本机队列残留。
+- DKIM 签名已改由 Rspamd 处理，已在本地域内投递邮件头中确认 `DKIM-Signature` 存在。
+- 邮件队列应保持空：`docker exec mailserver postqueue -p`。
+- 当前唯一未完成的邮件信誉项是 PTR 反向解析：`38.76.188.94 -> mail.evanshine.me`。
 - 邮件系统出问题时，先确认 `hermes-feishu-bridge` 和 `hermes-gateway` 是否仍正常，避免把邮件容器问题误判为 Hermes 主链路问题。
+
+阿里云 2H2G 服务器建议只做轻量辅助，不建议跑第二套完整邮件服务器。适合的用途：
+
+```text
+1. 每 5 分钟探测 mail.evanshine.me:25/587/993 和 https://hermes.evanshine.me/health
+2. 失败时发 QQ 邮件或飞书告警
+3. 每天拉取 /opt/mailserver/docker-data/dms/config 和非敏感运维状态备份
+4. 作为临时跳板机测试不同网络到邮件服务器的连通性
+```
+
+如果要启用阿里云辅助，需要用户提供阿里云服务器 SSH 信息，或在阿里云上创建只允许跑监控/备份脚本的低权限用户。
 
 ## Agent Router 和记忆
 

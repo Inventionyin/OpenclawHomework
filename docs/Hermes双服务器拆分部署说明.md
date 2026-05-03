@@ -274,6 +274,7 @@ Hermes 服务器还部署了 `evanshine.me` 的自建邮箱核心，使用 `dock
 容器：mailserver
 主机名：mail.evanshine.me
 开放端口：25, 465, 587, 993
+证书：Let's Encrypt，/etc/letsencrypt/live/mail.evanshine.me/
 账号密码：/root/mailserver-credentials.txt
 DNS 清单：/root/evanshine-mail-dns-records.txt
 ```
@@ -309,6 +310,25 @@ docker exec mailserver setup email add user@evanshine.me '强密码'
 删除邮箱前要先备份 `/opt/mailserver/docker-data/dms/mail-data/`，不要随手删。
 
 Cloudflare 必须添加的 DNS 记录见 `/root/evanshine-mail-dns-records.txt`。邮件相关记录全部保持 DNS only / 灰云。
+
+当前验证结果：
+
+```text
+QQ -> admin@evanshine.me 收信成功
+admin@evanshine.me -> QQ 发信成功过一次
+SMTP 587 正式 TLS 证书校验通过
+本地域内邮件确认存在 DKIM-Signature
+邮件队列已清空
+Hermes 飞书桥梁和 Hermes 邮件网关均 active
+```
+
+仍需补齐：
+
+```text
+PTR 反向解析：38.76.188.94 -> mail.evanshine.me
+```
+
+阿里云 2H2G 可以后续作为轻量监控/备份机，不建议部署第二套完整邮件服务器。
 
 ## 8. 旧服务器清理动作
 
