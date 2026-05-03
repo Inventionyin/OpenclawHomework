@@ -204,6 +204,62 @@ journalctl -u hermes-homework-watchdog -n 100 --no-pager
 
 它会每 5 分钟检查 Hermes 桥梁服务健康状态；健康检查失败时重启服务，并扫描 Nginx access log 里的飞书回调风暴。
 
+## 7.1 Hermes ClawEmail 邮件网关
+
+Hermes 服务器已经额外接入 ClawEmail 邮件通道。注意：这不是当前飞书机器人的生产入口，生产入口仍然是 `hermes-feishu-bridge`。
+
+当前状态：
+
+```text
+Hermes 原生邮件网关服务：hermes-gateway.service
+ClawEmail 地址：watchee@claw.163.com
+收信 IMAP：claw.163.com:993
+发信 SMTP：claw.163.com:25 + STARTTLS
+```
+
+检查 Hermes 邮件网关：
+
+```bash
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+export DBUS_SESSION_BUS_ADDRESS=unix:path=${XDG_RUNTIME_DIR}/bus
+systemctl --user is-active hermes-gateway
+systemctl --user status hermes-gateway --no-pager -l
+tail -n 100 /root/.hermes/logs/gateway.log
+```
+
+如果要重启：
+
+```bash
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+export DBUS_SESSION_BUS_ADDRESS=unix:path=${XDG_RUNTIME_DIR}/bus
+systemctl --user restart hermes-gateway
+```
+
+关键排障点：
+
+- Hermes 邮件适配器使用 STARTTLS，不使用隐式 SSL。
+- 当前服务器上 `claw.163.com:25` 可完成 STARTTLS 握手，`claw.163.com:587` 会在 SMTP 握手阶段超时。
+- 因此不要随手把 `EMAIL_SMTP_PORT` 改成 `587` 或 `465`。
+- `465` 需要 `SMTP_SSL`，而当前 Hermes 官方适配器代码走的是 `SMTP` 后 `starttls()`。
+- 如果日志出现 `SMTP connection failed`，先做协议探测，再改端口。
+
+协议探测命令：
+
+```bash
+python3 - <<'PY'
+import smtplib, ssl
+for port in (25, 587):
+    print(f"claw.163.com:{port} STARTTLS")
+    try:
+        smtp = smtplib.SMTP("claw.163.com", port, timeout=12)
+        print("EHLO", smtp.ehlo()[0])
+        print("STARTTLS", smtp.starttls(context=ssl.create_default_context())[0])
+        smtp.quit()
+    except Exception as exc:
+        print(type(exc).__name__, exc)
+PY
+```
+
 ## 8. 旧服务器清理动作
 
 旧服务器现在应该只保留 OpenClaw 主链路。
