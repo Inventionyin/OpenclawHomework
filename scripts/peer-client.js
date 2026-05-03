@@ -7,6 +7,7 @@ const PEER_ACTION_MAP = {
   'peer-logs': 'logs',
   'peer-restart': 'restart',
   'peer-repair': 'repair',
+  'peer-exec': 'exec',
 };
 
 function execFilePromise(command, args = [], options = {}, execFileImpl = execFileCallback) {
@@ -41,13 +42,13 @@ function buildPeerSshConfig(env = process.env) {
 
 function normalizePeerAction(action) {
   const normalized = PEER_ACTION_MAP[action] || action;
-  if (!['status', 'health', 'logs', 'restart', 'repair'].includes(normalized)) {
+  if (!['status', 'health', 'logs', 'restart', 'repair', 'exec'].includes(normalized)) {
     throw new Error('Unsupported peer action.');
   }
   return normalized;
 }
 
-async function runPeerSshAction(action, env = process.env, options = {}) {
+async function runPeerSshAction(action, env = process.env, options = {}, route = {}) {
   const peerAction = normalizePeerAction(action);
   const config = buildPeerSshConfig(env);
   if (!config.host || !config.keyPath) {
@@ -64,6 +65,9 @@ async function runPeerSshAction(action, env = process.env, options = {}) {
   }
 
   const execFile = options.execFile || execFilePromise;
+  const remoteCommand = peerAction === 'exec'
+    ? `exec ${String(route.command || '').trim()}`
+    : peerAction;
   const output = await execFile('ssh', [
     '-i',
     config.keyPath,
@@ -76,7 +80,7 @@ async function runPeerSshAction(action, env = process.env, options = {}) {
     '-o',
     'ConnectTimeout=10',
     `${config.user}@${config.host}`,
-    peerAction,
+    remoteCommand,
   ], { timeout: 240000 });
 
   let parsed;

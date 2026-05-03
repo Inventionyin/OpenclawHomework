@@ -2079,6 +2079,133 @@ test('createServer uses built-in local ops runner when no custom ops hook is pro
   }
 });
 
+test('createServer routes /exec commands to local ops runner in async mode', async () => {
+  let reply;
+  let received;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+    },
+    {
+      runOpsCheck: async (action, route) => {
+        received = `${action}:${route.command}`;
+        return {
+          service: 'root-shell',
+          active: 'ok',
+          health: 'n/a',
+          watchdog: 'manual',
+          commit: 'n/a',
+          operation: 'exec',
+          detail: 'Filesystem      Size  Used Avail Use% Mounted on',
+        };
+      },
+      receiptSender: async (message) => {
+        reply = message;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '/exec df -h' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await waitForCondition(() => Boolean(reply), { timeoutMs: 2000 });
+    assert.equal(received, 'exec:df -h');
+    assert.match(JSON.parse(reply.content).text, /Filesystem/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer routes /peer-exec commands to peer ops runner in async mode', async () => {
+  let reply;
+  let received;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+    },
+    {
+      runOpsCheck: async (action, route) => {
+        received = `${action}:${route.command}`;
+        return {
+          service: 'Hermes',
+          active: 'ok',
+          health: 'n/a',
+          watchdog: 'manual',
+          commit: 'n/a',
+          target: 'Hermes',
+          operation: 'peer-exec',
+          detail: 'total 8.0G used 3.1G avail 4.9G',
+        };
+      },
+      receiptSender: async (message) => {
+        reply = message;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '/peer-exec df -h' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await waitForCondition(() => Boolean(reply), { timeoutMs: 2000 });
+    assert.equal(received, 'peer-exec:df -h');
+    assert.match(JSON.parse(reply.content).text, /4\.9G/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('createServer ignores passive group memory questions without mention', async () => {
   let reply;
   const server = createServer(

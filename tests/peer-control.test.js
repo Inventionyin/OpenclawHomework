@@ -8,9 +8,10 @@ const {
 } = require('../scripts/peer-control');
 
 test('parsePeerAction accepts only whitelisted actions', () => {
-  assert.equal(parsePeerAction('peer status'), 'status');
-  assert.equal(parsePeerAction('repair'), 'repair');
-  assert.equal(parsePeerAction('', { SSH_ORIGINAL_COMMAND: 'logs' }), 'logs');
+  assert.deepEqual(parsePeerAction('peer status'), { action: 'status', command: '' });
+  assert.deepEqual(parsePeerAction('repair'), { action: 'repair', command: '' });
+  assert.deepEqual(parsePeerAction('', { SSH_ORIGINAL_COMMAND: 'logs' }), { action: 'logs', command: '' });
+  assert.deepEqual(parsePeerAction('exec df -h'), { action: 'exec', command: 'df -h' });
   assert.throws(() => parsePeerAction('rm -rf /'), /Unsupported peer action/);
 });
 

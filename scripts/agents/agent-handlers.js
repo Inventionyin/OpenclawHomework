@@ -17,11 +17,13 @@ const ALLOWED_OPS_ACTIONS = new Set([
   'health',
   'watchdog',
   'logs',
+  'exec',
   'peer-status',
   'peer-health',
   'peer-logs',
   'peer-restart',
   'peer-repair',
+  'peer-exec',
 ]);
 
 function trimForReply(value, limit = 1200) {
@@ -90,7 +92,7 @@ async function buildOpsAgentReply(route, options = {}) {
 
   let result;
   try {
-    result = await (options.runOpsCheck || defaultRunOpsCheck)(route.action);
+    result = await (options.runOpsCheck || defaultRunOpsCheck)(route.action, route);
   } catch (error) {
     return [
       '服务器状态暂时不可用。',

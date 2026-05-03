@@ -1,16 +1,21 @@
 const { execFile: execFileCallback } = require('node:child_process');
 
-const ALLOWED_PEER_ACTIONS = new Set(['status', 'health', 'logs', 'restart', 'repair']);
+const ALLOWED_PEER_ACTIONS = new Set(['status', 'health', 'logs', 'restart', 'repair', 'exec']);
 
 function parsePeerAction(value = '', env = process.env) {
   const raw = String(value || env.SSH_ORIGINAL_COMMAND || '').trim();
-  const normalized = raw.replace(/^peer\s+/i, '').trim().toLowerCase();
+  const normalized = raw.replace(/^peer\s+/i, '').trim();
+  const execMatch = normalized.match(/^exec\s+([\s\S]+)$/i);
+  if (execMatch) {
+    return { action: 'exec', command: execMatch[1].trim() };
+  }
+  const lowered = normalized.toLowerCase();
 
-  if (!ALLOWED_PEER_ACTIONS.has(normalized)) {
+  if (!ALLOWED_PEER_ACTIONS.has(lowered)) {
     throw new Error('Unsupported peer action.');
   }
 
-  return normalized;
+  return { action: lowered, command: '' };
 }
 
 function redactPeerOutput(value) {
@@ -135,8 +140,22 @@ async function runPeerControl(action, config = buildConfig(), impls = {}) {
 }
 
 async function main() {
-  const action = parsePeerAction(process.argv.slice(2).join(' '));
-  const result = await runPeerControl(action, buildConfig());
+  const parsed = parsePeerAction(process.argv.slice(2).join(' '));
+  if (parsed.action === 'exec') {
+    const output = await execFilePromise('bash', ['-lc', parsed.command], { timeout: 240000 });
+    console.log(JSON.stringify({
+      ok: true,
+      action: 'exec',
+      service: 'root-shell',
+      active: 'ok',
+      health: 'n/a',
+      watchdog: 'manual',
+      commit: 'n/a',
+      detail: redactPeerOutput(String(output).trim()).slice(0, 4000),
+    }, null, 2));
+    return;
+  }
+  const result = await runPeerControl(parsed.action, buildConfig());
   console.log(JSON.stringify(result, null, 2));
 }
 

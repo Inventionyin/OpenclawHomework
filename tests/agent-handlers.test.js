@@ -98,6 +98,28 @@ test('buildOpsAgentReply supports whitelisted peer repair actions', async () => 
   assert.match(reply, /restart ok; tests ok/);
 });
 
+test('buildOpsAgentReply supports explicit exec actions', async () => {
+  let receivedAction;
+  const reply = await buildOpsAgentReply({ action: 'exec', command: 'df -h' }, {
+    runOpsCheck: async (action, route) => {
+      receivedAction = `${action}:${route.command}`;
+      return {
+        service: 'root-shell',
+        active: 'ok',
+        health: 'n/a',
+        watchdog: 'manual',
+        commit: 'n/a',
+        operation: 'exec',
+        detail: 'Filesystem      Size  Used Avail Use% Mounted on',
+      };
+    },
+  });
+
+  assert.equal(receivedAction, 'exec:df -h');
+  assert.match(reply, /操作：exec/);
+  assert.match(reply, /Filesystem/);
+});
+
 test('buildOpsAgentReply rejects unknown ops actions', async () => {
   const reply = await buildOpsAgentReply({ action: 'rm -rf /' }, {
     runOpsCheck: async () => {

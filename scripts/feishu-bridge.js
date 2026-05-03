@@ -426,6 +426,33 @@ async function runLocalOpsAction(action, env = process.env, options = {}) {
   const execFileImpl = options.execFile || execFile;
   const fetchImpl = options.fetchImpl || fetch;
 
+  if (action === 'exec') {
+    const command = String(options.route?.command || '').trim();
+    if (!command) {
+      return {
+        service: 'root-shell',
+        active: 'error',
+        health: 'n/a',
+        watchdog: 'manual',
+        commit: 'n/a',
+        operation: 'exec',
+        detail: 'missing command',
+      };
+    }
+    const output = await execFilePromise('bash', ['-lc', command], { timeout: 240000 }, execFileImpl)
+      .then((value) => redactPeerOutput(String(value).trim()).slice(0, 4000))
+      .catch((error) => `error: ${redactPeerOutput(error.message)}`);
+    return {
+      service: 'root-shell',
+      active: 'ok',
+      health: 'n/a',
+      watchdog: 'manual',
+      commit: 'n/a',
+      operation: 'exec',
+      detail: output,
+    };
+  }
+
   const [active, commit, health, watchdog] = await Promise.all([
     execFilePromise('systemctl', ['is-active', service], {}, execFileImpl)
       .then((value) => value.trim())
@@ -1391,12 +1418,16 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
 
   if (route.agent === 'ops-agent') {
     const runOpsCheck = options.runOpsCheck || ((action) => {
+      if (action === 'peer-exec') {
+        return runPeerSshAction(action, env, {}, route);
+      }
       if (String(action).startsWith('peer-')) {
-        return runPeerSshAction(action, env);
+        return runPeerSshAction(action, env, {}, route);
       }
       return runLocalOpsAction(action, env, {
         execFile: options.execFile,
         fetchImpl: options.fetchImpl,
+        route,
       });
     });
     return {
