@@ -202,6 +202,56 @@ test('buildRouteEnv does not reuse OpenClaw allowlist for Hermes route', () => {
   assert.equal(routeEnv.FEISHU_REQUIRE_BINDING, 'true');
 });
 
+test('buildRouteEnv falls back to FEISHU_ENV_FILE peer ssh settings for OpenClaw route', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'openclaw-peer-env-'));
+  const envFile = join(tempDir, 'openclaw.env');
+  try {
+    writeFileSync(envFile, [
+      'PEER_SSH_HOST=38.76.188.94',
+      'PEER_SSH_USER=root',
+      'PEER_SSH_PORT=22',
+      'PEER_SSH_KEY=/root/.ssh/openclaw_to_hermes_ed25519',
+      'PEER_NAME=Hermes',
+    ].join('\n'), 'utf8');
+
+    const routeEnv = buildRouteEnv('openclaw', {
+      FEISHU_ENV_FILE: envFile,
+    });
+
+    assert.equal(routeEnv.PEER_SSH_HOST, '38.76.188.94');
+    assert.equal(routeEnv.PEER_SSH_KEY, '/root/.ssh/openclaw_to_hermes_ed25519');
+    assert.equal(routeEnv.PEER_NAME, 'Hermes');
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('buildRouteEnv falls back to FEISHU_ENV_FILE peer ssh settings for Hermes route', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'hermes-peer-env-'));
+  const envFile = join(tempDir, 'hermes.env');
+  try {
+    writeFileSync(envFile, [
+      'PEER_SSH_HOST=38.76.178.91',
+      'PEER_SSH_USER=root',
+      'PEER_SSH_PORT=22',
+      'PEER_SSH_KEY=/root/.ssh/hermes_to_openclaw_ed25519',
+      'PEER_NAME=OpenClaw',
+    ].join('\n'), 'utf8');
+
+    const routeEnv = buildRouteEnv('hermes', {
+      FEISHU_ENV_FILE: envFile,
+      HERMES_FEISHU_APP_ID: 'cli_hermes',
+      HERMES_FEISHU_APP_SECRET: 'secret_hermes',
+    });
+
+    assert.equal(routeEnv.PEER_SSH_HOST, '38.76.178.91');
+    assert.equal(routeEnv.PEER_SSH_KEY, '/root/.ssh/hermes_to_openclaw_ed25519');
+    assert.equal(routeEnv.PEER_NAME, 'OpenClaw');
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('getFeishuDedupKeys prefers Feishu ids when present', () => {
   const keys = getFeishuDedupKeys({
     header: {

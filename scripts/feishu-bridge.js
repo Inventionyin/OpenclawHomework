@@ -666,6 +666,23 @@ function upsertEnvFileValue(filePath, key, value) {
   writeFileSync(filePath, `${next.join('\n')}\n`);
 }
 
+function readEnvFileValues(filePath) {
+  if (!filePath || !existsSync(filePath)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    readFileSync(filePath, 'utf8')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#') && line.includes('='))
+      .map((line) => {
+        const index = line.indexOf('=');
+        return [line.slice(0, index), line.slice(index + 1)];
+      }),
+  );
+}
+
 function buildFeishuTextMessage(payload, text, env = process.env) {
   const chatId = extractFeishuChatId(payload);
   if (chatId) {
@@ -1257,8 +1274,16 @@ function buildRouteOptions(mode, options = {}) {
 }
 
 function buildRouteEnv(mode, env = process.env) {
+  const fileEnv = readEnvFileValues(env.FEISHU_ENV_FILE);
   if (mode !== 'hermes') {
-    return env;
+    return {
+      ...env,
+      PEER_NAME: env.PEER_NAME || fileEnv.PEER_NAME || '',
+      PEER_SSH_HOST: env.PEER_SSH_HOST || fileEnv.PEER_SSH_HOST || '',
+      PEER_SSH_USER: env.PEER_SSH_USER || fileEnv.PEER_SSH_USER || '',
+      PEER_SSH_PORT: env.PEER_SSH_PORT || fileEnv.PEER_SSH_PORT || '',
+      PEER_SSH_KEY: env.PEER_SSH_KEY || fileEnv.PEER_SSH_KEY || '',
+    };
   }
 
   const routeEnv = { ...env };
@@ -1278,6 +1303,11 @@ function buildRouteEnv(mode, env = process.env) {
   routeEnv.FEISHU_ALLOWED_USER_IDS = env.HERMES_FEISHU_ALLOWED_USER_IDS || '';
   routeEnv.FEISHU_ALLOWED_USER_IDS_ENV_KEY = 'HERMES_FEISHU_ALLOWED_USER_IDS';
   routeEnv.FEISHU_REQUIRE_BINDING = env.HERMES_FEISHU_REQUIRE_BINDING || env.FEISHU_REQUIRE_BINDING;
+  routeEnv.PEER_NAME = env.PEER_NAME || fileEnv.PEER_NAME || '';
+  routeEnv.PEER_SSH_HOST = env.PEER_SSH_HOST || fileEnv.PEER_SSH_HOST || '';
+  routeEnv.PEER_SSH_USER = env.PEER_SSH_USER || fileEnv.PEER_SSH_USER || '';
+  routeEnv.PEER_SSH_PORT = env.PEER_SSH_PORT || fileEnv.PEER_SSH_PORT || '';
+  routeEnv.PEER_SSH_KEY = env.PEER_SSH_KEY || fileEnv.PEER_SSH_KEY || '';
   return routeEnv;
 }
 
