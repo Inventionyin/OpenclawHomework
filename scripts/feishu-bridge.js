@@ -1094,6 +1094,49 @@ function buildFeishuCardMessage(payload, card, env = process.env) {
   };
 }
 
+function buildFeishuStreamingCard(text, env = process.env, metadata = {}) {
+  const status = metadata.status || '生成中';
+  const done = status === '完成';
+  const assistantName = getAssistantName(env);
+  const content = String(text || '正在思考...').trim() || '正在思考...';
+  const footer = [];
+  if (truthyEnv(env.FEISHU_REPLY_FOOTER_STATUS) || truthyEnv(env.FEISHU_FOOTER_STATUS_ENABLED)) {
+    footer.push(`状态：${status}`);
+  }
+  if (truthyEnv(env.FEISHU_REPLY_FOOTER_ELAPSED) || truthyEnv(env.FEISHU_FOOTER_ELAPSED_ENABLED)) {
+    footer.push(`耗时：${formatDuration(metadata.elapsedMs)}`);
+  }
+
+  return {
+    config: {
+      wide_screen_mode: true,
+    },
+    header: {
+      template: done ? 'green' : 'blue',
+      title: {
+        tag: 'plain_text',
+        content: done ? `${assistantName} 已完成` : `${assistantName} 正在思考`,
+      },
+    },
+    elements: [
+      {
+        tag: 'div',
+        text: {
+          tag: 'lark_md',
+          content: content.slice(0, 6000),
+        },
+      },
+      ...(footer.length > 0 ? [{
+        tag: 'note',
+        elements: [{
+          tag: 'plain_text',
+          content: footer.join(' · '),
+        }],
+      }] : []),
+    ],
+  };
+}
+
 function buildRunArtifactsUrl(runUrl) {
   return runUrl ? `${runUrl}#artifacts` : '';
 }
@@ -1729,6 +1772,13 @@ function buildFeishuTextUpdateMessage(text, env = process.env, metadata = {}) {
   };
 }
 
+function buildFeishuCardUpdateMessage(text, env = process.env, metadata = {}) {
+  return {
+    msgType: 'interactive',
+    content: JSON.stringify(buildFeishuStreamingCard(text, env, metadata)),
+  };
+}
+
 async function buildRoutedChatReply(text, env, options = {}) {
   if (String(env.OPENCLAW_CHAT_ENABLED ?? 'true').toLowerCase() === 'false') {
     return null;
@@ -1799,10 +1849,10 @@ async function streamRoutedChatReply(payload, text, env, options = {}) {
 
   const prompt = buildChatAgentPrompt(text);
   const timingContext = options.timingContext;
-  const placeholder = buildFeishuTextMessage(payload, '正在思考...', env, {
+  const placeholder = buildFeishuCardMessage(payload, buildFeishuStreamingCard('正在思考...', env, {
     status: '生成中',
     elapsedMs: elapsedMs(timingContext?.startedAt),
-  });
+  }), env);
   const sendResult = await sendTimedFeishuMessage(receiptSender, placeholder, env, timingContext, 'stream-placeholder');
   const messageId = extractFeishuMessageId(sendResult);
   if (!messageId) {
@@ -1830,7 +1880,7 @@ async function streamRoutedChatReply(payload, text, env, options = {}) {
       return;
     }
     lastUpdateAt = now;
-    await messageUpdater(messageId, buildFeishuTextUpdateMessage(fullText || '正在思考...', env, {
+    await messageUpdater(messageId, buildFeishuCardUpdateMessage(fullText || '正在思考...', env, {
       status: force ? '完成' : '生成中',
       elapsedMs: elapsedMs(timingContext?.startedAt),
     }));

@@ -1321,9 +1321,11 @@ test('createServer streams chat by updating the same Feishu message', async () =
     await waitForCondition(() => updates.length >= 2);
     assert.equal(chatCalled, false);
     assert.equal(replies.length, 1);
-    assert.match(JSON.parse(replies[0].content).text, /正在思考/);
+    assert.equal(replies[0].msgType, 'interactive');
+    assert.match(JSON.stringify(JSON.parse(replies[0].content)), /正在思考/);
     assert.deepEqual(updates.map((item) => item.messageId), ['om_stream', 'om_stream']);
-    assert.match(JSON.parse(updates.at(-1).message.content).text, /你好/);
+    assert.equal(updates.at(-1).message.msgType, 'interactive');
+    assert.match(JSON.stringify(JSON.parse(updates.at(-1).message.content)), /你好/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -1399,9 +1401,11 @@ test('runWebhookInBackground passes default receipt sender to streaming chat', a
     await waitForCondition(() => updates.length >= 2);
     assert.equal(chatCalled, false);
     assert.equal(sentMessages.length, 1);
-    assert.match(JSON.parse(sentMessages[0].content).text, /正在思考/);
+    assert.equal(sentMessages[0].msg_type, 'interactive');
+    assert.match(JSON.stringify(JSON.parse(sentMessages[0].content)), /正在思考/);
     assert.deepEqual(updates.map((item) => item.messageId), ['om_stream_bg', 'om_stream_bg']);
-    assert.match(JSON.parse(updates.at(-1).message.content).text, /你好/);
+    assert.equal(updates.at(-1).message.msgType, 'interactive');
+    assert.match(JSON.stringify(JSON.parse(updates.at(-1).message.content)), /你好/);
   } finally {
     global.fetch = originalFetch;
   }
