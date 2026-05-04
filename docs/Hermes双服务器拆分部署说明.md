@@ -218,7 +218,9 @@ Home email：1693457391@qq.com
 发信 SMTP：claw.163.com:25 + STARTTLS
 ```
 
-注意：Hermes 服务器当前是 Hermes 原生邮件网关已可用，`mail-cli` 管理 API 还未单独认证。因此它能通过 `hermes-gateway.service` 收发邮件消息，但不能直接用 `mail-cli clawemail create/list` 创建或管理子邮箱。子邮箱管理能力需要另配 `mail-cli` 认证。
+2026-05-04 已使用官方推荐的 `hermes-email-setup.sh --auth-url ... --home-email 1693457391@qq.com` 重新配置，`hermes-gateway.service` 为 user 级服务，当前运行正常。
+
+注意：Hermes 服务器当前有两套 ClawEmail 能力。`hermes-gateway.service` 使用 `shine1@claw.163.com` 作为邮件网关账号，用于收发邮件；`mail-cli` 管理 API 已在 2026-05-04 单独认证，当前 `mail-cli clawemail list` 返回 `shine1@claw.163.com`，用于管理 ClawEmail 邮箱。不要从 OpenClaw 服务器直接复制 `/root/.config/mail-cli`，该目录里的 `secrets.enc` 与本机 keychain 绑定，跨机器复制会失效。
 
 检查 Hermes 邮件网关：
 
