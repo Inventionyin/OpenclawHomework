@@ -2017,7 +2017,7 @@ function runWebhookInBackground(payload, env, options = {}) {
     }
 
     if (route.agent !== 'ui-test-agent') {
-      Promise.resolve(buildRoutedAgentReply(payload, env, { ...options, timingContext }, route))
+      Promise.resolve(buildRoutedAgentReply(payload, env, { ...options, receiptSender, timingContext }, route))
         .then(({ replyText }) => sendRoutedFeishuReply(receiptSender, payload, replyText, env, 'routed-agent', timingContext))
         .then(() => logFeishuTiming(env, timingContext, 'finish', { outcome: 'routed_agent' }))
         .catch((error) => {

@@ -28,6 +28,7 @@ const {
   sendEmailRunResultNotification,
   notifyFeishuRunResult,
   runOpenClawParser,
+  runWebhookInBackground,
   sendFeishuMessageUpdate,
 } = require('../scripts/feishu-bridge');
 
@@ -1325,6 +1326,84 @@ test('createServer streams chat by updating the same Feishu message', async () =
     assert.match(JSON.parse(updates.at(-1).message.content).text, /你好/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('runWebhookInBackground passes default receipt sender to streaming chat', async () => {
+  const originalFetch = global.fetch;
+  const sentMessages = [];
+  const updates = [];
+  let chatCalled = false;
+
+  global.fetch = async (url, init = {}) => {
+    const requestUrl = String(url);
+    if (requestUrl.includes('/auth/v3/tenant_access_token/internal')) {
+      return new Response(JSON.stringify({ code: 0, tenant_access_token: 'tenant-token' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (requestUrl.includes('/im/v1/messages?')) {
+      sentMessages.push(JSON.parse(init.body));
+      return new Response(JSON.stringify({ code: 0, data: { message_id: 'om_stream_bg' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    throw new Error(`Unexpected fetch: ${requestUrl}`);
+  };
+
+  try {
+    runWebhookInBackground(
+      {
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '今天随便聊两句' }),
+          },
+        },
+      },
+      {
+        GITHUB_TOKEN: 'ghp_example',
+        FEISHU_WEBHOOK_ASYNC: 'true',
+        FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+        FEISHU_APP_ID: 'cli_xxx',
+        FEISHU_APP_SECRET: 'secret_xxx',
+        OPENCLAW_CHAT_ENABLED: 'true',
+        FEISHU_CHAT_STREAMING_ENABLED: 'true',
+        STREAMING_MODEL_BASE_URL: 'https://example.test/v1',
+        STREAMING_MODEL_API_KEY: 'secret',
+        STREAMING_MODEL_ID: 'model-a',
+      },
+      {
+        chat: async () => {
+          chatCalled = true;
+          return 'fallback should not run';
+        },
+        messageUpdater: async (messageId, message) => {
+          updates.push({ messageId, message });
+        },
+        streamChat: async (prompt, options) => {
+          await options.onDelta('你', '你');
+          await options.onDelta('好', '你好');
+          return { text: '你好', endpoint: 'chat_completions' };
+        },
+      },
+    );
+
+    await waitForCondition(() => updates.length >= 2);
+    assert.equal(chatCalled, false);
+    assert.equal(sentMessages.length, 1);
+    assert.match(JSON.parse(sentMessages[0].content).text, /正在思考/);
+    assert.deepEqual(updates.map((item) => item.messageId), ['om_stream_bg', 'om_stream_bg']);
+    assert.match(JSON.parse(updates.at(-1).message.content).text, /你好/);
+  } finally {
+    global.fetch = originalFetch;
   }
 });
 
