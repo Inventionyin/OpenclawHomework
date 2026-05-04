@@ -52,6 +52,12 @@ function extractImagePrompt(text) {
   return '';
 }
 
+function looksLikeImageEditRequest(text) {
+  const normalized = stripMention(String(text ?? '').trim());
+  return /(修复|修一下|恢复|还原|增强|清晰|变清楚|去噪|上色|改图|编辑|处理|美化|抠图|换背景|放大|超分|旧照片|老照片|刚才那张|这张|这幅|这张图|这张图片)/i.test(normalized)
+    && /(图|图片|照片|相片|photo|image|刚才那张|这张)/i.test(normalized);
+}
+
 function looksLikeImageGenerationRequest(text) {
   return Boolean(extractImagePrompt(text));
 }
@@ -239,6 +245,15 @@ function routeAgentIntent(text) {
     };
   }
 
+  if (looksLikeImageEditRequest(normalized)) {
+    return {
+      agent: 'image-agent',
+      action: 'edit',
+      prompt: stripMention(original).trim(),
+      requiresAuth: true,
+    };
+  }
+
   const naturalLanguageOpsRoute = routeNaturalLanguageOps(normalized);
   if (naturalLanguageOpsRoute) {
     return naturalLanguageOpsRoute;
@@ -269,6 +284,7 @@ module.exports = {
   looksLikeTestNegation,
   looksLikeTestRunRequest,
   extractImagePrompt,
+  looksLikeImageEditRequest,
   looksLikeImageGenerationRequest,
   normalizeText,
   normalizeNaturalLanguageOpsText,

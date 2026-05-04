@@ -34,6 +34,7 @@ const {
   streamModelText,
 } = require('./streaming-client');
 const {
+  editImage,
   generateImage,
 } = require('./image-client');
 
@@ -41,6 +42,7 @@ const VALID_RUN_MODES = new Set(['contracts', 'smoke', 'all']);
 let openClawCliQueue = Promise.resolve();
 const seenFeishuEventKeys = new Map();
 const scheduledFeishuNotificationKeys = new Map();
+const recentFeishuImages = new Map();
 
 function parseJsonContent(content) {
   if (typeof content !== 'string') {
@@ -74,6 +76,45 @@ function extractFeishuText(payload) {
   }
 
   return '';
+}
+
+function collectFeishuImageKeysFromContent(content, imageKeys = []) {
+  if (!content || typeof content !== 'object') {
+    return imageKeys;
+  }
+
+  const directKey = content.image_key || content.imageKey || content.file_key || content.fileKey;
+  if (directKey) {
+    imageKeys.push(String(directKey));
+  }
+
+  if (Array.isArray(content)) {
+    for (const item of content) {
+      collectFeishuImageKeysFromContent(item, imageKeys);
+    }
+    return imageKeys;
+  }
+
+  for (const value of Object.values(content)) {
+    if (value && typeof value === 'object') {
+      collectFeishuImageKeysFromContent(value, imageKeys);
+    }
+  }
+
+  return imageKeys;
+}
+
+function extractFeishuImageKeys(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return [];
+  }
+
+  const keys = [];
+  const message = payload.event?.message || payload.message || {};
+  const content = parseJsonContent(message.content || payload.content);
+  collectFeishuImageKeysFromContent(content, keys);
+
+  return [...new Set(keys.filter(Boolean))];
 }
 
 function parseRunUiTestCommand(text) {
@@ -870,6 +911,48 @@ function getFeishuDedupKeys(payload) {
   return keys;
 }
 
+function getFeishuInputMessageId(payload) {
+  const message = payload?.event?.message || payload?.message || {};
+  return message.message_id || message.open_message_id || message.messageId || '';
+}
+
+function buildFeishuImageMemoryKey(payload) {
+  const senderId = extractSenderId(payload);
+  const chatId = extractFeishuChatId(payload);
+  return [chatId || 'direct', senderId || 'unknown'].join('|');
+}
+
+function pruneFeishuImageMemory(cache = recentFeishuImages, now = Date.now()) {
+  for (const [key, value] of cache.entries()) {
+    if (!value || value.expiresAt <= now) {
+      cache.delete(key);
+    }
+  }
+}
+
+function rememberFeishuImage(payload, cache = recentFeishuImages, ttlMs = 10 * 60 * 1000, now = Date.now()) {
+  const imageKeys = extractFeishuImageKeys(payload);
+  const messageId = getFeishuInputMessageId(payload);
+  if (!imageKeys.length || !messageId) {
+    return null;
+  }
+
+  pruneFeishuImageMemory(cache, now);
+  const memory = {
+    messageId,
+    imageKey: imageKeys[0],
+    imageKeys,
+    expiresAt: now + ttlMs,
+  };
+  cache.set(buildFeishuImageMemoryKey(payload), memory);
+  return memory;
+}
+
+function recallFeishuImage(payload, cache = recentFeishuImages, now = Date.now()) {
+  pruneFeishuImageMemory(cache, now);
+  return cache.get(buildFeishuImageMemoryKey(payload)) || null;
+}
+
 function pruneFeishuDedupCache(cache, now) {
   for (const [key, expiresAt] of cache.entries()) {
     if (expiresAt <= now) {
@@ -1336,6 +1419,45 @@ async function uploadFeishuImage(env = process.env, image, fetchImpl = fetch) {
     throw new Error(`Feishu image upload failed: ${body.msg || JSON.stringify(body)}`);
   }
   return imageKey;
+}
+
+function extensionFromMimeType(mimeType) {
+  const normalized = String(mimeType || '').toLowerCase();
+  if (normalized.includes('jpeg') || normalized.includes('jpg')) return 'jpg';
+  if (normalized.includes('webp')) return 'webp';
+  if (normalized.includes('gif')) return 'gif';
+  if (normalized.includes('bmp')) return 'bmp';
+  return 'png';
+}
+
+async function downloadFeishuMessageImage(env = process.env, messageId, imageKey, fetchImpl = fetch) {
+  if (!messageId || !imageKey) {
+    throw new Error('Missing Feishu message id or image key for download.');
+  }
+
+  const tenantAccessToken = await fetchFeishuTenantAccessToken(env, fetchImpl);
+  const response = await fetchImpl(
+    `https://open.feishu.cn/open-apis/im/v1/messages/${encodeURIComponent(messageId)}/resources/${encodeURIComponent(imageKey)}?type=image`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${tenantAccessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`Feishu image download failed: ${response.status} ${response.statusText}\n${body}`.trim());
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const mimeType = response.headers?.get?.('content-type') || 'image/png';
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    mimeType,
+    filename: `${imageKey}.${extensionFromMimeType(mimeType)}`,
+  };
 }
 
 function shouldNotifyFeishu(env) {
@@ -1821,6 +1943,29 @@ function buildImagePrompt(text, route = {}) {
     .trim();
 }
 
+function resolveFeishuImageReference(payload, options = {}) {
+  const imageKeys = extractFeishuImageKeys(payload);
+  const messageId = getFeishuInputMessageId(payload);
+  if (imageKeys.length && messageId) {
+    return {
+      messageId,
+      imageKey: imageKeys[0],
+      source: 'current-message',
+    };
+  }
+
+  const memory = recallFeishuImage(payload, options.imageMemory || recentFeishuImages);
+  if (memory) {
+    return {
+      messageId: memory.messageId,
+      imageKey: memory.imageKey,
+      source: 'recent-message',
+    };
+  }
+
+  return null;
+}
+
 function buildImageResultCard(result, prompt, env = process.env) {
   const assistantName = getAssistantName(env);
   const imageElement = result.imageKey
@@ -1893,10 +2038,20 @@ async function buildImageAgentReply(payload, text, env, options = {}, route = {}
   }
 
   const timingContext = options.timingContext;
+  const imageRef = route.action === 'edit' || extractFeishuImageKeys(payload).length
+    ? resolveFeishuImageReference(payload, options)
+    : null;
+  if (route.action === 'edit' && !imageRef) {
+    return {
+      handled: true,
+      replyText: '我还没拿到要处理的图片。你可以直接发图片并写“修复这张旧照片”，或者先发图片，再说“修复刚才那张”。',
+    };
+  }
+
   await sendTimedFeishuMessage(
     receiptSender,
-    buildFeishuTextMessage(payload, `收到，开始生成图片：${prompt}`, env, {
-      status: '生成中',
+    buildFeishuTextMessage(payload, imageRef ? `收到，开始处理图片：${prompt}` : `收到，开始生成图片：${prompt}`, env, {
+      status: imageRef ? '处理中' : '生成中',
       elapsedMs: elapsedMs(timingContext?.startedAt),
     }),
     env,
@@ -1904,8 +2059,16 @@ async function buildImageAgentReply(payload, text, env, options = {}, route = {}
     'image-receipt',
   );
 
-  const imageGenerator = options.imageGenerator || ((imagePrompt) => generateImage(imagePrompt, { env }));
-  const result = await imageGenerator(prompt);
+  let result;
+  if (imageRef) {
+    const imageDownloader = options.imageDownloader || ((messageId, imageKey) => downloadFeishuMessageImage(env, messageId, imageKey));
+    const sourceImage = await imageDownloader(imageRef.messageId, imageRef.imageKey);
+    const imageEditor = options.imageEditor || ((imagePrompt, editOptions) => editImage(imagePrompt, { env, ...editOptions }));
+    result = await imageEditor(prompt, { image: sourceImage, imageRef });
+  } else {
+    const imageGenerator = options.imageGenerator || ((imagePrompt) => generateImage(imagePrompt, { env }));
+    result = await imageGenerator(prompt);
+  }
   const imageUploader = options.imageUploader || ((imageResult) => uploadFeishuImage(env, imageResult));
   const imageKey = result.type === 'b64_json' ? await imageUploader(result) : '';
   const dataUrl = result.type === 'b64_json' && !imageKey ? `data:${result.mimeType || 'image/png'};base64,${result.b64Json}` : '';
@@ -2201,6 +2364,11 @@ function runWebhookInBackground(payload, env, options = {}) {
     const text = extractFeishuText(payload);
     const receiptSender = options.receiptSender || ((reply) => sendFeishuTextMessage(env, reply));
     const timingContext = options.timingContext || createFeishuTimingContext();
+    rememberFeishuImage(
+      payload,
+      options.imageMemory || recentFeishuImages,
+      Number(env.FEISHU_IMAGE_MEMORY_TTL_MS || 10 * 60 * 1000),
+    );
 
     if (!hasFeishuReplyTarget(payload)) {
       console.log('Ignored Feishu message without reply target.');
@@ -2432,7 +2600,9 @@ module.exports = {
   buildFeishuTextMessage,
   buildRouteEnv,
   createServer,
+  downloadFeishuMessageImage,
   extractFeishuText,
+  extractFeishuImageKeys,
   getFeishuDedupKeys,
   getFeishuRouteMode,
   handleFeishuWebhook,
@@ -2451,6 +2621,8 @@ module.exports = {
   runOpenClawParser,
   sendFeishuMessageUpdate,
   sendEmailRunResultNotification,
+  rememberFeishuImage,
+  recallFeishuImage,
   uploadFeishuImage,
   sendFeishuTextMessage,
   shouldNotifyEmail,

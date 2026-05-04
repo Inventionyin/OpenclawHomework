@@ -119,9 +119,59 @@ async function generateImage(prompt, options = {}) {
   };
 }
 
+async function editImage(prompt, options = {}) {
+  const envConfig = buildImageConfig(options.env || process.env);
+  const config = {
+    ...envConfig,
+    ...Object.fromEntries(Object.entries(options).filter(([key]) => ['baseUrl', 'apiKey', 'model', 'size'].includes(key))),
+  };
+  config.baseUrl = normalizeBaseUrl(config.baseUrl);
+
+  if (!config.baseUrl || !config.apiKey) {
+    throw new Error('Missing image model config.');
+  }
+
+  const image = options.image || {};
+  const buffer = Buffer.isBuffer(image.buffer)
+    ? image.buffer
+    : Buffer.from(String(image.b64Json || ''), 'base64');
+  if (buffer.length === 0) {
+    throw new Error('Missing source image content for image edit.');
+  }
+
+  const fetchImpl = options.fetchImpl || fetch;
+  const model = await resolveImageModel(config, fetchImpl);
+  const form = new FormData();
+  form.append('model', model);
+  form.append('prompt', prompt);
+  form.append('size', config.size);
+  form.append('n', '1');
+  form.append('image', new Blob([buffer], { type: image.mimeType || 'image/png' }), image.filename || 'source.png');
+
+  const response = await fetchImpl(`${config.baseUrl}/v1/images/edits`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: form,
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`Image edit failed: ${response.status} ${response.statusText} ${body}`.trim());
+  }
+
+  const body = await response.json();
+  return {
+    model,
+    ...extractImageResult(body),
+  };
+}
+
 module.exports = {
   buildImageConfig,
   chooseImageModel,
+  editImage,
   extractImageResult,
   extractModelIds,
   generateImage,

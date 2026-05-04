@@ -30,6 +30,9 @@ const {
   runOpenClawParser,
   runWebhookInBackground,
   sendFeishuMessageUpdate,
+  downloadFeishuMessageImage,
+  extractFeishuImageKeys,
+  rememberFeishuImage,
   uploadFeishuImage,
 } = require('../scripts/feishu-bridge');
 
@@ -288,6 +291,31 @@ test('extractFeishuText supports Feishu event message content', () => {
   };
 
   assert.equal(extractFeishuText(payload), '/run-ui-test main');
+});
+
+test('extractFeishuImageKeys supports image and post message content', () => {
+  assert.deepEqual(extractFeishuImageKeys({
+    event: {
+      message: {
+        msg_type: 'image',
+        content: JSON.stringify({ image_key: 'img_v3_photo' }),
+      },
+    },
+  }), ['img_v3_photo']);
+
+  assert.deepEqual(extractFeishuImageKeys({
+    event: {
+      message: {
+        msg_type: 'post',
+        content: JSON.stringify({
+          content: [[
+            { tag: 'text', text: '修复' },
+            { tag: 'img', image_key: 'img_v3_post' },
+          ]],
+        }),
+      },
+    },
+  }), ['img_v3_post']);
 });
 
 test('buildFeishuTextMessage uses chat id before sender id', () => {
@@ -788,6 +816,174 @@ test('uploadFeishuImage uploads generated image and returns image key', async ()
   assert.equal(calls[1].options.method, 'POST');
   assert.equal(calls[1].options.headers.Authorization, 'Bearer tenant-token');
   assert(calls[1].options.body instanceof FormData);
+});
+
+test('downloadFeishuMessageImage downloads an image resource from a message', async () => {
+  const calls = [];
+  const image = await downloadFeishuMessageImage(
+    {
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+    },
+    'om_photo',
+    'img_v3_photo',
+    async (url, options = {}) => {
+      calls.push({ url, options });
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        return new Response(JSON.stringify({
+          code: 0,
+          tenant_access_token: 'tenant-token',
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      return new Response(Buffer.from('jpeg-data'), {
+        status: 200,
+        headers: { 'Content-Type': 'image/jpeg' },
+      });
+    },
+  );
+
+  assert.equal(calls.length, 2);
+  assert.match(calls[1].url, /\/im\/v1\/messages\/om_photo\/resources\/img_v3_photo\?type=image$/);
+  assert.equal(calls[1].options.headers.Authorization, 'Bearer tenant-token');
+  assert.equal(image.mimeType, 'image/jpeg');
+  assert.equal(image.filename, 'img_v3_photo.jpg');
+  assert.deepEqual(image.buffer, Buffer.from('jpeg-data'));
+});
+
+test('runWebhookInBackground edits an image sent with the same message', async () => {
+  const sentMessages = [];
+  const editedPrompts = [];
+  const uploadedImages = [];
+
+  runWebhookInBackground(
+    {
+      event: {
+        sender: { sender_id: { open_id: 'user-a' } },
+        message: {
+          message_id: 'om_same_photo',
+          chat_id: 'chat-a',
+          msg_type: 'image',
+          content: JSON.stringify({ image_key: 'img_v3_same' }),
+        },
+      },
+      text: '修复这张旧照片',
+    },
+    {
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_OPEN_IDS: 'user-a',
+    },
+    {
+      receiptSender: async (message) => {
+        sentMessages.push(message);
+        return { data: { message_id: `om_reply_${sentMessages.length}` } };
+      },
+      imageDownloader: async (messageId, imageKey) => {
+        assert.equal(messageId, 'om_same_photo');
+        assert.equal(imageKey, 'img_v3_same');
+        return {
+          buffer: Buffer.from('old-photo'),
+          mimeType: 'image/jpeg',
+          filename: 'old-photo.jpg',
+        };
+      },
+      imageEditor: async (prompt, options) => {
+        editedPrompts.push(prompt);
+        assert.deepEqual(options.image.buffer, Buffer.from('old-photo'));
+        return {
+          model: 'gpt-image-2',
+          type: 'b64_json',
+          b64Json: Buffer.from('fixed-photo').toString('base64'),
+          mimeType: 'image/png',
+        };
+      },
+      imageUploader: async (imageResult) => {
+        uploadedImages.push(imageResult);
+        return 'img_v3_result';
+      },
+    },
+  );
+
+  await waitForCondition(() => sentMessages.length >= 2);
+  assert.deepEqual(editedPrompts, ['修复这张旧照片']);
+  assert.equal(uploadedImages.length, 1);
+  assert.match(JSON.stringify(JSON.parse(sentMessages[0].content)), /开始处理图片/);
+  assert.equal(sentMessages[1].msgType, 'interactive');
+  assert.match(JSON.stringify(JSON.parse(sentMessages[1].content)), /img_v3_result/);
+});
+
+test('runWebhookInBackground remembers an image and edits it from a later instruction', async () => {
+  const imageMemory = new Map();
+  const sentMessages = [];
+  const editedPrompts = [];
+
+  rememberFeishuImage(
+    {
+      event: {
+        sender: { sender_id: { open_id: 'user-a' } },
+        message: {
+          message_id: 'om_previous_photo',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ image_key: 'img_v3_previous' }),
+        },
+      },
+    },
+    imageMemory,
+    60_000,
+  );
+
+  runWebhookInBackground(
+    {
+      event: {
+        sender: { sender_id: { open_id: 'user-a' } },
+        message: {
+          message_id: 'om_instruction',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '修复刚才那张旧照片' }),
+        },
+      },
+    },
+    {
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_OPEN_IDS: 'user-a',
+    },
+    {
+      imageMemory,
+      receiptSender: async (message) => {
+        sentMessages.push(message);
+        return { data: { message_id: `om_reply_${sentMessages.length}` } };
+      },
+      imageDownloader: async (messageId, imageKey) => {
+        assert.equal(messageId, 'om_previous_photo');
+        assert.equal(imageKey, 'img_v3_previous');
+        return {
+          buffer: Buffer.from('old-photo'),
+          mimeType: 'image/jpeg',
+          filename: 'old-photo.jpg',
+        };
+      },
+      imageEditor: async (prompt) => {
+        editedPrompts.push(prompt);
+        return {
+          model: 'gpt-image-2',
+          type: 'b64_json',
+          b64Json: Buffer.from('fixed-photo').toString('base64'),
+          mimeType: 'image/png',
+        };
+      },
+      imageUploader: async () => 'img_v3_result',
+    },
+  );
+
+  await waitForCondition(() => sentMessages.length >= 2);
+  assert.deepEqual(editedPrompts, ['修复刚才那张旧照片']);
+  assert.match(JSON.stringify(JSON.parse(sentMessages[1].content)), /img_v3_result/);
 });
 
 test('handleFeishuWebhook responds to Feishu challenge', async () => {

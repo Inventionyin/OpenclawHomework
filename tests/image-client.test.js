@@ -4,6 +4,7 @@ const test = require('node:test');
 const {
   buildImageConfig,
   chooseImageModel,
+  editImage,
   extractImageResult,
   generateImage,
 } = require('../scripts/image-client');
@@ -75,4 +76,40 @@ test('generateImage resolves auto model and sends image generation request', asy
   assert.equal(JSON.parse(calls[1].options.body).model, 'gpt-image-2');
   assert.equal(JSON.parse(calls[1].options.body).prompt, '画一个杯子');
   assert.equal(calls[1].options.headers.Authorization, 'Bearer image-secret');
+});
+
+test('editImage sends multipart image edit request', async () => {
+  const calls = [];
+  const result = await editImage('修复旧照片', {
+    image: {
+      buffer: Buffer.from('old-photo'),
+      mimeType: 'image/jpeg',
+      filename: 'old-photo.jpg',
+    },
+    env: {
+      IMAGE_MODEL_BASE_URL: 'https://img.example.test',
+      IMAGE_MODEL_API_KEY: 'image-secret',
+      IMAGE_MODEL_ID: 'gpt-image-2',
+      IMAGE_MODEL_SIZE: '1024x1024',
+    },
+    fetchImpl: async (url, options = {}) => {
+      calls.push({ url, options });
+      assert.equal(url, 'https://img.example.test/v1/images/edits');
+      assert.equal(options.method, 'POST');
+      assert.equal(options.headers.Authorization, 'Bearer image-secret');
+      assert.ok(options.body instanceof FormData);
+      assert.equal(options.body.get('model'), 'gpt-image-2');
+      assert.equal(options.body.get('prompt'), '修复旧照片');
+      assert.equal(options.body.get('size'), '1024x1024');
+      assert.ok(options.body.get('image') instanceof Blob);
+      return new Response(JSON.stringify({
+        data: [{ b64_json: 'edited123' }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    },
+  });
+
+  assert.equal(result.model, 'gpt-image-2');
+  assert.equal(result.type, 'b64_json');
+  assert.equal(result.b64Json, 'edited123');
+  assert.equal(calls.length, 1);
 });
