@@ -30,6 +30,7 @@ const {
   runOpenClawParser,
   runWebhookInBackground,
   sendFeishuMessageUpdate,
+  uploadFeishuImage,
 } = require('../scripts/feishu-bridge');
 
 async function waitForCondition(checker, options = {}) {
@@ -744,6 +745,49 @@ test('sendFeishuMessageUpdate patches an existing Feishu message', async () => {
     msg_type: 'text',
     content: JSON.stringify({ text: '流式内容' }),
   });
+});
+
+test('uploadFeishuImage uploads generated image and returns image key', async () => {
+  const calls = [];
+  const imageKey = await uploadFeishuImage(
+    {
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+    },
+    {
+      b64Json: Buffer.from('png-data').toString('base64'),
+      mimeType: 'image/png',
+    },
+    async (url, options) => {
+      calls.push({ url, options });
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        return {
+          ok: true,
+          json: async () => ({
+            code: 0,
+            tenant_access_token: 'tenant-token',
+          }),
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({
+          code: 0,
+          data: {
+            image_key: 'img_v3_xxx',
+          },
+        }),
+      };
+    },
+  );
+
+  assert.equal(imageKey, 'img_v3_xxx');
+  assert.equal(calls.length, 2);
+  assert.match(calls[1].url, /\/im\/v1\/images$/);
+  assert.equal(calls[1].options.method, 'POST');
+  assert.equal(calls[1].options.headers.Authorization, 'Bearer tenant-token');
+  assert(calls[1].options.body instanceof FormData);
 });
 
 test('handleFeishuWebhook responds to Feishu challenge', async () => {
@@ -1472,6 +1516,74 @@ test('createServer does not block streaming deltas on slow Feishu card updates',
     await waitForCondition(() => firstDeltaReturned && secondDeltaReturned, { timeoutMs: 200 });
   } finally {
     releaseUpdate();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer routes image generation with isolated image generator', async () => {
+  const replies = [];
+  let imagePrompt = '';
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+      IMAGE_MODEL_BASE_URL: 'https://img.example.test',
+      IMAGE_MODEL_API_KEY: 'image-secret',
+    },
+    {
+      receiptSender: async (message) => {
+        replies.push(message);
+        return { data: { message_id: `om_${replies.length}` } };
+      },
+      imageGenerator: async (prompt) => {
+        imagePrompt = prompt;
+        return {
+          type: 'b64_json',
+          b64Json: 'abc123',
+          mimeType: 'image/png',
+          model: 'gpt-image-2',
+        };
+      },
+      imageUploader: async () => 'img_v3_generated',
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '生成一张图片：赛博风电商客服机器人海报' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await waitForCondition(() => replies.length >= 2);
+    assert.equal(imagePrompt, '赛博风电商客服机器人海报');
+    assert.equal(replies[0].msgType, 'text');
+    assert.match(JSON.parse(replies[0].content).text, /开始生成图片/);
+    assert.equal(replies[1].msgType, 'interactive');
+    assert.match(JSON.stringify(JSON.parse(replies[1].content)), /gpt-image-2/);
+    assert.match(JSON.stringify(JSON.parse(replies[1].content)), /img_v3_generated/);
+  } finally {
     await new Promise((resolve) => server.close(resolve));
   }
 });

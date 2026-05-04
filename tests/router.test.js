@@ -168,6 +168,21 @@ test('routeAgentIntent routes memory commands', () => {
   });
 });
 
+test('routeAgentIntent routes image generation requests', () => {
+  assert.deepEqual(routeAgentIntent('/image 赛博风电商客服机器人海报'), {
+    agent: 'image-agent',
+    action: 'generate',
+    prompt: '赛博风电商客服机器人海报',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('生成一张图片：极简科技风商品主图'), {
+    agent: 'image-agent',
+    action: 'generate',
+    prompt: '极简科技风商品主图',
+    requiresAuth: true,
+  });
+});
+
 test('routeAgentIntent routes documentation questions', () => {
   assert.deepEqual(routeAgentIntent('老师任务还差哪些'), {
     agent: 'doc-agent',

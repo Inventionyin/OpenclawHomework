@@ -95,6 +95,10 @@ function buildCapabilityGuideReply(assistantName = 'OpenClaw') {
     '邮箱和报告：',
     '- UI 自动化完成后发报告到飞书和邮箱',
     '- 查看 ClawEmail/SMTP 是否正常时先问状态，不要发密钥',
+    '',
+    '图片生成：',
+    '- 生成一张图片：赛博风电商客服机器人海报',
+    '- /image 极简科技风商品主图',
   ].join('\n');
 }
 

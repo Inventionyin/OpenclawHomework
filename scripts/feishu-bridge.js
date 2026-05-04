@@ -33,6 +33,9 @@ const {
   buildStreamingChatConfig,
   streamModelText,
 } = require('./streaming-client');
+const {
+  generateImage,
+} = require('./image-client');
 
 const VALID_RUN_MODES = new Set(['contracts', 'smoke', 'all']);
 let openClawCliQueue = Promise.resolve();
@@ -1302,6 +1305,39 @@ async function sendFeishuMessageUpdate(env = process.env, messageId, message, fe
   return body;
 }
 
+async function uploadFeishuImage(env = process.env, image, fetchImpl = fetch) {
+  const tenantAccessToken = await fetchFeishuTenantAccessToken(env, fetchImpl);
+  const buffer = Buffer.isBuffer(image?.buffer)
+    ? image.buffer
+    : Buffer.from(String(image?.b64Json || ''), 'base64');
+  if (buffer.length === 0) {
+    throw new Error('Missing image content for Feishu upload.');
+  }
+
+  const form = new FormData();
+  form.append('image_type', 'message');
+  form.append('image', new Blob([buffer], { type: image?.mimeType || 'image/png' }), image?.filename || 'generated.png');
+  const response = await fetchImpl('https://open.feishu.cn/open-apis/im/v1/images', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${tenantAccessToken}`,
+    },
+    body: form,
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Feishu image upload failed: ${response.status} ${response.statusText}\n${body}`);
+  }
+
+  const body = await response.json();
+  const imageKey = body?.data?.image_key || body?.image_key || '';
+  if (body.code !== 0 || !imageKey) {
+    throw new Error(`Feishu image upload failed: ${body.msg || JSON.stringify(body)}`);
+  }
+  return imageKey;
+}
+
 function shouldNotifyFeishu(env) {
   return String(env.FEISHU_RESULT_NOTIFY_ENABLED || '').toLowerCase() === 'true'
     && Boolean(env.FEISHU_APP_ID || env.LARK_APP_ID)
@@ -1779,6 +1815,118 @@ function buildFeishuCardUpdateMessage(text, env = process.env, metadata = {}) {
   };
 }
 
+function buildImagePrompt(text, route = {}) {
+  return String(route.prompt || text || '')
+    .replace(/^\/(?:image|img|draw|generate-image)\s+/i, '')
+    .trim();
+}
+
+function buildImageResultCard(result, prompt, env = process.env) {
+  const assistantName = getAssistantName(env);
+  const imageElement = result.imageKey
+    ? {
+      tag: 'img',
+      img_key: result.imageKey,
+      alt: {
+        tag: 'plain_text',
+        content: '生成图片',
+      },
+    }
+    : result.type === 'url'
+      ? {
+        tag: 'div',
+        text: {
+          tag: 'lark_md',
+          content: `[打开图片](${result.url})`,
+        },
+      }
+    : {
+      tag: 'div',
+      text: {
+        tag: 'lark_md',
+        content: `[图片 data URL](${result.dataUrl})`,
+      },
+    };
+
+  return {
+    config: {
+      wide_screen_mode: true,
+    },
+    header: {
+      template: 'green',
+      title: {
+        tag: 'plain_text',
+        content: `${assistantName} 图片生成完成`,
+      },
+    },
+    elements: [
+      {
+        tag: 'div',
+        text: {
+          tag: 'lark_md',
+          content: [
+            `**模型**：${result.model}`,
+            `**提示词**：${String(prompt).slice(0, 500)}`,
+          ].join('\n'),
+        },
+      },
+      imageElement,
+    ],
+  };
+}
+
+async function buildImageAgentReply(payload, text, env, options = {}, route = {}) {
+  const prompt = buildImagePrompt(text, route);
+  if (!prompt) {
+    return {
+      handled: true,
+      replyText: '请告诉我要生成什么图片，比如：生成一张图片：赛博风电商客服机器人海报。',
+    };
+  }
+
+  const receiptSender = options.receiptSender;
+  if (!receiptSender) {
+    return {
+      handled: true,
+      replyText: '收到生图请求，但当前缺少飞书回复通道。',
+    };
+  }
+
+  const timingContext = options.timingContext;
+  await sendTimedFeishuMessage(
+    receiptSender,
+    buildFeishuTextMessage(payload, `收到，开始生成图片：${prompt}`, env, {
+      status: '生成中',
+      elapsedMs: elapsedMs(timingContext?.startedAt),
+    }),
+    env,
+    timingContext,
+    'image-receipt',
+  );
+
+  const imageGenerator = options.imageGenerator || ((imagePrompt) => generateImage(imagePrompt, { env }));
+  const result = await imageGenerator(prompt);
+  const imageUploader = options.imageUploader || ((imageResult) => uploadFeishuImage(env, imageResult));
+  const imageKey = result.type === 'b64_json' ? await imageUploader(result) : '';
+  const dataUrl = result.type === 'b64_json' && !imageKey ? `data:${result.mimeType || 'image/png'};base64,${result.b64Json}` : '';
+  await sendTimedFeishuMessage(
+    receiptSender,
+    buildFeishuCardMessage(payload, buildImageResultCard({
+      ...result,
+      imageKey,
+      dataUrl,
+    }, prompt, env), env),
+    env,
+    timingContext,
+    'image-result',
+  );
+
+  return {
+    handled: true,
+    replyText: null,
+  };
+}
+
 async function buildRoutedChatReply(text, env, options = {}) {
   if (String(env.OPENCLAW_CHAT_ENABLED ?? 'true').toLowerCase() === 'false') {
     return null;
@@ -1958,6 +2106,16 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
       handled: true,
       replyText: buildMemoryAgentReply(route),
     };
+  }
+
+  if (route.agent === 'image-agent') {
+    if (route.requiresAuth && !isAuthorized(payload, env)) {
+      return {
+        handled: true,
+        replyText: getUnauthorizedMessage(env),
+      };
+    }
+    return buildImageAgentReply(payload, text, env, options, route);
   }
 
   if (route.agent === 'ops-agent') {
@@ -2293,6 +2451,7 @@ module.exports = {
   runOpenClawParser,
   sendFeishuMessageUpdate,
   sendEmailRunResultNotification,
+  uploadFeishuImage,
   sendFeishuTextMessage,
   shouldNotifyEmail,
 };

@@ -32,6 +32,30 @@ function looksLikeTestRunRequest(text) {
     || /^(帮我|请|麻烦|帮忙|给我).{0,20}(冒烟|全量|smoke|contracts?).{0,10}(测试|test)$/i.test(text);
 }
 
+function extractImagePrompt(text) {
+  const normalized = stripMention(String(text ?? '').trim());
+  const commandMatch = normalized.match(/^\/(?:image|img|draw|generate-image)\s+(.+)$/i);
+  if (commandMatch) {
+    return commandMatch[1].trim();
+  }
+
+  const naturalMatch = normalized.match(/(?:帮我|给我|请|麻烦)?(?:生成|画|绘制|做|出)(?:一张|个|幅)?(?:图片|图|插画|海报|头像|壁纸|logo|Logo|图标|封面|表情包)[:：\s]*(.+)/i);
+  if (naturalMatch) {
+    return naturalMatch[1].trim();
+  }
+
+  const imageFirstMatch = normalized.match(/(?:图片|生图|画图)[:：\s]+(.+)/i);
+  if (imageFirstMatch) {
+    return imageFirstMatch[1].trim();
+  }
+
+  return '';
+}
+
+function looksLikeImageGenerationRequest(text) {
+  return Boolean(extractImagePrompt(text));
+}
+
 function normalizeNaturalLanguageOpsText(text) {
   return String(text ?? '')
     .trim()
@@ -206,6 +230,15 @@ function routeAgentIntent(text) {
     return { agent: 'memory-agent', action: 'show', requiresAuth: true };
   }
 
+  if (looksLikeImageGenerationRequest(normalized)) {
+    return {
+      agent: 'image-agent',
+      action: 'generate',
+      prompt: extractImagePrompt(normalized),
+      requiresAuth: true,
+    };
+  }
+
   const naturalLanguageOpsRoute = routeNaturalLanguageOps(normalized);
   if (naturalLanguageOpsRoute) {
     return naturalLanguageOpsRoute;
@@ -235,6 +268,8 @@ module.exports = {
   looksLikeTestHowToQuestion,
   looksLikeTestNegation,
   looksLikeTestRunRequest,
+  extractImagePrompt,
+  looksLikeImageGenerationRequest,
   normalizeText,
   normalizeNaturalLanguageOpsText,
   routeAgentIntent,
