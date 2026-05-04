@@ -242,6 +242,16 @@ watchee.github@claw.163.com    sub      OpenClaw GitHub
 watchee.ops@claw.163.com       sub      OpenClaw Ops
 ```
 
+OpenClaw 额外主邮箱 `evasan@claw.163.com` 已作为业务测试邮箱组创建：
+
+```text
+evasan@claw.163.com            primary  evasan
+evasan.qa@claw.163.com         sub      Evasan QA
+evasan.account@claw.163.com    sub      Evasan Account
+evasan.shop@claw.163.com       sub      Evasan Shop
+evasan.replay@claw.163.com     sub      Evasan Replay
+```
+
 当前 ClawEmail 额度表现为每个主邮箱最多 1 个 primary + 4 个 sub。如果继续创建会返回 `OPEN_API_1004`，除非删除不用的子邮箱或申请提额。
 
 Hermes 额外主邮箱 `hagent@claw.163.com` 已作为监控/审计邮箱组创建：
