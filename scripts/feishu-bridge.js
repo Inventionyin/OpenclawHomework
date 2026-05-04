@@ -29,6 +29,10 @@ const {
 const {
   redactPeerOutput,
 } = require('./peer-control');
+const {
+  buildStreamingChatConfig,
+  streamModelText,
+} = require('./streaming-client');
 
 const VALID_RUN_MODES = new Set(['contracts', 'smoke', 'all']);
 let openClawCliQueue = Promise.resolve();
@@ -1224,6 +1228,37 @@ async function sendFeishuTextMessage(env = process.env, message, fetchImpl = fet
   return body;
 }
 
+async function sendFeishuMessageUpdate(env = process.env, messageId, message, fetchImpl = fetch) {
+  if (!messageId) {
+    throw new Error('Missing Feishu message id for message update.');
+  }
+
+  const tenantAccessToken = await fetchFeishuTenantAccessToken(env, fetchImpl);
+  const response = await fetchImpl(`https://open.feishu.cn/open-apis/im/v1/messages/${encodeURIComponent(messageId)}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${tenantAccessToken}`,
+      'Content-Type': 'application/json; charset=utf-8',
+    },
+    body: JSON.stringify({
+      msg_type: message.msgType,
+      content: message.content,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Feishu message update failed: ${response.status} ${response.statusText}\n${body}`);
+  }
+
+  const body = await response.json();
+  if (body.code !== 0) {
+    throw new Error(`Feishu message update failed: ${body.msg || JSON.stringify(body)}`);
+  }
+
+  return body;
+}
+
 function shouldNotifyFeishu(env) {
   return String(env.FEISHU_RESULT_NOTIFY_ENABLED || '').toLowerCase() === 'true'
     && Boolean(env.FEISHU_APP_ID || env.LARK_APP_ID)
@@ -1668,6 +1703,32 @@ function isAsyncWebhookEnabled(env) {
   return String(env.FEISHU_WEBHOOK_ASYNC ?? 'true').toLowerCase() !== 'false';
 }
 
+function isChatStreamingEnabled(env = process.env) {
+  if (!truthyEnv(env.FEISHU_CHAT_STREAMING_ENABLED)) {
+    return false;
+  }
+
+  const config = buildStreamingChatConfig(env);
+  return Boolean(config.baseUrl && config.apiKey && config.model);
+}
+
+function extractFeishuMessageId(sendResult) {
+  return sendResult?.data?.message_id
+    || sendResult?.data?.message?.message_id
+    || sendResult?.message_id
+    || sendResult?.data?.messageId
+    || '';
+}
+
+function buildFeishuTextUpdateMessage(text, env = process.env, metadata = {}) {
+  return {
+    msgType: 'text',
+    content: JSON.stringify({
+      text: appendFeishuReplyFooter(text, env, metadata),
+    }),
+  };
+}
+
 async function buildRoutedChatReply(text, env, options = {}) {
   if (String(env.OPENCLAW_CHAT_ENABLED ?? 'true').toLowerCase() === 'false') {
     return null;
@@ -1709,6 +1770,97 @@ async function buildRoutedChatReply(text, env, options = {}) {
       source: 'fallback',
     });
     return reply;
+  }
+}
+
+async function streamRoutedChatReply(payload, text, env, options = {}) {
+  if (String(env.OPENCLAW_CHAT_ENABLED ?? 'true').toLowerCase() === 'false') {
+    return {
+      streamed: false,
+      replyText: null,
+    };
+  }
+
+  if (!isChatStreamingEnabled(env)) {
+    return {
+      streamed: false,
+      replyText: null,
+    };
+  }
+
+  const receiptSender = options.receiptSender;
+  const messageUpdater = options.messageUpdater || ((messageId, message) => sendFeishuMessageUpdate(env, messageId, message));
+  if (!receiptSender) {
+    return {
+      streamed: false,
+      replyText: null,
+    };
+  }
+
+  const prompt = buildChatAgentPrompt(text);
+  const timingContext = options.timingContext;
+  const placeholder = buildFeishuTextMessage(payload, '正在思考...', env, {
+    status: '生成中',
+    elapsedMs: elapsedMs(timingContext?.startedAt),
+  });
+  const sendResult = await sendTimedFeishuMessage(receiptSender, placeholder, env, timingContext, 'stream-placeholder');
+  const messageId = extractFeishuMessageId(sendResult);
+  if (!messageId) {
+    return {
+      streamed: false,
+      replyText: null,
+    };
+  }
+
+  const streamChat = options.streamChat || ((streamPrompt, streamOptions) => streamModelText(streamPrompt, {
+    env,
+    ...streamOptions,
+  }));
+  const modelStartedAt = nowMs();
+  logFeishuTiming(env, timingContext, 'model:start', {
+    agent: 'chat-agent',
+    source: 'streaming',
+  });
+
+  let lastUpdateAt = Number.NEGATIVE_INFINITY;
+  const minIntervalMs = Number(env.FEISHU_STREAM_UPDATE_INTERVAL_MS || 800);
+  const update = async (fullText, force = false) => {
+    const now = nowMs();
+    if (!force && now - lastUpdateAt < minIntervalMs) {
+      return;
+    }
+    lastUpdateAt = now;
+    await messageUpdater(messageId, buildFeishuTextUpdateMessage(fullText || '正在思考...', env, {
+      status: force ? '完成' : '生成中',
+      elapsedMs: elapsedMs(timingContext?.startedAt),
+    }));
+  };
+
+  try {
+    const result = await streamChat(prompt, {
+      onDelta: async (delta, fullText) => {
+        await update(fullText);
+      },
+    });
+    await update(result.text, true);
+    logTimedModelFinish(env, timingContext, 'model:finish', modelStartedAt, {
+      agent: 'chat-agent',
+      source: result.endpoint || 'streaming',
+    });
+    return {
+      streamed: true,
+      replyText: result.text,
+    };
+  } catch (error) {
+    logTimedModelFinish(env, timingContext, 'model:error', modelStartedAt, {
+      agent: 'chat-agent',
+      source: 'streaming',
+    });
+    console.error(`Feishu streaming chat failed: ${error.message}`);
+    return {
+      streamed: false,
+      replyText: null,
+    };
   }
 }
 
@@ -1769,6 +1921,14 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
   }
 
   if (route.agent === 'chat-agent') {
+    const streamed = await streamRoutedChatReply(payload, text, env, options);
+    if (streamed.streamed) {
+      return {
+        handled: true,
+        replyText: null,
+      };
+    }
+
     return {
       handled: true,
       replyText: await buildRoutedChatReply(text, env, options),
@@ -2065,6 +2225,7 @@ module.exports = {
   runLocalOpsAction,
   runWebhookInBackground,
   runOpenClawParser,
+  sendFeishuMessageUpdate,
   sendEmailRunResultNotification,
   sendFeishuTextMessage,
   shouldNotifyEmail,

@@ -28,6 +28,7 @@ const {
   sendEmailRunResultNotification,
   notifyFeishuRunResult,
   runOpenClawParser,
+  sendFeishuMessageUpdate,
 } = require('../scripts/feishu-bridge');
 
 async function waitForCondition(checker, options = {}) {
@@ -702,6 +703,48 @@ test('sendFeishuTextMessage fetches tenant token and sends text message', async 
   assert.equal(calls[1].options.headers.Authorization, 'Bearer tenant-token');
 });
 
+test('sendFeishuMessageUpdate patches an existing Feishu message', async () => {
+  const calls = [];
+  await sendFeishuMessageUpdate(
+    {
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+    },
+    'om_xxx',
+    {
+      msgType: 'text',
+      content: JSON.stringify({ text: '流式内容' }),
+    },
+    async (url, options) => {
+      calls.push({ url, options });
+      if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+        return {
+          ok: true,
+          json: async () => ({
+            code: 0,
+            tenant_access_token: 'tenant-token',
+          }),
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({
+          code: 0,
+        }),
+      };
+    },
+  );
+
+  assert.equal(calls.length, 2);
+  assert.match(calls[1].url, /\/im\/v1\/messages\/om_xxx$/);
+  assert.equal(calls[1].options.method, 'PATCH');
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    msg_type: 'text',
+    content: JSON.stringify({ text: '流式内容' }),
+  });
+});
+
 test('handleFeishuWebhook responds to Feishu challenge', async () => {
   const response = await handleFeishuWebhook({ challenge: 'abc123' }, {}, async () => {
     throw new Error('dispatch should not be called');
@@ -1209,6 +1252,140 @@ test('createServer logs Feishu timing stages for async chat replies', async () =
     assert(timingLogs.some((line) => /stage=finish\b/.test(line)));
   } finally {
     console.log = originalLog;
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer streams chat by updating the same Feishu message', async () => {
+  const replies = [];
+  const updates = [];
+  let chatCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      OPENCLAW_CHAT_ENABLED: 'true',
+      FEISHU_CHAT_STREAMING_ENABLED: 'true',
+      STREAMING_MODEL_BASE_URL: 'https://example.test/v1',
+      STREAMING_MODEL_API_KEY: 'secret',
+      STREAMING_MODEL_ID: 'model-a',
+    },
+    {
+      chat: async () => {
+        chatCalled = true;
+        return 'fallback should not run';
+      },
+      receiptSender: async (message) => {
+        replies.push(message);
+        return { data: { message_id: 'om_stream' } };
+      },
+      messageUpdater: async (messageId, message) => {
+        updates.push({ messageId, message });
+      },
+      streamChat: async (prompt, options) => {
+        await options.onDelta('你', '你');
+        await options.onDelta('好', '你好');
+        return { text: '你好', endpoint: 'chat_completions' };
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '今天随便聊两句' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await waitForCondition(() => updates.length >= 2);
+    assert.equal(chatCalled, false);
+    assert.equal(replies.length, 1);
+    assert.match(JSON.parse(replies[0].content).text, /正在思考/);
+    assert.deepEqual(updates.map((item) => item.messageId), ['om_stream', 'om_stream']);
+    assert.match(JSON.parse(updates.at(-1).message.content).text, /你好/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer falls back to normal chat when streaming fails', async () => {
+  let reply;
+  let updateCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      OPENCLAW_CHAT_ENABLED: 'true',
+      FEISHU_CHAT_STREAMING_ENABLED: 'true',
+      STREAMING_MODEL_BASE_URL: 'https://example.test/v1',
+      STREAMING_MODEL_API_KEY: 'secret',
+      STREAMING_MODEL_ID: 'model-a',
+    },
+    {
+      chat: async () => '普通回复。',
+      receiptSender: async (message) => {
+        reply = message;
+      },
+      messageUpdater: async () => {
+        updateCalled = true;
+      },
+      streamChat: async () => {
+        throw new Error('stream failed');
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '今天随便聊两句' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await waitForCondition(() => Boolean(reply));
+    assert.equal(updateCalled, false);
+    assert.match(JSON.parse(reply.content).text, /普通回复/);
+  } finally {
     await new Promise((resolve) => server.close(resolve));
   }
 });

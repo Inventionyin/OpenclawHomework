@@ -426,6 +426,13 @@ FEISHU_DEDUP_ENABLED=true
 FEISHU_DEDUP_TTL_MS=300000
 FEISHU_RUN_NOTIFICATION_DEDUP_TTL_MS=300000
 
+FEISHU_CHAT_STREAMING_ENABLED=true
+STREAMING_MODEL_BASE_URL=...
+STREAMING_MODEL_API_KEY=...
+STREAMING_MODEL_ID=...
+STREAMING_MODEL_ENDPOINT_MODE=auto
+FEISHU_STREAM_UPDATE_INTERVAL_MS=800
+
 EMAIL_NOTIFY_ENABLED=true
 SMTP_HOST=smtp.qq.com
 SMTP_PORT=465
@@ -444,6 +451,13 @@ EMAIL_TO=收件邮箱，多个用逗号分隔
 - 不要把这个通道改成普通无限制 root SSH，除非用户明确要求并理解风险。
 - 邮件通知在 GitHub Actions 完成后由桥梁服务发送。邮件失败只写日志，不应阻断飞书报告。
 - SMTP 密码或授权码只放服务器环境文件，不要写入仓库。
+
+流式回复说明：
+
+- 只用于普通聊天，不用于 UI 自动化、服务器修复、`/status` 等确定性命令。
+- `STREAMING_MODEL_ENDPOINT_MODE=auto` 会先试 `/responses`，不兼容时降级到 `/chat/completions`。
+- 讯飞 CodingPlan 当前实测 `/chat/completions` 支持 `text/event-stream`，`/responses` 返回 HTML，不要强制设成 `responses`。
+- 飞书更新依赖 `PATCH /im/v1/messages/{message_id}`，如果权限不足，会自动退回一次性回复。
 
 修改后重启对应服务器上的服务：
 
