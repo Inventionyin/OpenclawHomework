@@ -155,8 +155,11 @@ test('runLocalOpsAction audits disk cleanup candidates without deleting', async 
     });
 
     assert.equal(result.audit.candidates[0].name, 'khoj');
+    assert.equal(result.audit.candidates[0].id, 1);
     assert.equal(result.audit.candidates[0].path, '/opt/khoj');
     assert.equal(result.audit.candidates[1].name, 'npm-cache');
+    assert.equal(result.audit.candidates[1].id, 2);
+    assert.equal(result.audit.candidates[2].id, 3);
     assert.equal(calls.some(([command, args]) => command === 'bash' && args.join(' ').includes('rm -rf')), false);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });

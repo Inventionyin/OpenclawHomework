@@ -543,16 +543,13 @@ async function collectDiskAudit(env, execFileImpl) {
     'done',
   ].join(' ');
   const duOutput = await execFilePromise('bash', ['-lc', duCommand], { timeout: 120000 }, execFileImpl).catch(() => '');
-  let nextId = 1;
-  const candidates = parseDuSummary(duOutput)
-    .map((entry) => classifyCleanupCandidate(entry, nextId))
-    .filter((candidate) => {
-      if (!candidate) {
-        return false;
-      }
-      nextId += 1;
-      return true;
-    });
+  const candidates = [];
+  parseDuSummary(duOutput).forEach((entry) => {
+    const candidate = classifyCleanupCandidate(entry, candidates.length + 1);
+    if (candidate) {
+      candidates.push(candidate);
+    }
+  });
 
   const audit = {
     createdAt: new Date().toISOString(),
