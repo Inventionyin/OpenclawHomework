@@ -824,14 +824,46 @@ function readEnvFileValues(filePath) {
   );
 }
 
-function buildFeishuTextMessage(payload, text, env = process.env) {
+function truthyEnv(value) {
+  return String(value ?? '').toLowerCase() === 'true';
+}
+
+function formatDuration(ms) {
+  const value = Number(ms);
+  if (!Number.isFinite(value) || value < 0) {
+    return 'unknown';
+  }
+  if (value < 1000) {
+    return `${Math.round(value)}ms`;
+  }
+  return `${(value / 1000).toFixed(1)}s`;
+}
+
+function appendFeishuReplyFooter(text, env = process.env, metadata = {}) {
+  const footer = [];
+  if (truthyEnv(env.FEISHU_REPLY_FOOTER_STATUS) || truthyEnv(env.FEISHU_FOOTER_STATUS_ENABLED)) {
+    footer.push(`状态：${metadata.status || '完成'}`);
+  }
+  if (truthyEnv(env.FEISHU_REPLY_FOOTER_ELAPSED) || truthyEnv(env.FEISHU_FOOTER_ELAPSED_ENABLED)) {
+    footer.push(`耗时：${formatDuration(metadata.elapsedMs)}`);
+  }
+
+  if (footer.length === 0) {
+    return String(text ?? '');
+  }
+
+  return `${String(text ?? '').trimEnd()}\n\n---\n${footer.join(' · ')}`;
+}
+
+function buildFeishuTextMessage(payload, text, env = process.env, metadata = {}) {
+  const finalText = appendFeishuReplyFooter(text, env, metadata);
   const chatId = extractFeishuChatId(payload);
   if (chatId) {
     return {
       receiveIdType: 'chat_id',
       receiveId: chatId,
       msgType: 'text',
-      content: JSON.stringify({ text }),
+      content: JSON.stringify({ text: finalText }),
     };
   }
 
@@ -841,7 +873,7 @@ function buildFeishuTextMessage(payload, text, env = process.env) {
       receiveIdType: 'open_id',
       receiveId: senderId,
       msgType: 'text',
-      content: JSON.stringify({ text }),
+      content: JSON.stringify({ text: finalText }),
     };
   }
 
@@ -852,7 +884,7 @@ function buildFeishuTextMessage(payload, text, env = process.env) {
       receiveIdType: configuredReceiveIdType || 'chat_id',
       receiveId: configuredReceiveId,
       msgType: 'text',
-      content: JSON.stringify({ text }),
+      content: JSON.stringify({ text: finalText }),
     };
   }
 
@@ -860,7 +892,7 @@ function buildFeishuTextMessage(payload, text, env = process.env) {
     receiveIdType: 'open_id',
     receiveId: '',
     msgType: 'text',
-    content: JSON.stringify({ text }),
+    content: JSON.stringify({ text: finalText }),
   };
 }
 
@@ -1592,7 +1624,10 @@ function sendRoutedFeishuReply(receiptSender, payload, replyText, env, label, ti
     return Promise.resolve();
   }
 
-  return sendTimedFeishuMessage(receiptSender, buildFeishuTextMessage(payload, replyText, env), env, timingContext, label).catch((error) => {
+  return sendTimedFeishuMessage(receiptSender, buildFeishuTextMessage(payload, replyText, env, {
+    status: '完成',
+    elapsedMs: elapsedMs(timingContext?.startedAt),
+  }), env, timingContext, label).catch((error) => {
     console.error(`Feishu ${label} reply failed: ${error.message}`);
   });
 }

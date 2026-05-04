@@ -234,6 +234,29 @@ test('buildFeishuTextMessage prefers current chat id over configured notify id',
   });
 });
 
+test('buildFeishuTextMessage can append elapsed and status footer', () => {
+  const payload = {
+    event: {
+      message: {
+        chat_id: 'chat-a',
+      },
+    },
+  };
+
+  const message = buildFeishuTextMessage(payload, '测试完成', {
+    FEISHU_REPLY_FOOTER_ELAPSED: 'true',
+    FEISHU_REPLY_FOOTER_STATUS: 'true',
+  }, {
+    elapsedMs: 1234,
+    status: '完成',
+  });
+
+  const content = JSON.parse(message.content);
+  assert.match(content.text, /测试完成/);
+  assert.match(content.text, /状态：完成/);
+  assert.match(content.text, /耗时：1\.2s/);
+});
+
 test('getFeishuRouteMode supports default and named bot routes', () => {
   assert.equal(getFeishuRouteMode('/webhook/feishu'), 'openclaw');
   assert.equal(getFeishuRouteMode('/webhook/feishu/openclaw'), 'openclaw');
@@ -2153,6 +2176,61 @@ test('createServer routes natural-language memory query to local ops runner in a
     await waitForCondition(() => Boolean(reply), { timeoutMs: 2000 });
     assert.equal(receivedAction, 'memory-summary:self:high');
     assert.match(JSON.parse(reply.content).text, /内存：8G 总量/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer appends status and elapsed footer to routed replies', async () => {
+  let reply;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+      FEISHU_REPLY_FOOTER_ELAPSED: 'true',
+      FEISHU_REPLY_FOOTER_STATUS: 'true',
+    },
+    {
+      runOpsCheck: async () => ({
+        service: 'openclaw-feishu-bridge',
+        active: 'active',
+        health: '{"ok":true}',
+        watchdog: 'active',
+        commit: 'abc1234',
+        memory: { total: '8G', used: '3.1G', free: '4.9G' },
+      }),
+      receiptSender: async (message) => {
+        reply = message;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: {
+          sender: { sender_id: { open_id: 'user-a' } },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '你现在内存多少' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await waitForCondition(() => Boolean(reply), { timeoutMs: 2000 });
+    const text = JSON.parse(reply.content).text;
+    assert.match(text, /状态：完成/);
+    assert.match(text, /耗时：/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
