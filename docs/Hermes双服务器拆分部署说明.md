@@ -301,6 +301,14 @@ files  -> agent3.files@claw.163.com
 daily  -> agent4.daily@claw.163.com
 ```
 
+第二阶段业务动作也已经接入：
+
+```text
+account -> evasan.account@claw.163.com
+shop    -> evasan.shop@claw.163.com
+support -> agent4.support@claw.163.com
+```
+
 接手时要分清两层：
 
 ```text
@@ -315,6 +323,9 @@ MAILBOX_ACTION_REPORT_TO=...
 MAILBOX_ACTION_REPLAY_TO=...
 MAILBOX_ACTION_FILES_TO=...
 MAILBOX_ACTION_DAILY_TO=...
+MAILBOX_ACTION_ACCOUNT_TO=...
+MAILBOX_ACTION_SHOP_TO=...
+MAILBOX_ACTION_SUPPORT_TO=...
 ```
 
 改完后：

@@ -32,6 +32,10 @@ on:
         description: "被测电商平台地址"
         required: true
         default: "http://127.0.0.1:5173"
+      mailbox_action:
+        description: "可选业务邮箱动作：account / shop / support"
+        required: false
+        default: ""
 
 jobs:
   ui-tests:

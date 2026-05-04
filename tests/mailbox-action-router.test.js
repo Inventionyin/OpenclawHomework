@@ -33,3 +33,16 @@ test('resolveMailboxAction returns skipped metadata when action is disabled', ()
   assert.equal(resolved.enabled, false);
   assert.equal(resolved.skipReason, 'disabled');
 });
+
+test('resolveMailboxAction returns second-phase business mailbox metadata', () => {
+  const account = resolveMailboxAction('account');
+  const shop = resolveMailboxAction('shop');
+  const support = resolveMailboxAction('support');
+
+  assert.equal(account.mailbox, 'evasan.account@claw.163.com');
+  assert.equal(shop.mailbox, 'evasan.shop@claw.163.com');
+  assert.equal(support.mailbox, 'agent4.support@claw.163.com');
+  assert.equal(account.enabled, true);
+  assert.equal(shop.enabled, true);
+  assert.equal(support.enabled, true);
+});

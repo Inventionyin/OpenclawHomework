@@ -11,4 +11,7 @@ test('loadMailboxActionConfig returns first-phase actions from default config fi
   assert.equal(config.actions.replay.mailbox, 'evasan.replay@claw.163.com');
   assert.equal(config.actions.files.mailbox, 'agent3.files@claw.163.com');
   assert.equal(config.actions.daily.mailbox, 'agent4.daily@claw.163.com');
+  assert.equal(config.actions.account.mailbox, 'evasan.account@claw.163.com');
+  assert.equal(config.actions.shop.mailbox, 'evasan.shop@claw.163.com');
+  assert.equal(config.actions.support.mailbox, 'agent4.support@claw.163.com');
 });

@@ -697,6 +697,69 @@ test('notifyUiMailboxActions sends report replay and files for failed UI result'
   assert.equal(sent[2].to[0], 'agent3.files@claw.163.com');
 });
 
+test('notifyUiMailboxActions sends explicit account business mailbox when requested', async () => {
+  const sent = [];
+
+  const messages = await notifyUiMailboxActions(
+    {
+      actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/789',
+      targetRef: 'main',
+      runMode: 'contracts',
+      mailboxAction: 'account',
+    },
+    {
+      conclusion: 'success',
+      html_url: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/789',
+    },
+    {
+      EMAIL_NOTIFY_ENABLED: 'true',
+    },
+    {
+      emailSender: async (message) => {
+        sent.push(message);
+        return { sent: true };
+      },
+    },
+  );
+
+  assert.deepEqual(messages.map((item) => item.action), ['report', 'files', 'account']);
+  assert.equal(sent[2].to[0], 'evasan.account@claw.163.com');
+  assert.match(sent[2].subject, /account/i);
+});
+
+test('notifyUiMailboxActions sends explicit support business mailbox when requested', async () => {
+  const sent = [];
+
+  const messages = await notifyUiMailboxActions(
+    {
+      actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/790',
+      targetRef: 'main',
+      runMode: 'smoke',
+      config: {
+        inputs: {
+          mailbox_action: 'support',
+        },
+      },
+    },
+    {
+      conclusion: 'failure',
+      html_url: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/790',
+    },
+    {
+      EMAIL_NOTIFY_ENABLED: 'true',
+    },
+    {
+      emailSender: async (message) => {
+        sent.push(message);
+        return { sent: true };
+      },
+    },
+  );
+
+  assert.deepEqual(messages.map((item) => item.action), ['report', 'replay', 'files', 'support']);
+  assert.equal(sent[3].to[0], 'agent4.support@claw.163.com');
+});
+
 test('notifyFeishuRunResult sends email after completed run notification', async () => {
   const feishuMessages = [];
   const emailJobs = [];

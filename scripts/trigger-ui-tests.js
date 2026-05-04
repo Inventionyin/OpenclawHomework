@@ -9,6 +9,7 @@ const DEFAULTS = {
   appRepository: 'dengzhekun/projectku-web',
   appRef: 'main',
   baseUrl: 'http://127.0.0.1:5173',
+  mailboxAction: '',
 };
 
 function readOption(args, name, fallback) {
@@ -41,6 +42,7 @@ function parseCliArgs(args = process.argv.slice(2), env = process.env) {
   const appRepository = readOption(args, '--app-repository', env.UI_TEST_APP_REPOSITORY ?? DEFAULTS.appRepository);
   const appRef = readOption(args, '--app-ref', env.UI_TEST_APP_REF ?? DEFAULTS.appRef);
   const baseUrl = readOption(args, '--base-url', env.UI_TEST_BASE_URL ?? DEFAULTS.baseUrl);
+  const mailboxAction = readOption(args, '--mailbox-action', env.UI_TEST_MAILBOX_ACTION ?? DEFAULTS.mailboxAction);
 
   return {
     owner,
@@ -55,6 +57,7 @@ function parseCliArgs(args = process.argv.slice(2), env = process.env) {
       app_repository: appRepository,
       app_ref: appRef,
       base_url: baseUrl,
+      mailbox_action: mailboxAction,
     },
   };
 }
@@ -215,6 +218,9 @@ async function main() {
   console.log(`Target repository: ${config.inputs.target_repository}`);
   console.log(`Target ref: ${config.inputs.target_ref}`);
   console.log(`Run mode: ${config.inputs.run_mode}`);
+  if (config.inputs.mailbox_action) {
+    console.log(`Mailbox action: ${config.inputs.mailbox_action}`);
+  }
 }
 
 if (require.main === module) {

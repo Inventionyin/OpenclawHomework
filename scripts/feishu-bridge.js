@@ -1606,6 +1606,59 @@ function buildFilesMessage(job, run) {
   };
 }
 
+function buildBusinessMailboxActionSubject(actionName, job, run) {
+  const conclusion = run.conclusion || 'unknown';
+  const targetRef = job.targetRef || job.config?.inputs?.target_ref || 'unknown-ref';
+  const runMode = job.runMode || job.config?.inputs?.run_mode || 'unknown-mode';
+  return `[${actionName}] ${conclusion} - ${targetRef} / ${runMode}`;
+}
+
+function buildBusinessMailboxMessage(actionName, resolvedAction, job, run) {
+  const runUrl = run.html_url || job.actionsUrl || '';
+  const artifactsUrl = buildRunArtifactsUrl(runUrl);
+  const lines = [
+    resolvedAction.description || `${actionName} 专项测试通知`,
+    `动作：${actionName}`,
+    `分支：${job.targetRef || job.config?.inputs?.target_ref || 'unknown-ref'}`,
+    `模式：${job.runMode || job.config?.inputs?.run_mode || 'unknown-mode'}`,
+    `结论：${run.conclusion || 'unknown'}`,
+    runUrl ? `GitHub Actions：${runUrl}` : '',
+    artifactsUrl ? `Allure / Playwright artifact：${artifactsUrl}` : '',
+  ].filter(Boolean);
+
+  return {
+    text: lines.join('\n'),
+    html: [
+      `<h2>${escapeHtml(resolvedAction.description || `${actionName} 专项测试通知`)}</h2>`,
+      '<pre style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap;">',
+      lines.map((line) => escapeHtml(line)).join('\n'),
+      '</pre>',
+      runUrl ? `<p><a href="${escapeHtml(runUrl)}">GitHub Actions Run</a></p>` : '',
+      artifactsUrl ? `<p><a href="${escapeHtml(artifactsUrl)}">Allure / Playwright Artifacts</a></p>` : '',
+    ].filter(Boolean).join('\n'),
+  };
+}
+
+function normalizeMailboxActionList(value) {
+  if (Array.isArray(value)) {
+    return [...new Set(value.map((item) => String(item || '').trim()).filter(Boolean))];
+  }
+
+  return [...new Set(String(value || '')
+    .split(/[,\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean))];
+}
+
+function getRequestedMailboxActions(job = {}) {
+  const raw = job.mailboxActions
+    || job.mailboxAction
+    || job.config?.inputs?.mailbox_action
+    || '';
+
+  return normalizeMailboxActionList(raw);
+}
+
 function buildMailboxActionMessage(actionName, job, run, env = process.env) {
   const resolvedAction = resolveMailboxAction(actionName, env);
   if (!resolvedAction.enabled || !resolvedAction.mailbox) {
@@ -1623,6 +1676,9 @@ function buildMailboxActionMessage(actionName, job, run, env = process.env) {
   } else if (actionName === 'files') {
     content = buildFilesMessage(job, run);
     fallbackSubject = buildEmailRunResultSubject(job, run);
+  } else if (['account', 'shop', 'support'].includes(actionName)) {
+    content = buildBusinessMailboxMessage(actionName, resolvedAction, job, run);
+    fallbackSubject = buildBusinessMailboxActionSubject(actionName, job, run);
   } else {
     return null;
   }
@@ -1639,15 +1695,18 @@ function buildMailboxActionMessage(actionName, job, run, env = process.env) {
 
 function buildUiMailboxMessages(job, run, env = process.env) {
   const messages = [];
+  const appendedActions = new Set();
   const reportMessage = buildMailboxActionMessage('report', job, run, env);
   if (reportMessage) {
     messages.push(reportMessage);
+    appendedActions.add(reportMessage.action);
   }
 
   if ((run.conclusion || 'unknown') !== 'success') {
     const replayMessage = buildMailboxActionMessage('replay', job, run, env);
     if (replayMessage) {
       messages.push(replayMessage);
+      appendedActions.add(replayMessage.action);
     }
   }
 
@@ -1655,6 +1714,19 @@ function buildUiMailboxMessages(job, run, env = process.env) {
     const filesMessage = buildMailboxActionMessage('files', job, run, env);
     if (filesMessage) {
       messages.push(filesMessage);
+      appendedActions.add(filesMessage.action);
+    }
+  }
+
+  for (const actionName of getRequestedMailboxActions(job)) {
+    if (appendedActions.has(actionName)) {
+      continue;
+    }
+
+    const actionMessage = buildMailboxActionMessage(actionName, job, run, env);
+    if (actionMessage) {
+      messages.push(actionMessage);
+      appendedActions.add(actionMessage.action);
     }
   }
 

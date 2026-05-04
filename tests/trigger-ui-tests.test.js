@@ -18,6 +18,8 @@ test('parseCliArgs returns homework defaults and supplied workflow inputs', () =
     'Inventionyin/UItest',
     '--base-url',
     'http://127.0.0.1:5173',
+    '--mailbox-action',
+    'support',
   ]);
 
   assert.equal(config.owner, 'Inventionyin');
@@ -32,6 +34,7 @@ test('parseCliArgs returns homework defaults and supplied workflow inputs', () =
     app_repository: 'dengzhekun/projectku-web',
     app_ref: 'main',
     base_url: 'http://127.0.0.1:5173',
+    mailbox_action: 'support',
   });
 });
 
@@ -49,6 +52,7 @@ test('buildWorkflowDispatchRequest creates GitHub workflow_dispatch request', ()
       app_repository: 'dengzhekun/projectku-web',
       app_ref: 'main',
       base_url: 'http://127.0.0.1:5173',
+      mailbox_action: 'account',
     },
   });
 
@@ -68,6 +72,7 @@ test('buildWorkflowDispatchRequest creates GitHub workflow_dispatch request', ()
       app_repository: 'dengzhekun/projectku-web',
       app_ref: 'main',
       base_url: 'http://127.0.0.1:5173',
+      mailbox_action: 'account',
     },
   });
 });

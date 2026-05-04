@@ -24,6 +24,24 @@
       "subjectPrefix": "[Daily Summary]",
       "description": "每日自动化测试汇总",
       "enabled": true
+    },
+    "account": {
+      "mailbox": "evasan.account@claw.163.com",
+      "subjectPrefix": "[Account]",
+      "description": "账号体系专项测试通知",
+      "enabled": true
+    },
+    "shop": {
+      "mailbox": "evasan.shop@claw.163.com",
+      "subjectPrefix": "[Shop]",
+      "description": "电商业务专项测试通知",
+      "enabled": true
+    },
+    "support": {
+      "mailbox": "agent4.support@claw.163.com",
+      "subjectPrefix": "[Support]",
+      "description": "客服与支持流程专项测试通知",
+      "enabled": true
     }
   }
 }
