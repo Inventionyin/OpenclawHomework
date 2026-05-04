@@ -1,6 +1,7 @@
 const { join } = require('node:path');
 const {
   buildMemoryContext,
+  buildMemorySearchContext,
   isSafeMemoryText,
   rememberMemoryNote,
 } = require('./memory-store');
@@ -69,6 +70,34 @@ function buildDocAgentReply(text, memoryContext = buildMemoryContext()) {
   ].join('\n');
 }
 
+function buildCapabilityGuideReply(assistantName = 'OpenClaw') {
+  return [
+    `${assistantName} 当前适合这样玩：`,
+    '',
+    'UI 自动化：',
+    '- 帮我跑一下 main 分支的 UI 自动化冒烟测试',
+    '- 如何使用 /run-ui-test main smoke',
+    '',
+    '服务器运维：',
+    '- 看我自己：你现在内存多少 / 你硬盘还剩多少 / 你现在卡不卡',
+    '- 你现在内存多少',
+    '- 你硬盘还剩多少',
+    '- 硬盘清理：看看哪些东西占硬盘 / khoj 可以清理吗 / 确认清理第 1 个',
+    '- 看对方：看看 Hermes 的服务器状态 / OpenClaw 硬盘还剩多少',
+    '- 重启修复：修复你自己 / 修复 Hermes / 修复 OpenClaw',
+    '',
+    '记忆和接手：',
+    '- /memory',
+    '- /memory search session lock',
+    '- /memory remember 今天修复了某个非敏感问题',
+    '- 老师任务还差哪些',
+    '',
+    '邮箱和报告：',
+    '- UI 自动化完成后发报告到飞书和邮箱',
+    '- 查看 ClawEmail/SMTP 是否正常时先问状态，不要发密钥',
+  ].join('\n');
+}
+
 function buildMemoryAgentReply(route, memoryContext = buildMemoryContext(), options = {}) {
   if (route.action === 'remember') {
     try {
@@ -80,6 +109,11 @@ function buildMemoryAgentReply(route, memoryContext = buildMemoryContext(), opti
     } catch (error) {
       return `不能保存疑似密钥或敏感信息：${error.message}`;
     }
+  }
+
+  if (route.action === 'search') {
+    const searchMemoryContext = options.searchMemoryContext || buildMemorySearchContext;
+    return searchMemoryContext(route.query);
   }
 
   return [
@@ -261,6 +295,7 @@ function buildChatAgentPrompt(text, memoryContext = '') {
 
 module.exports = {
   ALLOWED_OPS_ACTIONS,
+  buildCapabilityGuideReply,
   buildChatAgentPrompt,
   buildDocAgentReply,
   buildMemoryAgentReply,

@@ -193,6 +193,15 @@ function routeAgentIntent(text) {
       requiresAuth: true,
     };
   }
+  const searchMatch = normalized.match(/^\/memory\s+(?:search|find|查找|搜索)\s+(.+)$/i);
+  if (searchMatch) {
+    return {
+      agent: 'memory-agent',
+      action: 'search',
+      query: searchMatch[1].trim(),
+      requiresAuth: true,
+    };
+  }
   if (/^\/memory\b/i.test(normalized) || /(记住|记忆|项目状态)/.test(normalized)) {
     return { agent: 'memory-agent', action: 'show', requiresAuth: true };
   }

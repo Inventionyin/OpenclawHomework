@@ -6,11 +6,21 @@ const test = require('node:test');
 
 const {
   buildChatAgentPrompt,
+  buildCapabilityGuideReply,
   buildDocAgentReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,
   sanitizeReplyField,
 } = require('../scripts/agents/agent-handlers');
+
+test('buildCapabilityGuideReply explains practical agent playbook', () => {
+  const reply = buildCapabilityGuideReply('OpenClaw');
+  assert.match(reply, /OpenClaw/);
+  assert.match(reply, /UI 自动化/);
+  assert.match(reply, /服务器/);
+  assert.match(reply, /记忆/);
+  assert.match(reply, /邮箱/);
+});
 
 test('buildDocAgentReply answers project progress from memory', () => {
   const memoryContext = [
@@ -29,6 +39,14 @@ test('buildMemoryAgentReply shows memory context', () => {
   const reply = buildMemoryAgentReply({ action: 'show' }, '# Memory Context\nOpenClaw 已部署');
   assert.match(reply, /当前记忆摘要/);
   assert.match(reply, /OpenClaw/);
+});
+
+test('buildMemoryAgentReply supports keyword search', () => {
+  const reply = buildMemoryAgentReply({ action: 'search', query: 'session lock' }, '', {
+    searchMemoryContext: () => '# 记忆检索结果\n\n- session lock 已修复',
+  });
+  assert.match(reply, /记忆检索结果/);
+  assert.match(reply, /session lock/);
 });
 
 test('buildMemoryAgentReply stores safe note', () => {

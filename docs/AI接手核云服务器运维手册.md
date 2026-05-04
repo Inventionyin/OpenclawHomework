@@ -309,6 +309,7 @@ docs/skills/ui-automation.md
 docs/skills/server-ops.md
 docs/skills/feishu-debug.md
 docs/skills/handoff.md
+docs/Agent玩法与二改优化路线.md
 ```
 
 安全规则：
@@ -316,6 +317,8 @@ docs/skills/handoff.md
 - 记忆文件只能保存非敏感事实。
 - 不要把服务器密码、Token、App Secret、模型 API Key 写入记忆。
 - 普通聊天默认不携带完整记忆。
+- 支持 `/memory search 关键词` 检索非敏感记忆，适合先查历史故障再动手。
+- `帮助`、`你会做什么`、`怎么玩` 会返回当前能力玩法菜单。
 - `ui-test-agent`、`ops-agent`、`doc-agent`、`memory-agent` 都需要授权用户。
 - `ops-agent` 支持 `/peer-status`、`/peer-health`、`/peer-logs`、`/peer-restart`、`/peer-repair`。这些命令只会走受限 peer-control 白名单，不能执行任意 shell。
 - 群聊里没有 @ 机器人时，普通聊天、文档和记忆问题默认忽略，避免把项目状态发到群里。

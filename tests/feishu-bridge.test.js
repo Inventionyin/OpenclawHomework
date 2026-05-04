@@ -105,6 +105,14 @@ test('parseSmallTalkMessage help includes categorized natural-language examples'
   assert.match(reply, /修复 OpenClaw/);
 });
 
+test('parseSmallTalkMessage supports capability discovery phrases', () => {
+  const reply = parseSmallTalkMessage('你会做什么');
+  assert.match(reply, /UI 自动化/);
+  assert.match(reply, /服务器/);
+  assert.match(reply, /记忆/);
+  assert.match(reply, /邮箱/);
+});
+
 test('runLocalOpsAction returns summary data for memory and disk views', async () => {
   const result = await runLocalOpsAction('memory-summary', {
     WATCHDOG_SERVICE: 'openclaw-feishu-bridge',

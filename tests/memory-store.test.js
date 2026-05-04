@@ -6,9 +6,11 @@ const test = require('node:test');
 
 const {
   buildMemoryContext,
+  buildMemorySearchContext,
   isSafeMemoryText,
   readJsonMemory,
   rememberMemoryNote,
+  searchMemory,
 } = require('../scripts/agents/memory-store');
 
 test('readJsonMemory returns parsed JSON or fallback', () => {
@@ -95,6 +97,39 @@ test('buildMemoryContext redacts prefixed env-style secret labels', () => {
     const context = buildMemoryContext(tempDir);
     assert.match(context, /\[redacted secret-like memory content\]/);
     assert.doesNotMatch(context, /GITHUB_TOKEN: abc123/);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('searchMemory returns safe keyword matches from memory files', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'memory-store-test-'));
+  try {
+    writeFileSync(join(tempDir, 'user-profile.json'), '{"language":"zh-CN"}', 'utf8');
+    writeFileSync(join(tempDir, 'project-state.json'), '{"capabilities":["GitHub Actions UI 自动化"]}', 'utf8');
+    writeFileSync(join(tempDir, 'incident-log.md'), '# Incident Log\n\nsession lock 已通过串行队列修复', 'utf8');
+    writeFileSync(join(tempDir, 'runbook-notes.md'), 'TOKEN: abc123', 'utf8');
+
+    const matches = searchMemory('session lock', { memoryDir: tempDir });
+    assert.equal(matches.length, 1);
+    assert.match(matches[0].text, /串行队列/);
+    assert.doesNotMatch(JSON.stringify(matches), /TOKEN|abc123/);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('buildMemorySearchContext formats matches and empty state', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'memory-store-test-'));
+  try {
+    writeFileSync(join(tempDir, 'incident-log.md'), '# Incident Log\n\n飞书重复消息由 receive_id 和重试导致', 'utf8');
+
+    const found = buildMemorySearchContext('receive_id', { memoryDir: tempDir });
+    assert.match(found, /记忆检索结果/);
+    assert.match(found, /receive_id/);
+
+    const missing = buildMemorySearchContext('不存在的关键词', { memoryDir: tempDir });
+    assert.match(missing, /没有找到相关记忆/);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

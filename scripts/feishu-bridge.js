@@ -17,6 +17,7 @@ const {
   routeAgentIntent,
 } = require('./agents/router');
 const {
+  buildCapabilityGuideReply,
   buildChatAgentPrompt,
   buildDocAgentReply,
   buildMemoryAgentReply,
@@ -910,14 +911,11 @@ function parseSmallTalkMessage(text, env = process.env) {
     ].join('\n');
   }
 
-  if (/^(帮助|help|怎么用|使用说明)[!！。.\s]*$/i.test(normalized)) {
+  if (/^(帮助|help|怎么用|使用说明|你会做什么|你能做什么|怎么玩|玩法)[!！。.\s]*$/i.test(normalized)) {
     return [
       `我是 ${assistantName} UI 自动化助手。`,
-      '看我自己：你现在内存多少 / 你硬盘还剩多少 / 你现在卡不卡',
-      '硬盘清理：看看哪些东西占硬盘 / khoj 可以清理吗 / 确认清理第 1 个',
-      '看对方：看看 Hermes 的服务器状态 / OpenClaw 硬盘还剩多少',
-      '重启修复：重启你自己 / 修复你自己 / 重启 Hermes / 修复 OpenClaw',
-      'UI 自动化：帮我跑一下 main 分支的 UI 自动化冒烟测试',
+      buildCapabilityGuideReply(assistantName),
+      '',
       '绑定权限：绑定我 / whoami',
       '高级命令：/status /health /logs /exec df -h /peer-status /peer-repair',
     ].join('\n');

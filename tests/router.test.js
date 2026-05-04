@@ -154,6 +154,12 @@ test('routeAgentIntent marks ambiguous dangerous ops as medium or low confidence
 
 test('routeAgentIntent routes memory commands', () => {
   assert.deepEqual(routeAgentIntent('/memory'), { agent: 'memory-agent', action: 'show', requiresAuth: true });
+  assert.deepEqual(routeAgentIntent('/memory search session lock'), {
+    agent: 'memory-agent',
+    action: 'search',
+    query: 'session lock',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('/memory remember 今天修复了 session lock'), {
     agent: 'memory-agent',
     action: 'remember',
