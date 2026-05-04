@@ -162,6 +162,67 @@ test('buildOpsAgentReply supports explicit exec actions', async () => {
   assert.match(reply, /Filesystem/);
 });
 
+test('buildOpsAgentReply renders disk audit cleanup candidates', async () => {
+  const reply = await buildOpsAgentReply({ action: 'disk-audit' }, {
+    runOpsCheck: async () => ({
+      service: 'openclaw-feishu-bridge',
+      active: 'active',
+      health: '{"ok":true}',
+      watchdog: 'active',
+      commit: 'abc1234',
+      disk: { size: '40G', used: '36G', available: '4G', usePercent: '90%' },
+      audit: {
+        candidates: [
+          {
+            id: 1,
+            name: 'khoj',
+            path: '/opt/khoj',
+            size: '9.5G',
+            risk: 'confirm',
+            recommendation: '如果不用 Khoj，可以确认清理。',
+          },
+          {
+            id: 2,
+            name: 'npm-cache',
+            path: '/root/.npm',
+            size: '1.2G',
+            risk: 'safe',
+            recommendation: '可清理 npm 缓存。',
+          },
+        ],
+      },
+    }),
+  });
+
+  assert.match(reply, /硬盘占用盘点/);
+  assert.match(reply, /1\. khoj/);
+  assert.match(reply, /\/opt\/khoj/);
+  assert.match(reply, /确认清理第 1 个/);
+});
+
+test('buildOpsAgentReply renders cleanup confirmation results', async () => {
+  const reply = await buildOpsAgentReply({ action: 'cleanup-confirm', selection: 1 }, {
+    runOpsCheck: async () => ({
+      service: 'openclaw-feishu-bridge',
+      active: 'active',
+      health: '{"ok":true}',
+      watchdog: 'active',
+      commit: 'abc1234',
+      operation: 'cleanup-confirm',
+      cleaned: {
+        name: 'khoj',
+        path: '/opt/khoj',
+        beforeAvailable: '4G',
+        afterAvailable: '13G',
+        detail: '清理完成',
+      },
+    }),
+  });
+
+  assert.match(reply, /已清理 khoj/);
+  assert.match(reply, /4G -> 13G/);
+});
+
 test('buildOpsAgentReply rejects unknown ops actions', async () => {
   const reply = await buildOpsAgentReply({ action: 'rm -rf /' }, {
     runOpsCheck: async () => {

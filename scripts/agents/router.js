@@ -68,6 +68,35 @@ function routeNaturalLanguageOps(text) {
   const target = detectOpsTarget(normalized);
   const hasExplicitPeer = target !== 'self';
 
+  const cleanupSelectionMatch = normalized.match(/(?:确认)?清理(?:第\s*)?(\d+)\s*(?:个|项)?/);
+  if (cleanupSelectionMatch) {
+    return {
+      ...toOpsRoute('cleanup-confirm', target, 'high'),
+      selection: Number(cleanupSelectionMatch[1]),
+    };
+  }
+
+  const cleanupNameMatch = normalized.match(/(?:确认)?清理\s*(khoj|npm|缓存|日志|tmp|临时文件)/i);
+  if (cleanupNameMatch) {
+    return {
+      ...toOpsRoute('cleanup-confirm', target, 'high'),
+      selectionName: cleanupNameMatch[1].toLowerCase(),
+    };
+  }
+
+  if (/(khoj)/i.test(normalized) && /(清理|删除|能删|可以删|占用|硬盘|空间)/.test(normalized)) {
+    return {
+      ...toOpsRoute('disk-audit', target, 'high'),
+      cleanupHint: 'khoj',
+    };
+  }
+
+  if (/(哪些|哪里|什么|地方|文件|目录).{0,16}(占用|占|耗|吃).{0,12}(硬盘|磁盘|空间|存储)/.test(normalized)
+    || /(没用|无用|可以删|能删|可清理).{0,20}(硬盘|磁盘|空间|存储)/.test(normalized)
+    || /(硬盘|磁盘|空间|存储).{0,20}(没用|无用|可以删|能删|可清理|占用多|大户)/.test(normalized)) {
+    return toOpsRoute('disk-audit', target, 'high');
+  }
+
   if (/(重启|修复|重起|搞一下)/.test(normalized)) {
     const selfRestart = /(重启|重起).{0,8}(你自己|自己|你这台|本机)|你.{0,4}(重启|重起).{0,4}(一下)?/.test(normalized);
     const peerRestart = hasExplicitPeer && /(重启|重起)/.test(normalized);

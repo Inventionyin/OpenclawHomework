@@ -22,6 +22,8 @@ const ALLOWED_OPS_ACTIONS = new Set([
   'exec',
   'memory-summary',
   'disk-summary',
+  'disk-audit',
+  'cleanup-confirm',
   'load-summary',
   'peer-status',
   'peer-health',
@@ -148,6 +150,55 @@ function buildSummaryReply(route, result) {
   return lines.join('\n');
 }
 
+function buildDiskAuditReply(result) {
+  const safeResult = result && typeof result === 'object' ? result : {};
+  const candidates = Array.isArray(safeResult.audit?.candidates) ? safeResult.audit.candidates : [];
+  const lines = [
+    '硬盘占用盘点：',
+  ];
+
+  if (safeResult.disk) {
+    lines.push(`硬盘：${sanitizeReplyField(safeResult.disk.size || 'unknown')} 总量，已用 ${sanitizeReplyField(safeResult.disk.used || 'unknown')}，剩余 ${sanitizeReplyField(safeResult.disk.available || 'unknown')}，使用率 ${sanitizeReplyField(safeResult.disk.usePercent || 'unknown')}`);
+  }
+
+  if (candidates.length === 0) {
+    lines.push('暂时没有找到白名单内可建议清理的候选项。');
+    return lines.join('\n');
+  }
+
+  candidates.forEach((candidate, index) => {
+    const id = candidate.id || index + 1;
+    const risk = candidate.risk === 'safe' ? '可清理' : '需确认';
+    lines.push(`${id}. ${sanitizeReplyField(candidate.name || 'unknown')} ${sanitizeReplyField(candidate.size || 'unknown')} - ${sanitizeReplyField(candidate.path || 'unknown')}（${risk}）`);
+    if (candidate.recommendation) {
+      lines.push(`   ${sanitizeReplyField(candidate.recommendation)}`);
+    }
+  });
+
+  lines.push('要执行请回复：确认清理第 1 个 / 清理 khoj。');
+  return lines.join('\n');
+}
+
+function buildCleanupConfirmReply(result) {
+  const safeResult = result && typeof result === 'object' ? result : {};
+  if (!safeResult.cleaned) {
+    return [
+      '还没有可执行的清理项。',
+      safeResult.detail ? `原因：${sanitizeReplyField(safeResult.detail)}` : '请先说“看看哪些东西占硬盘”，让我先生成候选清单。',
+    ].join('\n');
+  }
+
+  const cleaned = safeResult.cleaned;
+  const before = cleaned.beforeAvailable || 'unknown';
+  const after = cleaned.afterAvailable || 'unknown';
+  return [
+    `已清理 ${sanitizeReplyField(cleaned.name || 'unknown')}。`,
+    `路径：${sanitizeReplyField(cleaned.path || 'unknown')}`,
+    `硬盘剩余：${sanitizeReplyField(before)} -> ${sanitizeReplyField(after)}`,
+    cleaned.detail ? `详情：${sanitizeReplyField(cleaned.detail)}` : null,
+  ].filter(Boolean).join('\n');
+}
+
 async function buildOpsAgentReply(route, options = {}) {
   if (!ALLOWED_OPS_ACTIONS.has(route.action)) {
     return '不支持的运维指令。';
@@ -172,6 +223,12 @@ async function buildOpsAgentReply(route, options = {}) {
   }
 
   const safeResult = result && typeof result === 'object' ? result : {};
+  if (route.action === 'disk-audit') {
+    return buildDiskAuditReply(safeResult);
+  }
+  if (route.action === 'cleanup-confirm') {
+    return buildCleanupConfirmReply(safeResult);
+  }
   if (/summary$/.test(route.action)) {
     return buildSummaryReply(route, safeResult);
   }

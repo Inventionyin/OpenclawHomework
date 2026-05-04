@@ -93,12 +93,14 @@ test('parseSmallTalkMessage replies to greeting without triggering automation', 
   const reply = parseSmallTalkMessage('你好');
   assert.match(reply, /OpenClaw UI 自动化助手/);
   assert.match(reply, /你现在内存多少/);
+  assert.match(reply, /哪些东西占硬盘/);
   assert.match(reply, /重启你自己/);
 });
 
 test('parseSmallTalkMessage help includes categorized natural-language examples', () => {
   const reply = parseSmallTalkMessage('帮助');
   assert.match(reply, /看我自己/);
+  assert.match(reply, /硬盘清理/);
   assert.match(reply, /看对方/);
   assert.match(reply, /修复 OpenClaw/);
 });
@@ -123,6 +125,93 @@ test('runLocalOpsAction returns summary data for memory and disk views', async (
   });
 
   assert.equal(result.memory.total, '8G');
+});
+
+test('runLocalOpsAction audits disk cleanup candidates without deleting', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'disk-audit-state-'));
+  const calls = [];
+  try {
+    const result = await runLocalOpsAction('disk-audit', {
+      WATCHDOG_SERVICE: 'openclaw-feishu-bridge',
+      LOCAL_PROJECT_DIR: '/tmp/project',
+      PORT: '8788',
+      DISK_AUDIT_STATE_FILE: join(tempDir, 'state.json'),
+    }, {
+      execFile: (command, args, options, callback) => {
+        calls.push([command, args]);
+        const joined = [command, ...(args || [])].join(' ');
+        let stdout = '';
+        if (command === 'systemctl') stdout = 'active\n';
+        else if (command === 'git') stdout = 'abc1234\n';
+        else if (joined.includes('df -h')) stdout = 'overlay 40G 36G 4G 90% /';
+        else if (joined.includes('du -sh')) stdout = [
+          '9.5G\t/opt/khoj',
+          '1.2G\t/root/.npm',
+          '800M\t/var/log',
+        ].join('\n');
+        callback(null, stdout, '');
+      },
+      fetchImpl: async () => ({ ok: true, text: async () => '{"ok":true}' }),
+    });
+
+    assert.equal(result.audit.candidates[0].name, 'khoj');
+    assert.equal(result.audit.candidates[0].path, '/opt/khoj');
+    assert.equal(result.audit.candidates[1].name, 'npm-cache');
+    assert.equal(calls.some(([command, args]) => command === 'bash' && args.join(' ').includes('rm -rf')), false);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('runLocalOpsAction cleans only a candidate saved by previous disk audit', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'disk-cleanup-state-'));
+  const stateFile = join(tempDir, 'state.json');
+  const calls = [];
+  const env = {
+    WATCHDOG_SERVICE: 'openclaw-feishu-bridge',
+    LOCAL_PROJECT_DIR: '/tmp/project',
+    PORT: '8788',
+    DISK_AUDIT_STATE_FILE: stateFile,
+  };
+
+  try {
+    await runLocalOpsAction('disk-audit', env, {
+      execFile: (command, args, options, callback) => {
+        const joined = [command, ...(args || [])].join(' ');
+        let stdout = '';
+        if (command === 'systemctl') stdout = 'active\n';
+        else if (command === 'git') stdout = 'abc1234\n';
+        else if (joined.includes('df -h')) stdout = 'overlay 40G 36G 4G 90% /';
+        else if (joined.includes('du -sh')) stdout = '9.5G\t/opt/khoj\n';
+        callback(null, stdout, '');
+      },
+      fetchImpl: async () => ({ ok: true, text: async () => '{"ok":true}' }),
+    });
+
+    const result = await runLocalOpsAction('cleanup-confirm', env, {
+      route: { selection: 1 },
+      execFile: (command, args, options, callback) => {
+        calls.push([command, args]);
+        const joined = [command, ...(args || [])].join(' ');
+        let stdout = '';
+        if (command === 'systemctl') stdout = 'active\n';
+        else if (command === 'git') stdout = 'abc1234\n';
+        else if (joined.includes('df -h') && calls.filter(([cmd, callArgs]) => cmd === 'bash' && callArgs.join(' ').includes('df -h')).length > 1) stdout = 'overlay 40G 27G 13G 68% /';
+        else if (joined.includes('df -h')) stdout = 'overlay 40G 36G 4G 90% /';
+        else if (joined.includes('rm -rf -- /opt/khoj')) stdout = '';
+        callback(null, stdout, '');
+      },
+      fetchImpl: async () => ({ ok: true, text: async () => '{"ok":true}' }),
+    });
+
+    assert.equal(result.cleaned.name, 'khoj');
+    assert.equal(result.cleaned.path, '/opt/khoj');
+    assert.equal(result.cleaned.beforeAvailable, '4G');
+    assert.equal(result.cleaned.afterAvailable, '13G');
+    assert.equal(calls.some(([command, args]) => command === 'bash' && args.join(' ').includes('rm -rf -- /opt/khoj')), true);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('runLocalOpsAction restarts local service for restart action', async () => {

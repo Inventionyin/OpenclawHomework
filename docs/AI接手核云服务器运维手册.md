@@ -779,6 +779,15 @@ https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml
 
 - `FEISHU_DEDUP_ENABLED=true` 会忽略短时间重复投递的同一飞书事件。
 - `FEISHU_RUN_NOTIFICATION_DEDUP_TTL_MS=300000` 会避免同一聊天、同一分支、同一模式的报告 5 分钟内重复发送。
+
+### 硬盘盘点与清理
+
+OpenClaw/Hermes 支持自然语言两步清理：
+
+1. 先说“看看哪些东西占硬盘”或“khoj 可以清理吗”，服务会扫描白名单路径并把候选写入 `data/memory/disk-cleanup-state.json`。
+2. 再说“确认清理第 1 个”或“清理 khoj”，服务只会执行上一轮候选里的白名单清理项。
+
+当前白名单：Khoj 目录、npm 缓存、旧 systemd 日志、1 天前临时文件。不要把自然语言清理扩展成任意 shell 删除。
 - 飞书后台只保留 `接收消息 im.message.receive_v1`；不要订阅 `消息已读 im.message.message_read_v1`。
 - 飞书事件回调必须返回 HTTP `200`，不要返回 `202`。飞书可能把非 `200` 当成投递失败并持续重试，造成夜间消息轰炸。
 - `server-watchdog.js` 会扫描 Nginx access log；如果最近 10 分钟出现飞书 webhook 非 `200` 或请求风暴，会在日志里留下原因，配置通知后也会按冷却时间告警。

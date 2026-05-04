@@ -60,6 +60,40 @@ test('routeAgentIntent routes natural-language self server queries', () => {
   });
 });
 
+test('routeAgentIntent routes natural-language disk audit and cleanup confirmations', () => {
+  assert.deepEqual(routeAgentIntent('有哪些地方没用的占用很多硬盘'), {
+    agent: 'ops-agent',
+    action: 'disk-audit',
+    target: 'self',
+    confidence: 'high',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('khoj 可以清理吗'), {
+    agent: 'ops-agent',
+    action: 'disk-audit',
+    target: 'self',
+    confidence: 'high',
+    cleanupHint: 'khoj',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('确认清理第 2 个'), {
+    agent: 'ops-agent',
+    action: 'cleanup-confirm',
+    target: 'self',
+    confidence: 'high',
+    selection: 2,
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('清理 khoj'), {
+    agent: 'ops-agent',
+    action: 'cleanup-confirm',
+    target: 'self',
+    confidence: 'high',
+    selectionName: 'khoj',
+    requiresAuth: true,
+  });
+});
+
 test('routeAgentIntent routes natural-language peer server queries', () => {
   assert.deepEqual(routeAgentIntent('看看 Hermes 的服务器状态'), {
     agent: 'ops-agent',

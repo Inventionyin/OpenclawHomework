@@ -1,8 +1,9 @@
 const http = require('node:http');
 const { execFile } = require('node:child_process');
 const { createHash } = require('node:crypto');
-const { existsSync, readFileSync, writeFileSync } = require('node:fs');
+const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
+const { dirname } = require('node:path');
 const { performance } = require('node:perf_hooks');
 
 const {
@@ -450,6 +451,166 @@ function parseLoadSummary(output) {
   };
 }
 
+function getDiskAuditStateFile(env = process.env) {
+  return env.DISK_AUDIT_STATE_FILE || join(env.LOCAL_PROJECT_DIR || '/opt/OpenclawHomework', 'data', 'memory', 'disk-cleanup-state.json');
+}
+
+function readDiskAuditState(filePath) {
+  if (!filePath || !existsSync(filePath)) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(readFileSync(filePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function writeDiskAuditState(filePath, state) {
+  mkdirSync(dirname(filePath), { recursive: true });
+  writeFileSync(filePath, JSON.stringify(state, null, 2), 'utf8');
+}
+
+function parseDuSummary(output) {
+  return String(output || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^(\S+)\s+(.+)$/);
+      return match ? { size: match[1], path: match[2].trim() } : null;
+    })
+    .filter(Boolean);
+}
+
+function classifyCleanupCandidate(entry, id) {
+  const path = String(entry.path || '');
+  const lowered = path.toLowerCase();
+  if (/(^|\/)khoj($|\/)/.test(lowered)) {
+    return {
+      id,
+      name: 'khoj',
+      path,
+      size: entry.size,
+      risk: 'confirm',
+      cleanupCommand: `rm -rf -- ${path}`,
+      recommendation: '如果已经不用 Khoj，可以确认清理；它可能占用模型、索引或虚拟环境空间。',
+    };
+  }
+  if (/\/\.npm($|\/)/.test(lowered)) {
+    return {
+      id,
+      name: 'npm-cache',
+      path,
+      size: entry.size,
+      risk: 'safe',
+      cleanupCommand: 'npm cache clean --force',
+      recommendation: '这是 npm 缓存，清理后需要时会重新下载。',
+    };
+  }
+  if (/\/var\/log($|\/)/.test(lowered)) {
+    return {
+      id,
+      name: 'system-logs',
+      path,
+      size: entry.size,
+      risk: 'confirm',
+      cleanupCommand: 'journalctl --vacuum-time=7d',
+      recommendation: '只压缩清理旧日志，保留近 7 天日志。',
+    };
+  }
+  if (/\/tmp($|\/)|\/var\/tmp($|\/)/.test(lowered)) {
+    return {
+      id,
+      name: 'tmp-files',
+      path,
+      size: entry.size,
+      risk: 'confirm',
+      cleanupCommand: `find ${path} -mindepth 1 -maxdepth 1 -mtime +1 -exec rm -rf -- {} +`,
+      recommendation: '只清理 1 天前的临时文件。',
+    };
+  }
+  return null;
+}
+
+async function collectDiskAudit(env, execFileImpl) {
+  const diskOutput = await execFilePromise('bash', ['-lc', 'df -h / | tail -n 1'], {}, execFileImpl)
+    .catch((error) => `unknown unknown unknown unknown unknown / # ${error.message}`);
+  const duCommand = [
+    'for p in /opt/khoj /root/.cache /root/.npm /var/log /tmp /var/tmp /usr/local/lib/hermes-agent /opt/OpenclawHomework/node_modules; do',
+    '  [ -e "$p" ] && du -sh "$p" 2>/dev/null || true;',
+    'done',
+  ].join(' ');
+  const duOutput = await execFilePromise('bash', ['-lc', duCommand], { timeout: 120000 }, execFileImpl).catch(() => '');
+  let nextId = 1;
+  const candidates = parseDuSummary(duOutput)
+    .map((entry) => classifyCleanupCandidate(entry, nextId))
+    .filter((candidate) => {
+      if (!candidate) {
+        return false;
+      }
+      nextId += 1;
+      return true;
+    });
+
+  const audit = {
+    createdAt: new Date().toISOString(),
+    candidates,
+  };
+  writeDiskAuditState(getDiskAuditStateFile(env), audit);
+  return {
+    disk: parseDiskSummary(diskOutput),
+    audit,
+  };
+}
+
+function findCleanupCandidate(state, route = {}) {
+  const candidates = Array.isArray(state?.candidates) ? state.candidates : [];
+  if (route.selection) {
+    return candidates.find((candidate) => Number(candidate.id) === Number(route.selection));
+  }
+  const name = String(route.selectionName || route.cleanupHint || '').toLowerCase();
+  if (!name) {
+    return null;
+  }
+  if (name === '缓存') {
+    return candidates.find((candidate) => /cache/.test(candidate.name));
+  }
+  if (name === '日志') {
+    return candidates.find((candidate) => candidate.name === 'system-logs');
+  }
+  return candidates.find((candidate) => String(candidate.name || '').toLowerCase().includes(name));
+}
+
+async function runCleanupConfirm(env, execFileImpl, route = {}) {
+  const state = readDiskAuditState(getDiskAuditStateFile(env));
+  const candidate = findCleanupCandidate(state, route);
+  if (!candidate) {
+    return {
+      operation: 'cleanup-confirm',
+      detail: '没有找到上一轮扫描里的对应清理项。',
+    };
+  }
+
+  const beforeDisk = parseDiskSummary(await execFilePromise('bash', ['-lc', 'df -h / | tail -n 1'], {}, execFileImpl)
+    .catch((error) => `unknown unknown unknown unknown unknown / # ${error.message}`));
+  await execFilePromise('bash', ['-lc', candidate.cleanupCommand], { timeout: 240000 }, execFileImpl);
+  const afterDisk = parseDiskSummary(await execFilePromise('bash', ['-lc', 'df -h / | tail -n 1'], {}, execFileImpl)
+    .catch((error) => `unknown unknown unknown unknown unknown / # ${error.message}`));
+
+  return {
+    operation: 'cleanup-confirm',
+    cleaned: {
+      name: candidate.name,
+      path: candidate.path,
+      beforeAvailable: beforeDisk.available,
+      afterAvailable: afterDisk.available,
+      detail: '清理完成',
+    },
+  };
+}
+
 async function collectLocalSummary(action, execFileImpl) {
   const summary = {};
   if (action === 'memory-summary' || action === 'load-summary') {
@@ -503,6 +664,28 @@ async function runLocalOpsAction(action, env = process.env, options = {}) {
       commit: 'n/a',
       operation: 'exec',
       detail: output,
+    };
+  }
+
+  if (action === 'disk-audit') {
+    return {
+      service,
+      active: 'ok',
+      health: 'n/a',
+      watchdog: 'manual',
+      commit: 'n/a',
+      ...(await collectDiskAudit(env, execFileImpl)),
+    };
+  }
+
+  if (action === 'cleanup-confirm') {
+    return {
+      service,
+      active: 'ok',
+      health: 'n/a',
+      watchdog: 'manual',
+      commit: 'n/a',
+      ...(await runCleanupConfirm(env, execFileImpl, options.route || {})),
     };
   }
 
@@ -722,6 +905,7 @@ function parseSmallTalkMessage(text, env = process.env) {
       '你可以直接这样说：',
       '- 你现在内存多少',
       '- 你硬盘还剩多少',
+      '- 看看哪些东西占硬盘',
       '- 看看 Hermes 的服务器状态',
       '- 重启你自己',
       '- 帮我跑一下 main 分支的 UI 自动化冒烟测试',
@@ -733,6 +917,7 @@ function parseSmallTalkMessage(text, env = process.env) {
     return [
       `我是 ${assistantName} UI 自动化助手。`,
       '看我自己：你现在内存多少 / 你硬盘还剩多少 / 你现在卡不卡',
+      '硬盘清理：看看哪些东西占硬盘 / khoj 可以清理吗 / 确认清理第 1 个',
       '看对方：看看 Hermes 的服务器状态 / OpenClaw 硬盘还剩多少',
       '重启修复：重启你自己 / 修复你自己 / 重启 Hermes / 修复 OpenClaw',
       'UI 自动化：帮我跑一下 main 分支的 UI 自动化冒烟测试',
