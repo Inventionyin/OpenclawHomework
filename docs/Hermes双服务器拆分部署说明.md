@@ -274,7 +274,31 @@ hagent.security@claw.163.com   sub      HAgent Security
 hagent.backup@claw.163.com     sub      HAgent Backup
 ```
 
+Hermes 第三组主邮箱 `agent4@claw.163.com` 已作为日报/归档邮箱组创建：
+
+```text
+agent4@claw.163.com            primary  agent4
+agent4.daily@claw.163.com      sub      Agent4 Daily
+agent4.archive@claw.163.com    sub      Agent4 Archive
+agent4.support@claw.163.com    sub      Agent4 Support
+agent4.notify@claw.163.com     sub      Agent4 Notify
+```
+
 当前 `mail-cli auth apikey set` 会切换全局 ClawEmail 管理 API key。创建 `hagent` 子邮箱后，已把 Hermes 默认管理 key 切回 `shine1`。以后管理多个主邮箱时，按“临时切 key -> 执行管理动作 -> 切回默认 key”的流程，不要让生产服务依赖临时 key 状态。
+
+到这里 6 组主邮箱已经补齐：
+
+```text
+OpenClaw:
+- watchee  -> 报告 / UI / GitHub / 运维
+- evasan   -> QA / 账号 / 电商 / 回放
+- agent3   -> 图片 / 文件 / 实验 / 通知
+
+Hermes:
+- shine1   -> 报告 / UI / GitHub / 运维
+- hagent   -> 监控 / 日志 / 安全 / 备份
+- agent4   -> 日报 / 归档 / 客服 / 通知
+```
 
 检查 Hermes 邮件网关：
 
