@@ -300,6 +300,30 @@ Hermes:
 - agent4   -> 日报 / 归档 / 客服 / 通知
 ```
 
+两台服务器都已经放置主邮箱 root-only 清单和切换脚本：
+
+```text
+/root/.secrets/clawemail-master-accounts.env
+/usr/local/bin/clawemail-switch-key
+```
+
+常用操作：
+
+```bash
+clawemail-switch-key list
+clawemail-switch-key current
+clawemail-switch-key hagent
+clawemail-switch-key agent4
+```
+
+说明：
+
+```text
+- 清单文件里保存 6 个主邮箱和 API key，只给 root 读。
+- 切换脚本本质上是调用 mail-cli auth apikey set，再显示当前 master-user。
+- 管理某个主邮箱前先切换，做完最好再切回这台服务器默认那组。
+```
+
 检查 Hermes 邮件网关：
 
 ```bash
