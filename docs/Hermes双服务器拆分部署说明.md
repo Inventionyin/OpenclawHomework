@@ -252,6 +252,16 @@ evasan.shop@claw.163.com       sub      Evasan Shop
 evasan.replay@claw.163.com     sub      Evasan Replay
 ```
 
+OpenClaw 第三组主邮箱 `agent3@claw.163.com` 已作为实验/附件邮箱组创建：
+
+```text
+agent3@claw.163.com            primary  agent3
+agent3.images@claw.163.com     sub      Agent3 Images
+agent3.files@claw.163.com      sub      Agent3 Files
+agent3.sandbox@claw.163.com    sub      Agent3 Sandbox
+agent3.notify@claw.163.com     sub      Agent3 Notify
+```
+
 当前 ClawEmail 额度表现为每个主邮箱最多 1 个 primary + 4 个 sub。如果继续创建会返回 `OPEN_API_1004`，除非删除不用的子邮箱或申请提额。
 
 Hermes 额外主邮箱 `hagent@claw.163.com` 已作为监控/审计邮箱组创建：
