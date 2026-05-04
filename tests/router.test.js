@@ -36,6 +36,88 @@ test('routeAgentIntent routes safe ops commands', () => {
   });
 });
 
+test('routeAgentIntent routes natural-language self server queries', () => {
+  assert.deepEqual(routeAgentIntent('你现在内存多少'), {
+    agent: 'ops-agent',
+    action: 'memory-summary',
+    target: 'self',
+    confidence: 'high',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('你硬盘还剩多少'), {
+    agent: 'ops-agent',
+    action: 'disk-summary',
+    target: 'self',
+    confidence: 'high',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('你现在卡不卡'), {
+    agent: 'ops-agent',
+    action: 'load-summary',
+    target: 'self',
+    confidence: 'medium',
+    requiresAuth: true,
+  });
+});
+
+test('routeAgentIntent routes natural-language peer server queries', () => {
+  assert.deepEqual(routeAgentIntent('看看 Hermes 的服务器状态'), {
+    agent: 'ops-agent',
+    action: 'peer-status',
+    target: 'hermes',
+    confidence: 'high',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('OpenClaw 硬盘还剩多少'), {
+    agent: 'ops-agent',
+    action: 'peer-disk-summary',
+    target: 'openclaw',
+    confidence: 'high',
+    requiresAuth: true,
+  });
+});
+
+test('routeAgentIntent routes high-confidence restart and repair requests', () => {
+  assert.deepEqual(routeAgentIntent('重启你自己'), {
+    agent: 'ops-agent',
+    action: 'restart',
+    target: 'self',
+    confidence: 'high',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('修复 Hermes'), {
+    agent: 'ops-agent',
+    action: 'peer-repair',
+    target: 'hermes',
+    confidence: 'high',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('修复 OpenClaw'), {
+    agent: 'ops-agent',
+    action: 'peer-repair',
+    target: 'openclaw',
+    confidence: 'high',
+    requiresAuth: true,
+  });
+});
+
+test('routeAgentIntent marks ambiguous dangerous ops as medium or low confidence', () => {
+  assert.deepEqual(routeAgentIntent('你重起一下'), {
+    agent: 'ops-agent',
+    action: 'restart',
+    target: 'self',
+    confidence: 'medium',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('那个你帮我搞一下'), {
+    agent: 'ops-agent',
+    action: 'clarify',
+    target: 'unknown',
+    confidence: 'low',
+    requiresAuth: true,
+  });
+});
+
 test('routeAgentIntent routes memory commands', () => {
   assert.deepEqual(routeAgentIntent('/memory'), { agent: 'memory-agent', action: 'show', requiresAuth: true });
   assert.deepEqual(routeAgentIntent('/memory remember 今天修复了 session lock'), {

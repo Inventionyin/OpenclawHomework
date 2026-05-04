@@ -74,6 +74,48 @@ test('buildOpsAgentReply formats whitelisted check results', async () => {
   assert.equal(receivedAction, 'status');
 });
 
+test('buildOpsAgentReply renders friendly summary replies', async () => {
+  const reply = await buildOpsAgentReply({
+    action: 'memory-summary',
+    target: 'self',
+    confidence: 'high',
+  }, {
+    runOpsCheck: async () => ({
+      service: 'openclaw-feishu-bridge',
+      active: 'active',
+      health: '{"ok":true}',
+      watchdog: 'active',
+      commit: 'abc1234',
+      memory: { total: '8G', used: '3.1G', free: '4.9G' },
+    }),
+  });
+
+  assert.match(reply, /我这台服务器目前正常/);
+  assert.match(reply, /内存：8G 总量/);
+});
+
+test('buildOpsAgentReply asks for clarification on medium-confidence dangerous ops', async () => {
+  const reply = await buildOpsAgentReply({
+    action: 'restart',
+    target: 'self',
+    confidence: 'medium',
+    originalText: '你重起一下',
+  });
+
+  assert.match(reply, /你是想让我重启/);
+});
+
+test('buildOpsAgentReply guides on low-confidence ops requests', async () => {
+  const reply = await buildOpsAgentReply({
+    action: 'clarify',
+    target: 'unknown',
+    confidence: 'low',
+  });
+
+  assert.match(reply, /我没完全听懂/);
+  assert.match(reply, /你现在内存多少/);
+});
+
 test('buildOpsAgentReply supports whitelisted peer repair actions', async () => {
   let receivedAction;
   const reply = await buildOpsAgentReply({ action: 'peer-repair' }, {

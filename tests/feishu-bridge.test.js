@@ -22,6 +22,7 @@ const {
   buildRunArtifactsUrl,
   parseOpenClawChatOutput,
   runHermesChat,
+  runLocalOpsAction,
   runOpenClawChat,
   sendFeishuTextMessage,
   sendEmailRunResultNotification,
@@ -89,10 +90,39 @@ test('parseOpenClawCommandOutput ignores non automation intent', () => {
 });
 
 test('parseSmallTalkMessage replies to greeting without triggering automation', () => {
-  assert.equal(
-    parseSmallTalkMessage('你好'),
-    '你好，我是 OpenClaw UI 自动化助手。你可以发：帮我跑一下 main 分支的 UI 自动化冒烟测试',
-  );
+  const reply = parseSmallTalkMessage('你好');
+  assert.match(reply, /OpenClaw UI 自动化助手/);
+  assert.match(reply, /你现在内存多少/);
+  assert.match(reply, /重启你自己/);
+});
+
+test('parseSmallTalkMessage help includes categorized natural-language examples', () => {
+  const reply = parseSmallTalkMessage('帮助');
+  assert.match(reply, /看我自己/);
+  assert.match(reply, /看对方/);
+  assert.match(reply, /修复 OpenClaw/);
+});
+
+test('runLocalOpsAction returns summary data for memory and disk views', async () => {
+  const result = await runLocalOpsAction('memory-summary', {
+    WATCHDOG_SERVICE: 'openclaw-feishu-bridge',
+    LOCAL_PROJECT_DIR: '/tmp/project',
+    PORT: '8788',
+  }, {
+    execFile: (command, args, options, callback) => {
+      const joined = [command, ...(args || [])].join(' ');
+      let stdout = '';
+      if (command === 'systemctl') stdout = 'active\n';
+      else if (command === 'git') stdout = 'abc1234\n';
+      else if (joined.includes('free -h')) stdout = 'Mem: 8G 3.1G 4.9G';
+      else if (joined.includes('df -h')) stdout = 'overlay 40G 10G 30G 25% /';
+      else if (joined.includes('uptime')) stdout = 'load average: 0.10, 0.20, 0.30';
+      callback(null, stdout, '');
+    },
+    fetchImpl: async () => ({ ok: true, text: async () => '{"ok":true}' }),
+  });
+
+  assert.equal(result.memory.total, '8G');
 });
 
 test('parseOpenClawChatOutput strips OpenClaw CLI prefix', () => {
@@ -2029,6 +2059,111 @@ test('createServer uses local ops runner for direct status command in async mode
   }
 });
 
+test('createServer routes natural-language memory query to local ops runner in async mode', async () => {
+  let reply;
+  let receivedAction;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+    },
+    {
+      runOpsCheck: async (action, route) => {
+        receivedAction = `${action}:${route.target}:${route.confidence}`;
+        return {
+          service: 'openclaw-feishu-bridge',
+          active: 'active',
+          health: '{"ok":true}',
+          watchdog: 'active',
+          commit: 'abc1234',
+          memory: { total: '8G', used: '3.1G', free: '4.9G' },
+        };
+      },
+      receiptSender: async (message) => {
+        reply = message;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: {
+          sender: { sender_id: { open_id: 'user-a' } },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '你现在内存多少' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await waitForCondition(() => Boolean(reply), { timeoutMs: 2000 });
+    assert.equal(receivedAction, 'memory-summary:self:high');
+    assert.match(JSON.parse(reply.content).text, /内存：8G 总量/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer does not execute medium-confidence restart requests in async mode', async () => {
+  let called = false;
+  let reply;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+    },
+    {
+      runOpsCheck: async () => {
+        called = true;
+        return {};
+      },
+      receiptSender: async (message) => {
+        reply = message;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: {
+          sender: { sender_id: { open_id: 'user-a' } },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '你重起一下' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await waitForCondition(() => Boolean(reply), { timeoutMs: 2000 });
+    assert.equal(called, false);
+    assert.match(JSON.parse(reply.content).text, /你是想让我重启/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('createServer uses built-in local ops runner when no custom ops hook is provided', async () => {
   let reply;
   const server = createServer(
@@ -2201,6 +2336,64 @@ test('createServer routes /peer-exec commands to peer ops runner in async mode',
     await waitForCondition(() => Boolean(reply), { timeoutMs: 2000 });
     assert.equal(received, 'peer-exec:df -h');
     assert.match(JSON.parse(reply.content).text, /4\.9G/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer maps natural-language peer disk summary to peer status runner', async () => {
+  let reply;
+  let receivedAction;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+    },
+    {
+      runOpsCheck: async (action, route) => {
+        receivedAction = `${action}:${route.action}:${route.target}`;
+        return {
+          service: 'hermes-feishu-bridge',
+          active: 'active',
+          health: '{"ok":true}',
+          watchdog: 'peer-control',
+          commit: 'abc1234',
+          target: 'Hermes',
+          operation: action,
+          detail: 'peer status ok',
+        };
+      },
+      receiptSender: async (message) => {
+        reply = message;
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: {
+          sender: { sender_id: { open_id: 'user-a' } },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: 'Hermes 硬盘还剩多少' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await waitForCondition(() => Boolean(reply), { timeoutMs: 2000 });
+    assert.equal(receivedAction, 'peer-status:peer-disk-summary:hermes');
+    assert.match(JSON.parse(reply.content).text, /hermes-feishu-bridge/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

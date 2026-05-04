@@ -17,14 +17,25 @@ const ALLOWED_OPS_ACTIONS = new Set([
   'health',
   'watchdog',
   'logs',
+  'restart',
+  'repair',
   'exec',
+  'memory-summary',
+  'disk-summary',
+  'load-summary',
   'peer-status',
   'peer-health',
   'peer-logs',
   'peer-restart',
   'peer-repair',
   'peer-exec',
+  'peer-memory-summary',
+  'peer-disk-summary',
+  'peer-load-summary',
+  'clarify',
 ]);
+
+const DANGEROUS_OPS_ACTIONS = new Set(['restart', 'repair', 'peer-restart', 'peer-repair']);
 
 function trimForReply(value, limit = 1200) {
   const text = String(value ?? '').trim();
@@ -85,9 +96,69 @@ async function defaultRunOpsCheck() {
   };
 }
 
+function targetLabel(target) {
+  if (target === 'hermes') return 'Hermes';
+  if (target === 'openclaw') return 'OpenClaw';
+  if (target === 'peer') return '对方';
+  return '我这台';
+}
+
+function buildClarifyReply(route) {
+  const actionText = String(route.action || '').includes('repair') ? '修复' : '重启';
+  const target = targetLabel(route.target);
+  return [
+    `你是想让我${actionText}${target === '我这台' ? '我自己' : target}吗？`,
+    `为了避免误操作，请发更明确的一句，比如：${actionText}你自己 / ${actionText} Hermes / ${actionText} OpenClaw。`,
+  ].join('\n');
+}
+
+function buildLowConfidenceOpsReply() {
+  return [
+    '我没完全听懂你想让我看哪台服务器，或者要做什么操作。',
+    '可以这样说：',
+    '- 你现在内存多少',
+    '- 你硬盘还剩多少',
+    '- 看看 Hermes 的服务器状态',
+    '- 重启你自己',
+    '- 修复 OpenClaw',
+  ].join('\n');
+}
+
+function buildSummaryReply(route, result) {
+  const safeResult = result && typeof result === 'object' ? result : {};
+  const target = route.target && route.target !== 'self'
+    ? targetLabel(route.target)
+    : '我这台服务器';
+  const lines = [
+    `${target}目前${safeResult.active === 'active' ? '正常' : '状态需要留意'}。`,
+  ];
+
+  if (safeResult.memory) {
+    lines.push(`内存：${sanitizeReplyField(safeResult.memory.total || 'unknown')} 总量，已用 ${sanitizeReplyField(safeResult.memory.used || 'unknown')}，可用 ${sanitizeReplyField(safeResult.memory.free || 'unknown')}`);
+  }
+  if (safeResult.disk) {
+    lines.push(`硬盘：${sanitizeReplyField(safeResult.disk.size || 'unknown')} 总量，已用 ${sanitizeReplyField(safeResult.disk.used || 'unknown')}，剩余 ${sanitizeReplyField(safeResult.disk.available || 'unknown')}，使用率 ${sanitizeReplyField(safeResult.disk.usePercent || 'unknown')}`);
+  }
+  if (safeResult.load) {
+    lines.push(`负载：${sanitizeReplyField(safeResult.load.loadAverage || 'unknown')}，CPU：${sanitizeReplyField(safeResult.load.cpu || 'unknown')}`);
+  }
+
+  lines.push(`服务：${sanitizeReplyField(safeResult.service || 'unknown')}（${sanitizeReplyField(safeResult.active || 'unknown')}）`);
+  lines.push(`代码版本：${sanitizeReplyField(safeResult.commit || 'unknown')}`);
+  return lines.join('\n');
+}
+
 async function buildOpsAgentReply(route, options = {}) {
   if (!ALLOWED_OPS_ACTIONS.has(route.action)) {
     return '不支持的运维指令。';
+  }
+
+  if (route.action === 'clarify' || route.confidence === 'low') {
+    return buildLowConfidenceOpsReply();
+  }
+
+  if (DANGEROUS_OPS_ACTIONS.has(route.action) && route.confidence && route.confidence !== 'high') {
+    return buildClarifyReply(route);
   }
 
   let result;
@@ -101,6 +172,10 @@ async function buildOpsAgentReply(route, options = {}) {
   }
 
   const safeResult = result && typeof result === 'object' ? result : {};
+  if (/summary$/.test(route.action)) {
+    return buildSummaryReply(route, safeResult);
+  }
+
   return [
     '服务器状态摘要：',
     safeResult.target ? `目标：${sanitizeReplyField(safeResult.target || 'unknown')}` : null,

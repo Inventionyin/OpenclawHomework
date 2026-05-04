@@ -417,6 +417,59 @@ async function checkLocalHealth(healthUrl, fetchImpl = fetch) {
   return body;
 }
 
+function parseMemorySummary(output) {
+  const line = String(output || '').split(/\r?\n/).find((item) => /^\s*Mem:/i.test(item)) || String(output || '');
+  const parts = line.trim().split(/\s+/);
+  return {
+    total: parts[1] || 'unknown',
+    used: parts[2] || 'unknown',
+    free: parts[3] || 'unknown',
+  };
+}
+
+function parseDiskSummary(output) {
+  const lines = String(output || '').trim().split(/\r?\n/).filter(Boolean);
+  const line = lines.find((item) => /\s\/$/.test(item.trim())) || lines[0] || '';
+  const parts = line.trim().split(/\s+/);
+  return {
+    filesystem: parts[0] || 'unknown',
+    size: parts[1] || 'unknown',
+    used: parts[2] || 'unknown',
+    available: parts[3] || 'unknown',
+    usePercent: parts[4] || 'unknown',
+    mountedOn: parts[5] || 'unknown',
+  };
+}
+
+function parseLoadSummary(output) {
+  const text = String(output || '').trim();
+  const loadAverage = (text.match(/load averages?:\s*(.+)$/i) || text.match(/load average:\s*(.+)$/i) || [])[1] || text || 'unknown';
+  return {
+    loadAverage: loadAverage.trim(),
+    cpu: 'see load average',
+  };
+}
+
+async function collectLocalSummary(action, execFileImpl) {
+  const summary = {};
+  if (action === 'memory-summary' || action === 'load-summary') {
+    const memoryOutput = await execFilePromise('bash', ['-lc', 'free -h | awk \'/^Mem:/ {print $0}\''], {}, execFileImpl)
+      .catch((error) => `Mem: unknown unknown unknown # ${error.message}`);
+    summary.memory = parseMemorySummary(memoryOutput);
+  }
+  if (action === 'disk-summary' || action === 'load-summary') {
+    const diskOutput = await execFilePromise('bash', ['-lc', 'df -h / | tail -n 1'], {}, execFileImpl)
+      .catch((error) => `unknown unknown unknown unknown unknown / # ${error.message}`);
+    summary.disk = parseDiskSummary(diskOutput);
+  }
+  if (action === 'load-summary') {
+    const loadOutput = await execFilePromise('bash', ['-lc', 'uptime'], {}, execFileImpl)
+      .catch((error) => `unknown # ${error.message}`);
+    summary.load = parseLoadSummary(loadOutput);
+  }
+  return summary;
+}
+
 async function runLocalOpsAction(action, env = process.env, options = {}) {
   const service = getLocalBridgeService(env);
   const watchdogTimer = getLocalWatchdogTimer(env, service);
@@ -482,13 +535,19 @@ async function runLocalOpsAction(action, env = process.env, options = {}) {
     };
   }
 
-  return {
+  const result = {
     service,
     active,
     health,
     watchdog,
     commit,
   };
+
+  if (['memory-summary', 'disk-summary', 'load-summary'].includes(action)) {
+    Object.assign(result, await collectLocalSummary(action, execFileImpl));
+  }
+
+  return result;
 }
 
 function extractSenderId(payload) {
@@ -614,16 +673,27 @@ function parseSmallTalkMessage(text, env = process.env) {
   const normalized = String(text ?? '').trim().replace(/^@\S+\s*/, '');
   const assistantName = getAssistantName(env, 'OpenClaw');
   if (/^(你好|您好|hi|hello|嗨|在吗|在不在)[!！。.\s]*$/i.test(normalized)) {
-    return `你好，我是 ${assistantName} UI 自动化助手。你可以发：帮我跑一下 main 分支的 UI 自动化冒烟测试`;
+    return [
+      `你好，我是 ${assistantName} UI 自动化助手。`,
+      '你可以直接这样说：',
+      '- 你现在内存多少',
+      '- 你硬盘还剩多少',
+      '- 看看 Hermes 的服务器状态',
+      '- 重启你自己',
+      '- 帮我跑一下 main 分支的 UI 自动化冒烟测试',
+      '发“帮助”可以看完整示例。',
+    ].join('\n');
   }
 
   if (/^(帮助|help|怎么用|使用说明)[!！。.\s]*$/i.test(normalized)) {
     return [
       `我是 ${assistantName} UI 自动化助手。`,
-      '可用指令：',
-      '1. 帮我跑一下 main 分支的 UI 自动化冒烟测试',
-      '2. /run-ui-test main smoke',
-      '3. /run-ui-test main contracts',
+      '看我自己：你现在内存多少 / 你硬盘还剩多少 / 你现在卡不卡',
+      '看对方：看看 Hermes 的服务器状态 / OpenClaw 硬盘还剩多少',
+      '重启修复：重启你自己 / 修复你自己 / 重启 Hermes / 修复 OpenClaw',
+      'UI 自动化：帮我跑一下 main 分支的 UI 自动化冒烟测试',
+      '绑定权限：绑定我 / whoami',
+      '高级命令：/status /health /logs /exec df -h /peer-status /peer-repair',
     ].join('\n');
   }
 
@@ -1430,9 +1500,15 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
         route,
       });
     });
+    const bridgedRunOpsCheck = async (action, currentRoute) => {
+      const executableAction = ['peer-memory-summary', 'peer-disk-summary', 'peer-load-summary'].includes(action)
+        ? 'peer-status'
+        : action;
+      return runOpsCheck(executableAction, currentRoute);
+    };
     return {
       handled: true,
-      replyText: await buildOpsAgentReply(route, { runOpsCheck }),
+      replyText: await buildOpsAgentReply(route, { runOpsCheck: bridgedRunOpsCheck }),
     };
   }
 

@@ -32,6 +32,92 @@ function looksLikeTestRunRequest(text) {
     || /^(帮我|请|麻烦|帮忙|给我).{0,20}(冒烟|全量|smoke|contracts?).{0,10}(测试|test)$/i.test(text);
 }
 
+function normalizeNaturalLanguageOpsText(text) {
+  return String(text ?? '')
+    .trim()
+    .replace(/open\s*claw/ig, 'openclaw')
+    .replace(/龙虾/g, 'openclaw')
+    .replace(/赫尔墨斯/ig, 'hermes')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function detectOpsTarget(text) {
+  const normalized = normalizeNaturalLanguageOpsText(text);
+  const hasHermes = /\bhermes\b/.test(normalized);
+  const hasOpenClaw = /\bopenclaw\b/.test(normalized);
+  if (hasHermes && !hasOpenClaw) return 'hermes';
+  if (hasOpenClaw && !hasHermes) return 'openclaw';
+  if (/(你自己|自己|你这台|本机|自己服务器|你的服务器)/.test(normalized)) return 'self';
+  return 'self';
+}
+
+function toOpsRoute(action, target = 'self', confidence = 'high') {
+  const routedAction = target === 'self' || action.startsWith('peer-') ? action : `peer-${action}`;
+  return {
+    agent: 'ops-agent',
+    action: routedAction,
+    target,
+    confidence,
+    requiresAuth: true,
+  };
+}
+
+function routeNaturalLanguageOps(text) {
+  const normalized = normalizeNaturalLanguageOpsText(text).replace(/重起/g, '重启');
+  const target = detectOpsTarget(normalized);
+  const hasExplicitPeer = target !== 'self';
+
+  if (/(重启|修复|重起|搞一下)/.test(normalized)) {
+    const selfRestart = /(重启|重起).{0,8}(你自己|自己|你这台|本机)|你.{0,4}(重启|重起).{0,4}(一下)?/.test(normalized);
+    const peerRestart = hasExplicitPeer && /(重启|重起)/.test(normalized);
+    const selfRepair = /修复.{0,8}(你自己|自己|你这台|本机)|你.{0,4}修复/.test(normalized);
+    const peerRepair = hasExplicitPeer && /修复/.test(normalized);
+
+    if (peerRestart) {
+      return toOpsRoute('restart', target, 'high');
+    }
+    if (peerRepair) {
+      return toOpsRoute('repair', target, 'high');
+    }
+    if (selfRestart) {
+      const confidence = /重起/.test(String(text ?? '')) ? 'medium' : 'high';
+      return toOpsRoute('restart', 'self', confidence);
+    }
+    if (selfRepair) {
+      return toOpsRoute('repair', 'self', 'high');
+    }
+    if (/(重启|重起|修复|搞一下)/.test(normalized)) {
+      return {
+        agent: 'ops-agent',
+        action: 'clarify',
+        target: 'unknown',
+        confidence: 'low',
+        requiresAuth: true,
+      };
+    }
+  }
+
+  if (/(服务器状态|自己.{0,8}状态|你这台.{0,8}状态|本机.{0,8}状态)/.test(normalized)
+    || (hasExplicitPeer && /(状态|正常吗|运行)/.test(normalized))) {
+    return toOpsRoute('status', target, hasExplicitPeer ? 'high' : 'medium');
+  }
+
+  if (/(内存|memory|ram)/i.test(normalized) && /(多少|剩|占用|使用|状态|够不够|高不高)?/.test(normalized)) {
+    return toOpsRoute('memory-summary', target, 'high');
+  }
+
+  if (/(硬盘|磁盘|存储|空间|disk|df)/i.test(normalized) && /(多少|剩|占用|使用|状态|够不够)?/.test(normalized)) {
+    return toOpsRoute('disk-summary', target, 'high');
+  }
+
+  if (/(卡不卡|卡吗|负载|cpu|CPU|load|压力|慢不慢)/i.test(normalized)) {
+    return toOpsRoute('load-summary', target, hasExplicitPeer ? 'high' : 'medium');
+  }
+
+  return null;
+}
+
 function routeAgentIntent(text) {
   const original = stripMention(text);
   if (looksLikeTestHowToQuestion(original)) {
@@ -82,6 +168,11 @@ function routeAgentIntent(text) {
     return { agent: 'memory-agent', action: 'show', requiresAuth: true };
   }
 
+  const naturalLanguageOpsRoute = routeNaturalLanguageOps(normalized);
+  if (naturalLanguageOpsRoute) {
+    return naturalLanguageOpsRoute;
+  }
+
   if (looksLikeTestHowToQuestion(normalized)) {
     return { agent: 'doc-agent', action: 'answer', requiresAuth: true };
   }
@@ -107,6 +198,8 @@ module.exports = {
   looksLikeTestNegation,
   looksLikeTestRunRequest,
   normalizeText,
+  normalizeNaturalLanguageOpsText,
   routeAgentIntent,
+  routeNaturalLanguageOps,
   stripMention,
 };
