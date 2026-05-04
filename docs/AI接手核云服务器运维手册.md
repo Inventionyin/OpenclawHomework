@@ -788,6 +788,16 @@ OpenClaw/Hermes 支持自然语言两步清理：
 2. 再说“确认清理第 1 个”或“清理 khoj”，服务只会执行上一轮候选里的白名单清理项。
 
 当前白名单：Khoj 目录、npm 缓存、旧 systemd 日志、1 天前临时文件。不要把自然语言清理扩展成任意 shell 删除。
+
+### 2026-05-04 OpenClaw 磁盘清理记录
+
+OpenClaw 服务器曾经只剩约 6.9G 可用空间，已做一轮安全清理：
+
+- 清理 npm 缓存、apt 缓存、Docker 停止容器、旧网络、无用镜像和构建缓存。
+- 清理可重建的 root 缓存：Camoufox、Playwright、uv archive/build/wheels、pip、pnpm。
+- 没有删除正在运行的 Docker 容器和 Docker volume。
+- 没有删除 `/usr/local/lib/ollama`，该目录约 4.9G，但属于运行库，需确认不用 Ollama 后再动。
+- 清理后 OpenClaw 根分区约为：40G 总量，22G 已用，17G 可用，使用率约 57%。
 - 飞书后台只保留 `接收消息 im.message.receive_v1`；不要订阅 `消息已读 im.message.message_read_v1`。
 - 飞书事件回调必须返回 HTTP `200`，不要返回 `202`。飞书可能把非 `200` 当成投递失败并持续重试，造成夜间消息轰炸。
 - `server-watchdog.js` 会扫描 Nginx access log；如果最近 10 分钟出现飞书 webhook 非 `200` 或请求风暴，会在日志里留下原因，配置通知后也会按冷却时间告警。
