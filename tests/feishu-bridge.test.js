@@ -1411,6 +1411,71 @@ test('runWebhookInBackground passes default receipt sender to streaming chat', a
   }
 });
 
+test('createServer does not block streaming deltas on slow Feishu card updates', async () => {
+  let releaseUpdate;
+  const slowUpdateStarted = new Promise((resolve) => {
+    releaseUpdate = resolve;
+  });
+  let firstDeltaReturned = false;
+  let secondDeltaReturned = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      OPENCLAW_CHAT_ENABLED: 'true',
+      FEISHU_CHAT_STREAMING_ENABLED: 'true',
+      STREAMING_MODEL_BASE_URL: 'https://example.test/v1',
+      STREAMING_MODEL_API_KEY: 'secret',
+      STREAMING_MODEL_ID: 'model-a',
+      FEISHU_STREAM_UPDATE_INTERVAL_MS: '0',
+    },
+    {
+      receiptSender: async () => ({ data: { message_id: 'om_stream_slow' } }),
+      messageUpdater: async () => slowUpdateStarted,
+      streamChat: async (prompt, options) => {
+        await options.onDelta('你', '你');
+        firstDeltaReturned = true;
+        await options.onDelta('好', '你好');
+        secondDeltaReturned = true;
+        return { text: '你好', endpoint: 'chat_completions' };
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '今天随便聊两句' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await waitForCondition(() => firstDeltaReturned && secondDeltaReturned, { timeoutMs: 200 });
+  } finally {
+    releaseUpdate();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('createServer falls back to normal chat when streaming fails', async () => {
   let reply;
   let updateCalled = false;

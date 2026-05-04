@@ -1873,17 +1873,33 @@ async function streamRoutedChatReply(payload, text, env, options = {}) {
   });
 
   let lastUpdateAt = Number.NEGATIVE_INFINITY;
+  let pendingUpdate = Promise.resolve();
   const minIntervalMs = Number(env.FEISHU_STREAM_UPDATE_INTERVAL_MS || 800);
+  const waitForUpdate = async () => {
+    try {
+      await pendingUpdate;
+    } catch (error) {
+      console.error(`Feishu streaming card update failed: ${error.message}`);
+    }
+  };
   const update = async (fullText, force = false) => {
     const now = nowMs();
     if (!force && now - lastUpdateAt < minIntervalMs) {
       return;
     }
     lastUpdateAt = now;
-    await messageUpdater(messageId, buildFeishuCardUpdateMessage(fullText || '正在思考...', env, {
+    const message = buildFeishuCardUpdateMessage(fullText || '正在思考...', env, {
       status: force ? '完成' : '生成中',
       elapsedMs: elapsedMs(timingContext?.startedAt),
-    }));
+    });
+    if (force) {
+      await waitForUpdate();
+      pendingUpdate = Promise.resolve(messageUpdater(messageId, message));
+      await waitForUpdate();
+      return;
+    }
+
+    pendingUpdate = pendingUpdate.catch(() => {}).then(() => messageUpdater(messageId, message));
   };
 
   try {
