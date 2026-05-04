@@ -227,7 +227,7 @@ Home email：1693457391@qq.com
 ```text
 shine1@claw.163.com           primary  shine1
 shine1.report@claw.163.com    sub      Hermes Reports
-shine1.ui1@claw.163.com       sub      Hermes UI Tests
+shine1.ui@claw.163.com        sub      Hermes UI Tests
 shine1.github@claw.163.com    sub      Hermes GitHub
 shine1.ops@claw.163.com       sub      Hermes Ops
 ```
@@ -237,7 +237,7 @@ OpenClaw 服务器对应的 ClawEmail 邮箱：
 ```text
 watchee@claw.163.com           primary  watchee
 watchee.report@claw.163.com    sub      OpenClaw Reports
-watchee.ui1@claw.163.com       sub      OpenClaw UI Tests
+watchee.ui@claw.163.com        sub      OpenClaw UI Tests
 watchee.github@claw.163.com    sub      OpenClaw GitHub
 watchee.ops@claw.163.com       sub      OpenClaw Ops
 ```
