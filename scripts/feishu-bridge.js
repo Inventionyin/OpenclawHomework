@@ -30,6 +30,12 @@ const {
   redactPeerOutput,
 } = require('./peer-control');
 const {
+  resolveMailboxAction,
+} = require('./mailbox-action-router');
+const {
+  buildDailySummary,
+} = require('./daily-summary');
+const {
   buildStreamingChatConfig,
   streamModelText,
 } = require('./streaming-client');
@@ -1543,6 +1549,169 @@ function parseEmailRecipients(value) {
     .filter(Boolean);
 }
 
+function buildMailboxActionEmailSubject(resolvedAction, fallbackSubject) {
+  if (!resolvedAction?.subjectPrefix) {
+    return fallbackSubject;
+  }
+
+  return `${resolvedAction.subjectPrefix} ${fallbackSubject}`.trim();
+}
+
+function buildReplayMessage(job, run) {
+  const runUrl = run.html_url || job.actionsUrl || '';
+  const artifactsUrl = buildRunArtifactsUrl(runUrl);
+  const lines = [
+    '失败任务回放提醒',
+    `分支：${job.targetRef}`,
+    `模式：${job.runMode}`,
+    `结论：${run.conclusion || 'unknown'}`,
+    runUrl ? `GitHub Actions：${runUrl}` : '',
+    artifactsUrl ? `失败截图 / trace / artifact：${artifactsUrl}` : '',
+  ].filter(Boolean);
+
+  return {
+    text: lines.join('\n'),
+    html: [
+      '<h2>失败任务回放提醒</h2>',
+      '<pre style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap;">',
+      lines.map((line) => escapeHtml(line)).join('\n'),
+      '</pre>',
+      runUrl ? `<p><a href="${escapeHtml(runUrl)}">GitHub Actions Run</a></p>` : '',
+      artifactsUrl ? `<p><a href="${escapeHtml(artifactsUrl)}">Artifacts / Trace</a></p>` : '',
+    ].filter(Boolean).join('\n'),
+  };
+}
+
+function buildFilesMessage(job, run) {
+  const runUrl = run.html_url || job.actionsUrl || '';
+  const artifactsUrl = buildRunArtifactsUrl(runUrl);
+  const lines = [
+    '报告附件与 artifact 入口',
+    `分支：${job.targetRef}`,
+    `模式：${job.runMode}`,
+    runUrl ? `GitHub Actions：${runUrl}` : '',
+    artifactsUrl ? `Allure / Playwright artifact：${artifactsUrl}` : '',
+  ].filter(Boolean);
+
+  return {
+    text: lines.join('\n'),
+    html: [
+      '<h2>报告附件与 Artifact 入口</h2>',
+      '<pre style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap;">',
+      lines.map((line) => escapeHtml(line)).join('\n'),
+      '</pre>',
+      runUrl ? `<p><a href="${escapeHtml(runUrl)}">GitHub Actions Run</a></p>` : '',
+      artifactsUrl ? `<p><a href="${escapeHtml(artifactsUrl)}">Allure / Playwright Artifacts</a></p>` : '',
+    ].filter(Boolean).join('\n'),
+  };
+}
+
+function buildMailboxActionMessage(actionName, job, run, env = process.env) {
+  const resolvedAction = resolveMailboxAction(actionName, env);
+  if (!resolvedAction.enabled || !resolvedAction.mailbox) {
+    return null;
+  }
+
+  let content;
+  let fallbackSubject;
+  if (actionName === 'report') {
+    content = buildEmailRunResultMessage(job, run);
+    fallbackSubject = buildEmailRunResultSubject(job, run);
+  } else if (actionName === 'replay') {
+    content = buildReplayMessage(job, run);
+    fallbackSubject = buildEmailRunResultSubject(job, run);
+  } else if (actionName === 'files') {
+    content = buildFilesMessage(job, run);
+    fallbackSubject = buildEmailRunResultSubject(job, run);
+  } else {
+    return null;
+  }
+
+  return {
+    action: actionName,
+    mailbox: resolvedAction.mailbox,
+    to: [resolvedAction.mailbox],
+    subject: buildMailboxActionEmailSubject(resolvedAction, fallbackSubject),
+    text: content.text,
+    html: content.html,
+  };
+}
+
+function buildUiMailboxMessages(job, run, env = process.env) {
+  const messages = [];
+  const reportMessage = buildMailboxActionMessage('report', job, run, env);
+  if (reportMessage) {
+    messages.push(reportMessage);
+  }
+
+  if ((run.conclusion || 'unknown') !== 'success') {
+    const replayMessage = buildMailboxActionMessage('replay', job, run, env);
+    if (replayMessage) {
+      messages.push(replayMessage);
+    }
+  }
+
+  if (buildRunArtifactsUrl(run.html_url || job.actionsUrl || '')) {
+    const filesMessage = buildMailboxActionMessage('files', job, run, env);
+    if (filesMessage) {
+      messages.push(filesMessage);
+    }
+  }
+
+  return messages;
+}
+
+async function sendMailboxActionEmail(message, env = process.env, options = {}) {
+  if (!shouldNotifyEmail(env)) {
+    return { sent: false, reason: 'disabled', action: message?.action || 'unknown' };
+  }
+
+  const recipients = Array.isArray(message?.to) ? message.to.filter(Boolean) : [];
+  if (!recipients.length) {
+    return { sent: false, reason: 'missing_recipients', action: message?.action || 'unknown' };
+  }
+
+  if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
+    return { sent: false, reason: 'missing_smtp_config', action: message?.action || 'unknown' };
+  }
+
+  const createTransport = options.createTransport || require('nodemailer').createTransport;
+  const transport = createTransport({
+    host: env.SMTP_HOST,
+    port: Number(env.SMTP_PORT || 465),
+    secure: String(env.SMTP_SECURE ?? 'true').toLowerCase() !== 'false',
+    auth: {
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASS,
+    },
+  });
+
+  const result = await transport.sendMail({
+    from: env.EMAIL_FROM || env.SMTP_USER,
+    to: recipients,
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+  });
+
+  return { sent: true, result, action: message.action };
+}
+
+async function notifyUiMailboxActions(job, run, env = process.env, options = {}) {
+  if (!shouldNotifyEmail(env)) {
+    return [];
+  }
+
+  const messages = buildUiMailboxMessages(job, run, env);
+  const emailSender = options.emailSender || ((message, senderEnv) => sendMailboxActionEmail(message, senderEnv, options));
+
+  for (const message of messages) {
+    await Promise.resolve(emailSender(message, env));
+  }
+
+  return messages;
+}
+
 async function sendEmailRunResultNotification(job, run, env = process.env, options = {}) {
   if (!shouldNotifyEmail(env)) {
     return { sent: false, reason: 'disabled' };
@@ -1579,6 +1748,31 @@ async function sendEmailRunResultNotification(job, run, env = process.env, optio
   return { sent: true, result };
 }
 
+async function sendDailySummaryNotification(runs, env = process.env, options = {}) {
+  if (!shouldNotifyEmail(env)) {
+    return [];
+  }
+
+  const resolvedAction = resolveMailboxAction('daily', env);
+  if (!resolvedAction.enabled || !resolvedAction.mailbox) {
+    return [];
+  }
+
+  const summary = buildDailySummary(runs);
+  const message = {
+    action: 'daily',
+    mailbox: resolvedAction.mailbox,
+    to: [resolvedAction.mailbox],
+    subject: buildMailboxActionEmailSubject(resolvedAction, summary.subject),
+    text: summary.text,
+    html: summary.html,
+  };
+
+  const emailSender = options.emailSender || ((mail, senderEnv) => sendMailboxActionEmail(mail, senderEnv, options));
+  await Promise.resolve(emailSender(message, env));
+  return [message];
+}
+
 async function notifyFeishuRunResult(job, env = process.env, fetchImpl = fetch, options = {}) {
   const feishuSender = options.feishuSender || ((senderEnv, message) => sendFeishuTextMessage(senderEnv, message, fetchImpl));
   if (!job.run?.id) {
@@ -1609,8 +1803,11 @@ async function notifyFeishuRunResult(job, env = process.env, fetchImpl = fetch, 
     });
   }
 
-  const emailSender = options.emailSender || sendEmailRunResultNotification;
-  await Promise.resolve(emailSender(job, completedRun, env)).catch((error) => {
+  const emailSender = options.emailSender;
+  await Promise.resolve(notifyUiMailboxActions(job, completedRun, env, {
+    ...options,
+    emailSender,
+  })).catch((error) => {
     console.error(`Email result notification failed: ${error.message}`);
   });
   return completedRun;
@@ -2594,6 +2791,7 @@ if (require.main === module) {
 module.exports = {
   buildEmailRunResultMessage,
   buildEmailRunResultSubject,
+  buildUiMailboxMessages,
   buildFeishuResultCard,
   buildRunArtifactsUrl,
   buildFeishuCardMessage,
@@ -2613,12 +2811,15 @@ module.exports = {
   parseSmallTalkMessage,
   parseRunUiTestCommand,
   parseOpenClawCommandOutput,
+  notifyUiMailboxActions,
   runHermesChat,
   runHermesParser,
   runOpenClawChat,
   runLocalOpsAction,
   runWebhookInBackground,
   runOpenClawParser,
+  sendDailySummaryNotification,
+  sendMailboxActionEmail,
   sendFeishuMessageUpdate,
   sendEmailRunResultNotification,
   rememberFeishuImage,

@@ -25,7 +25,9 @@ const {
   runLocalOpsAction,
   runOpenClawChat,
   sendFeishuTextMessage,
+  notifyUiMailboxActions,
   sendEmailRunResultNotification,
+  sendDailySummaryNotification,
   notifyFeishuRunResult,
   runOpenClawParser,
   runWebhookInBackground,
@@ -635,6 +637,66 @@ test('sendEmailRunResultNotification sends email when SMTP env is enabled', asyn
   assert.match(sent[0].text, /UI 自动化测试失败/);
 });
 
+test('notifyUiMailboxActions sends report only for successful UI result', async () => {
+  const sent = [];
+
+  const messages = await notifyUiMailboxActions(
+    {
+      actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123',
+      targetRef: 'main',
+      runMode: 'smoke',
+    },
+    {
+      conclusion: 'success',
+      html_url: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123',
+    },
+    {
+      EMAIL_NOTIFY_ENABLED: 'true',
+    },
+    {
+      emailSender: async (message) => {
+        sent.push(message);
+        return { sent: true };
+      },
+    },
+  );
+
+  assert.deepEqual(messages.map((item) => item.action), ['report', 'files']);
+  assert.deepEqual(sent.map((item) => item.action), ['report', 'files']);
+  assert.equal(sent[0].to[0], 'watchee.report@claw.163.com');
+  assert.equal(sent[1].to[0], 'agent3.files@claw.163.com');
+});
+
+test('notifyUiMailboxActions sends report replay and files for failed UI result', async () => {
+  const sent = [];
+
+  const messages = await notifyUiMailboxActions(
+    {
+      actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/456',
+      targetRef: 'main',
+      runMode: 'contracts',
+    },
+    {
+      conclusion: 'failure',
+      html_url: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/456',
+    },
+    {
+      EMAIL_NOTIFY_ENABLED: 'true',
+    },
+    {
+      emailSender: async (message) => {
+        sent.push(message);
+        return { sent: true };
+      },
+    },
+  );
+
+  assert.deepEqual(messages.map((item) => item.action), ['report', 'replay', 'files']);
+  assert.deepEqual(sent.map((item) => item.action), ['report', 'replay', 'files']);
+  assert.equal(sent[1].to[0], 'evasan.replay@claw.163.com');
+  assert.equal(sent[2].to[0], 'agent3.files@claw.163.com');
+});
+
 test('notifyFeishuRunResult sends email after completed run notification', async () => {
   const feishuMessages = [];
   const emailJobs = [];
@@ -676,17 +738,41 @@ test('notifyFeishuRunResult sends email after completed run notification', async
     feishuSender: async (env, message) => {
       feishuMessages.push(message);
     },
-    emailSender: async (scheduledJob, run) => {
-      emailJobs.push({ scheduledJob, run });
+    emailSender: async (message) => {
+      emailJobs.push(message);
       return { sent: true };
     },
   });
 
   assert.equal(result, completedRun);
   assert.equal(feishuMessages.length, 1);
-  assert.equal(emailJobs.length, 1);
-  assert.equal(emailJobs[0].scheduledJob.targetRef, 'main');
-  assert.equal(emailJobs[0].run.conclusion, 'success');
+  assert.equal(emailJobs.length, 2);
+  assert.equal(emailJobs[0].action, 'report');
+  assert.equal(emailJobs[0].to[0], 'watchee.report@claw.163.com');
+  assert.equal(emailJobs[1].action, 'files');
+  assert.equal(emailJobs[1].to[0], 'agent3.files@claw.163.com');
+});
+
+test('sendDailySummaryNotification routes message to daily mailbox action', async () => {
+  const sent = [];
+
+  await sendDailySummaryNotification(
+    [{ conclusion: 'success', runUrl: 'https://example.com/run' }],
+    {
+      EMAIL_NOTIFY_ENABLED: 'true',
+    },
+    {
+      emailSender: async (message) => {
+        sent.push(message);
+        return { sent: true };
+      },
+    },
+  );
+
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].action, 'daily');
+  assert.equal(sent[0].to[0], 'agent4.daily@claw.163.com');
+  assert.match(sent[0].subject, /Daily Summary/);
 });
 
 test('sendFeishuTextMessage fetches tenant token and sends text message', async () => {

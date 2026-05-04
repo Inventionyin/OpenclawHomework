@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "actions": {
+    "report": {
+      "mailbox": "watchee.report@claw.163.com",
+      "subjectPrefix": "[OpenClaw Report]",
+      "description": "UI 自动化结果汇总",
+      "enabled": true
+    },
+    "replay": {
+      "mailbox": "evasan.replay@claw.163.com",
+      "subjectPrefix": "[Replay]",
+      "description": "失败回放入口通知",
+      "enabled": true
+    },
+    "files": {
+      "mailbox": "agent3.files@claw.163.com",
+      "subjectPrefix": "[Artifacts]",
+      "description": "报告附件与 artifact 入口通知",
+      "enabled": true
+    },
+    "daily": {
+      "mailbox": "agent4.daily@claw.163.com",
+      "subjectPrefix": "[Daily Summary]",
+      "description": "每日自动化测试汇总",
+      "enabled": true
+    }
+  }
+}

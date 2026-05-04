@@ -286,6 +286,43 @@ agent4.notify@claw.163.com     sub      Agent4 Notify
 
 当前 `mail-cli auth apikey set` 会切换全局 ClawEmail 管理 API key。创建 `hagent` 子邮箱后，已把 Hermes 默认管理 key 切回 `shine1`。以后管理多个主邮箱时，按“临时切 key -> 执行管理动作 -> 切回默认 key”的流程，不要让生产服务依赖临时 key 状态。
 
+补充：仓库已经增加邮箱动作注册表：
+
+```text
+config/mailbox-action-map.json
+```
+
+当前第一阶段真实动作绑定先以 OpenClaw 主链路为主：
+
+```text
+report -> watchee.report@claw.163.com
+replay -> evasan.replay@claw.163.com
+files  -> agent3.files@claw.163.com
+daily  -> agent4.daily@claw.163.com
+```
+
+接手时要分清两层：
+
+```text
+1. clawemail-switch-key / mail-cli 决定“这台服务器能管理哪些邮箱”
+2. mailbox-action-map.json 决定“真实自动化动作发给哪个邮箱”
+```
+
+如果以后要让 Hermes 这边单独接管自己的动作收件人，也可以沿用同样结构，在 `/etc/hermes-feishu-bridge.env` 里覆盖：
+
+```text
+MAILBOX_ACTION_REPORT_TO=...
+MAILBOX_ACTION_REPLAY_TO=...
+MAILBOX_ACTION_FILES_TO=...
+MAILBOX_ACTION_DAILY_TO=...
+```
+
+改完后：
+
+```bash
+systemctl restart hermes-feishu-bridge
+```
+
 到这里 6 组主邮箱已经补齐：
 
 ```text
