@@ -521,6 +521,50 @@ async function runLocalOpsAction(action, env = process.env, options = {}) {
       .catch((error) => `error: ${error.message}`),
   ]);
 
+  if (action === 'restart') {
+    await execFilePromise('systemctl', ['restart', service], {}, execFileImpl);
+    const restartedActive = await execFilePromise('systemctl', ['is-active', service], {}, execFileImpl)
+      .then((value) => value.trim())
+      .catch((error) => `error: ${error.message}`);
+    const restartedHealth = await checkLocalHealth(healthUrl, fetchImpl)
+      .then((value) => redactPeerOutput(value))
+      .catch((error) => `error: ${redactPeerOutput(error.message)}`);
+    return {
+      service,
+      active: restartedActive,
+      health: restartedHealth,
+      watchdog,
+      commit,
+      operation: 'restart',
+      detail: 'service restarted',
+    };
+  }
+
+  if (action === 'repair') {
+    await execFilePromise('git', ['-C', projectDir, 'fetch', 'origin'], { timeout: 120000 }, execFileImpl);
+    await execFilePromise('git', ['-C', projectDir, 'pull', '--ff-only'], { timeout: 120000 }, execFileImpl);
+    await execFilePromise('npm', ['test'], { cwd: projectDir, timeout: 180000 }, execFileImpl);
+    await execFilePromise('systemctl', ['restart', service], {}, execFileImpl);
+    const repairedActive = await execFilePromise('systemctl', ['is-active', service], {}, execFileImpl)
+      .then((value) => value.trim())
+      .catch((error) => `error: ${error.message}`);
+    const repairedCommit = await execFilePromise('git', ['-C', projectDir, 'rev-parse', '--short', 'HEAD'], {}, execFileImpl)
+      .then((value) => value.trim())
+      .catch(() => commit);
+    const repairedHealth = await checkLocalHealth(healthUrl, fetchImpl)
+      .then((value) => redactPeerOutput(value))
+      .catch((error) => `error: ${redactPeerOutput(error.message)}`);
+    return {
+      service,
+      active: repairedActive,
+      health: repairedHealth,
+      watchdog,
+      commit: repairedCommit,
+      operation: 'repair',
+      detail: 'git pull --ff-only, npm test, and service restart completed',
+    };
+  }
+
   if (action === 'logs') {
     const detail = await execFilePromise('journalctl', ['-u', service, '-n', String(logLines), '--no-pager'], {}, execFileImpl)
       .then((value) => redactPeerOutput(value).slice(-2000))

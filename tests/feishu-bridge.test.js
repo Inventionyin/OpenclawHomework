@@ -125,6 +125,49 @@ test('runLocalOpsAction returns summary data for memory and disk views', async (
   assert.equal(result.memory.total, '8G');
 });
 
+test('runLocalOpsAction restarts local service for restart action', async () => {
+  const calls = [];
+  const result = await runLocalOpsAction('restart', {
+    WATCHDOG_SERVICE: 'openclaw-feishu-bridge',
+    LOCAL_PROJECT_DIR: '/tmp/project',
+    PORT: '8788',
+  }, {
+    execFile: (command, args, options, callback) => {
+      calls.push([command, args]);
+      if (command === 'systemctl') callback(null, args[0] === 'restart' ? '' : 'active\n', '');
+      else if (command === 'git') callback(null, 'abc1234\n', '');
+      else callback(null, '', '');
+    },
+    fetchImpl: async () => ({ ok: true, text: async () => '{"ok":true}' }),
+  });
+
+  assert(calls.some(([command, args]) => command === 'systemctl' && args[0] === 'restart'));
+  assert.equal(result.operation, 'restart');
+  assert.equal(result.active, 'active');
+});
+
+test('runLocalOpsAction repairs local service with pull test and restart', async () => {
+  const calls = [];
+  const result = await runLocalOpsAction('repair', {
+    WATCHDOG_SERVICE: 'openclaw-feishu-bridge',
+    LOCAL_PROJECT_DIR: '/tmp/project',
+    PORT: '8788',
+  }, {
+    execFile: (command, args, options, callback) => {
+      calls.push([command, args, options]);
+      if (command === 'systemctl') callback(null, args[0] === 'restart' ? '' : 'active\n', '');
+      else if (command === 'git' && args.includes('rev-parse')) callback(null, 'abc1234\n', '');
+      else callback(null, '', '');
+    },
+    fetchImpl: async () => ({ ok: true, text: async () => '{"ok":true}' }),
+  });
+
+  assert(calls.some(([command, args]) => command === 'git' && args.includes('pull')));
+  assert(calls.some(([command]) => command === 'npm'));
+  assert(calls.some(([command, args]) => command === 'systemctl' && args[0] === 'restart'));
+  assert.equal(result.operation, 'repair');
+});
+
 test('parseOpenClawChatOutput strips OpenClaw CLI prefix', () => {
   assert.equal(
     parseOpenClawChatOutput(['model.run via local', 'provider: xfyun', 'model: astron-code-latest', '你好，我可以帮你触发 UI 自动化。'].join('\n')),
