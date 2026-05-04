@@ -220,7 +220,29 @@ Home email：1693457391@qq.com
 
 2026-05-04 已使用官方推荐的 `hermes-email-setup.sh --auth-url ... --home-email 1693457391@qq.com` 重新配置，`hermes-gateway.service` 为 user 级服务，当前运行正常。
 
-注意：Hermes 服务器当前有两套 ClawEmail 能力。`hermes-gateway.service` 使用 `shine1@claw.163.com` 作为邮件网关账号，用于收发邮件；`mail-cli` 管理 API 已在 2026-05-04 单独认证，当前 `mail-cli clawemail list` 返回 `shine1@claw.163.com`，用于管理 ClawEmail 邮箱。不要从 OpenClaw 服务器直接复制 `/root/.config/mail-cli`，该目录里的 `secrets.enc` 与本机 keychain 绑定，跨机器复制会失效。
+注意：Hermes 服务器当前有两套 ClawEmail 能力。`hermes-gateway.service` 使用 `shine1@claw.163.com` 作为邮件网关账号，用于收发邮件；`mail-cli` 管理 API 已在 2026-05-04 单独认证，用于管理 ClawEmail 邮箱。不要从 OpenClaw 服务器直接复制 `/root/.config/mail-cli`，该目录里的 `secrets.enc` 与本机 keychain 绑定，跨机器复制会失效。
+
+2026-05-04 已创建的 Hermes ClawEmail 邮箱：
+
+```text
+shine1@claw.163.com           primary  shine1
+shine1.report@claw.163.com    sub      Hermes Reports
+shine1.ui1@claw.163.com       sub      Hermes UI Tests
+shine1.github@claw.163.com    sub      Hermes GitHub
+shine1.ops@claw.163.com       sub      Hermes Ops
+```
+
+OpenClaw 服务器对应的 ClawEmail 邮箱：
+
+```text
+watchee@claw.163.com           primary  watchee
+watchee.report@claw.163.com    sub      OpenClaw Reports
+watchee.ui1@claw.163.com       sub      OpenClaw UI Tests
+watchee.github@claw.163.com    sub      OpenClaw GitHub
+watchee.ops@claw.163.com       sub      OpenClaw Ops
+```
+
+当前 ClawEmail 额度表现为每个主邮箱最多 1 个 primary + 4 个 sub。如果继续创建会返回 `OPEN_API_1004`，除非删除不用的子邮箱或申请提额。
 
 检查 Hermes 邮件网关：
 
