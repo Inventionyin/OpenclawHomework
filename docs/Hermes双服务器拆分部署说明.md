@@ -244,6 +244,18 @@ watchee.ops@claw.163.com       sub      OpenClaw Ops
 
 当前 ClawEmail 额度表现为每个主邮箱最多 1 个 primary + 4 个 sub。如果继续创建会返回 `OPEN_API_1004`，除非删除不用的子邮箱或申请提额。
 
+Hermes 额外主邮箱 `hagent@claw.163.com` 已作为监控/审计邮箱组创建：
+
+```text
+hagent@claw.163.com            primary  hagent
+hagent.monitor@claw.163.com    sub      HAgent Monitor
+hagent.logs@claw.163.com       sub      HAgent Logs
+hagent.security@claw.163.com   sub      HAgent Security
+hagent.backup@claw.163.com     sub      HAgent Backup
+```
+
+当前 `mail-cli auth apikey set` 会切换全局 ClawEmail 管理 API key。创建 `hagent` 子邮箱后，已把 Hermes 默认管理 key 切回 `shine1`。以后管理多个主邮箱时，按“临时切 key -> 执行管理动作 -> 切回默认 key”的流程，不要让生产服务依赖临时 key 状态。
+
 检查 Hermes 邮件网关：
 
 ```bash
