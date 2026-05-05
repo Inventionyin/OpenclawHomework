@@ -482,6 +482,19 @@ function buildClerkAgentReply(route = {}, options = {}) {
     ].join('\n');
   }
 
+  if (route.action === 'token-factory') {
+    return [
+      '文员 token-factory 已就绪，我会按一条完整流水线给你推进：',
+      '- 先生成训练数据：覆盖电商客服、验证码流程、UI 自动化与 Agent 对比场景。',
+      '- 接着进 token lab：批量跑模型调用并记录 token/耗时账本，方便后续复盘。',
+      '- 然后做多 Agent 评审：按风险、完整性、可执行性逐条打分挑错。',
+      '- 评审结果会做邮箱归档：样本进 archive，评分进 eval，综合摘要进 report/daily。',
+      '- 最后做日报沉淀：自动整理“今天产出了什么、哪类样本最好、明天先做什么”。',
+      '',
+      '你只要继续一句：文员，今天就按 token-factory 跑一轮。',
+    ].join('\n');
+  }
+
   if (route.action === 'multi-agent-lab') {
     return [
       '文员多 Agent 训练场：',

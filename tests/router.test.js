@@ -259,6 +259,31 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'token-lab',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，把 token 跑起来'), {
+    agent: 'clerk-agent',
+    action: 'token-factory',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，来一套高 token 玩法'), {
+    agent: 'clerk-agent',
+    action: 'token-factory',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，生成一套训练数据并评测归档'), {
+    agent: 'clerk-agent',
+    action: 'token-factory',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，今天把 token 用起来'), {
+    agent: 'clerk-agent',
+    action: 'token-factory',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，安排一条 token 全链路流水线'), {
+    agent: 'clerk-agent',
+    action: 'token-factory',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，启动多 Agent 训练场，用邮箱归档结果'), {
     agent: 'clerk-agent',
     action: 'multi-agent-lab',

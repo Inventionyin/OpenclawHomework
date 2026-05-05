@@ -1548,6 +1548,114 @@ test('buildRoutedAgentReply can run clerk multi-agent lab when explicitly reques
   assert.match(reply.replyText, /summary\.json/);
 });
 
+test('buildRoutedAgentReply can run clerk token factory by chaining token and multi-agent labs', async () => {
+  const calls = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-clerk-token-factory',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '文员，开始 token 工厂' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {
+      tokenLabRunner: async () => {
+        calls.push('token-lab');
+        return {
+          report: {
+            totalJobs: 2,
+            totalTokens: 300,
+            estimatedTotalTokens: 350,
+          },
+          files: {
+            report: '/tmp/qa-token-lab/report.md',
+            items: '/tmp/qa-token-lab/items.json',
+          },
+        };
+      },
+      multiAgentLabRunner: async () => {
+        calls.push('multi-agent-lab');
+        return {
+          summary: {
+            totalItems: 9,
+            totalTokens: 900,
+            estimatedTotalTokens: 1200,
+            winner: 'Hermes',
+          },
+          files: {
+            report: '/tmp/multi-agent-lab/report.md',
+            items: '/tmp/multi-agent-lab/items.json',
+            summary: '/tmp/multi-agent-lab/summary.json',
+          },
+        };
+      },
+    },
+    { agent: 'clerk-agent', action: 'token-factory', requiresAuth: true },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.deepEqual(calls, ['token-lab', 'multi-agent-lab']);
+  assert.match(reply.replyText, /整套 token 工厂已完成/);
+  assert.match(reply.replyText, /训练场任务数：2/);
+  assert.match(reply.replyText, /训练场样本数：9/);
+  assert.match(reply.replyText, /真实 token：1200/);
+  assert.match(reply.replyText, /估算 token：1550/);
+  assert.match(reply.replyText, /赢家：Hermes/);
+  assert.match(reply.replyText, /qa-token-lab\/report\.md/);
+  assert.match(reply.replyText, /multi-agent-lab\/summary\.json/);
+});
+
+test('buildRoutedAgentReply sends token factory receipt before long execution', async () => {
+  const sent = [];
+  await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-clerk-token-factory-receipt',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '文员，开始 token 工厂' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {
+      receiptSender: async (message) => {
+        sent.push(JSON.parse(message.content).text);
+        return { message_id: 'reply-token-factory' };
+      },
+      tokenLabRunner: async () => ({
+        report: { totalJobs: 1, totalTokens: 10, estimatedTotalTokens: 12 },
+        files: {},
+      }),
+      multiAgentLabRunner: async () => ({
+        summary: { totalItems: 1, totalTokens: 20, estimatedTotalTokens: 25, winner: '平手' },
+        files: {},
+      }),
+    },
+    { agent: 'clerk-agent', action: 'token-factory', requiresAuth: true },
+  );
+
+  assert.match(sent[0], /收到/);
+  assert.match(sent[0], /整套 token 工厂/);
+});
+
 test('sendFeishuTextMessage fetches tenant token and sends text message', async () => {
   const calls = [];
   await sendFeishuTextMessage(

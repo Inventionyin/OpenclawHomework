@@ -239,6 +239,16 @@ test('buildClerkAgentReply explains token lab before execution', () => {
   assert.match(reply, /eval/);
 });
 
+test('buildClerkAgentReply explains token factory full workflow naturally', () => {
+  const reply = buildClerkAgentReply({ action: 'token-factory' });
+  assert.match(reply, /token/);
+  assert.match(reply, /训练数据/);
+  assert.match(reply, /token lab/i);
+  assert.match(reply, /多 Agent 评审/);
+  assert.match(reply, /邮箱归档/);
+  assert.match(reply, /日报沉淀/);
+});
+
 test('buildClerkAgentReply explains multi-agent lab before execution', () => {
   const reply = buildClerkAgentReply({ action: 'multi-agent-lab' });
   assert.match(reply, /多 Agent 训练场/);

@@ -252,6 +252,14 @@ function routeClerkIntent(text) {
     return { agent: 'clerk-agent', action: 'training-data', requiresAuth: true };
   }
 
+  if (/(把|将|让).{0,8}token.{0,8}(跑起来|用起来)/i.test(normalized)
+    || /(来一套|安排一套|整一套).{0,12}(高\s*token|token).{0,12}(玩法|流程|全链路)/i.test(normalized)
+    || /(生成|做|整理).{0,16}(一套|一批).{0,16}(训练数据|语料).{0,20}(评测|评审).{0,12}(归档|沉淀)/i.test(normalized)
+    || /(token).{0,20}(全链路|流水线|工厂|产线)/i.test(normalized)
+    || /(今天).{0,10}(把).{0,8}(token).{0,8}(用起来)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'token-factory', requiresAuth: true };
+  }
+
   if (/(启动|开始|跑|执行|开).{0,12}(高\s*token|token).{0,20}(训练场|实验室|lab|额度|数据|训练|烧|消耗)/i.test(normalized)
     || /(高\s*token|token).{0,20}(训练场|实验室|lab|额度|烧|消耗)/i.test(normalized)
     || /(烧|消耗|花完).{0,12}(token|额度).{0,20}(训练|数据|训练场)/i.test(normalized)) {

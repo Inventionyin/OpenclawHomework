@@ -2824,6 +2824,80 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
   }
 
   if (route.agent === 'clerk-agent') {
+    if (route.action === 'token-factory') {
+      if (options.receiptSender) {
+        await sendTimedFeishuMessage(
+          options.receiptSender,
+          buildFeishuTextMessage(payload, '收到，开始跑整套 token 工厂：先高 token 训练场，再多 Agent 训练场。完成后我会给你汇总。', env, {
+            status: '运行中',
+            elapsedMs: elapsedMs(options.timingContext?.startedAt),
+          }),
+          env,
+          options.timingContext,
+          'token-factory-receipt',
+        ).catch((error) => {
+          console.error(`Feishu token factory receipt failed: ${error.message}`);
+        });
+      }
+
+      const tokenLabRunner = options.tokenLabRunner || ((runnerOptions) => runTokenLab(runnerOptions));
+      const tokenLabResult = await tokenLabRunner({
+        env,
+        batchSize: env.QA_TOKEN_LAB_BATCH_SIZE,
+        outputDir: env.QA_TOKEN_LAB_OUTPUT_DIR,
+        emailSender: options.emailSender
+          ? (message, senderEnv) => options.emailSender(message, senderEnv)
+          : (message, senderEnv) => sendMailboxActionEmail(message, senderEnv, options),
+      });
+
+      const multiAgentLabRunner = options.multiAgentLabRunner || (async (runnerOptions) => {
+        const base = await runMultiAgentLab(runnerOptions);
+        return {
+          summary: {
+            totalRounds: Number(base.plan?.rounds?.length || 3),
+            totalItems: Number(base.summary?.totalItems || 0),
+            totalTokens: Number(base.summary?.totalTokens || 0),
+            estimatedTotalTokens: Number(base.summary?.estimatedTotalTokens || 0),
+            failedJobs: Number(base.summary?.failedJobs || 0),
+            winner: base.summary?.winner || '平手',
+          },
+          files: base.files || {},
+        };
+      });
+      const multiAgentResult = await multiAgentLabRunner({
+        env,
+        batchSize: env.MULTI_AGENT_LAB_BATCH_SIZE || env.QA_TOKEN_LAB_BATCH_SIZE,
+        outputDir: env.MULTI_AGENT_LAB_OUTPUT_DIR || env.QA_TOKEN_LAB_OUTPUT_DIR,
+        emailSender: options.emailSender
+          ? (message, senderEnv) => options.emailSender(message, senderEnv)
+          : (message, senderEnv) => sendMailboxActionEmail(message, senderEnv, options),
+      });
+
+      const tokenReport = tokenLabResult.report || {};
+      const tokenFiles = tokenLabResult.files || {};
+      const multiSummary = multiAgentResult.summary || {};
+      const multiFiles = multiAgentResult.files || {};
+      const totalRealTokens = Number(tokenReport.totalTokens || 0) + Number(multiSummary.totalTokens || 0);
+      const totalEstimatedTokens = Number(tokenReport.estimatedTotalTokens || 0) + Number(multiSummary.estimatedTotalTokens || 0);
+
+      return {
+        handled: true,
+        replyText: [
+          '整套 token 工厂已完成（高 token 训练场 + 多 Agent 训练场）。',
+          `- 训练场任务数：${tokenReport.totalJobs || 0}`,
+          `- 训练场样本数：${multiSummary.totalItems || 0}`,
+          `- 真实 token：${totalRealTokens}`,
+          totalEstimatedTokens ? `- 估算 token：${totalEstimatedTokens}` : null,
+          multiSummary.winner ? `- 赢家：${multiSummary.winner}` : null,
+          tokenFiles.report ? `- token 训练场报告：${tokenFiles.report}` : null,
+          tokenFiles.items ? `- token 训练场产物：${tokenFiles.items}` : null,
+          multiFiles.report ? `- 多 Agent 报告：${multiFiles.report}` : null,
+          multiFiles.items ? `- 多 Agent 产物：${multiFiles.items}` : null,
+          multiFiles.summary ? `- 多 Agent 摘要：${multiFiles.summary}` : null,
+        ].filter(Boolean).join('\n'),
+      };
+    }
+
     if (route.action === 'token-lab') {
       if (options.receiptSender) {
         await sendTimedFeishuMessage(
