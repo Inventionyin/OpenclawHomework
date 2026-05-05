@@ -47,6 +47,7 @@ test('buildUsageLedgerEntry keeps timing and token fields without secrets', () =
     promptTokens: 10,
     completionTokens: 5,
     totalTokens: 15,
+    tokenSource: 'provider_usage',
   });
 });
 
@@ -102,5 +103,9 @@ test('buildUsageLedgerEntry still records latency when provider omits token usag
   assert.equal(entry.promptChars, 42);
   assert.equal(entry.replyChars, 88);
   assert.equal(entry.usageMissing, true);
+  assert.equal(entry.tokenSource, 'estimated_chars');
+  assert.equal(entry.estimatedPromptTokens, 21);
+  assert.equal(entry.estimatedCompletionTokens, 44);
+  assert.equal(entry.estimatedTotalTokens, 65);
   assert.equal(entry.totalTokens, undefined);
 });

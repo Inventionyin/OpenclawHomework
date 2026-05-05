@@ -196,6 +196,8 @@ function summarizeUsageLedger(entries = []) {
       calls: 0,
       totalTokens: 0,
       tokenCalls: 0,
+      estimatedTotalTokens: 0,
+      estimatedTokenCalls: 0,
       usageMissingCalls: 0,
       modelElapsedMs: 0,
     };
@@ -206,6 +208,10 @@ function summarizeUsageLedger(entries = []) {
     }
     if (entry.usageMissing || entry.totalTokens === undefined || entry.totalTokens === null) {
       current.usageMissingCalls += 1;
+    }
+    if (entry.estimatedTotalTokens !== undefined && entry.estimatedTotalTokens !== null) {
+      current.estimatedTotalTokens += Number(entry.estimatedTotalTokens || 0);
+      current.estimatedTokenCalls += 1;
     }
     current.modelElapsedMs += Number(entry.modelElapsedMs || 0);
     summary.set(key, current);
@@ -233,7 +239,9 @@ function buildTokenSummaryReply(entries = []) {
     const avgMs = row.calls ? Math.round(row.modelElapsedMs / row.calls) : 0;
     const tokenText = row.tokenCalls
       ? `${row.totalTokens} tokens，平均 ${avgTokens} tokens/次`
-      : '未返回 token';
+      : row.estimatedTokenCalls
+        ? `未返回 token，字符估算约 ${row.estimatedTotalTokens} tokens`
+        : '未返回 token';
     const missingText = row.usageMissingCalls && row.tokenCalls
       ? `，${row.usageMissingCalls} 次未返回 token`
       : '';
@@ -246,7 +254,7 @@ function buildTokenSummaryReply(entries = []) {
     const tokenTop = tokenRows.sort((a, b) => b.totalTokens - a.totalTokens || b.calls - a.calls)[0];
     lines.push(`目前样本里 token 用量最高的是：${tokenTop.assistant} / ${tokenTop.model}。`);
   } else if (top) {
-    lines.push('这些记录的模型接口未返回 token，只能先比较调用次数和耗时。');
+    lines.push('这些记录的模型接口未返回 token，已用字符数做粗略估算；精确计费仍以平台后台为准。');
   }
   return lines.join('\n');
 }

@@ -65,6 +65,8 @@ test('buildClerkAgentReply summarizes token usage from ledger lines', () => {
         assistant: 'Hermes',
         model: 'LongCat-Flash-Lite',
         usageMissing: true,
+        tokenSource: 'estimated_chars',
+        estimatedTotalTokens: 42,
         modelElapsedMs: 3000,
       },
     ],
@@ -76,6 +78,7 @@ test('buildClerkAgentReply summarizes token usage from ledger lines', () => {
   assert.match(reply, /OpenClaw/);
   assert.match(reply, /20/);
   assert.match(reply, /未返回 token/);
+  assert.match(reply, /约 42 tokens/);
 });
 
 test('buildClerkAgentReply does not claim token winner when every entry lacks usage', () => {
@@ -87,13 +90,15 @@ test('buildClerkAgentReply does not claim token winner when every entry lacks us
         assistant: 'Hermes',
         model: 'LongCat-Flash-Lite',
         usageMissing: true,
+        tokenSource: 'estimated_chars',
+        estimatedTotalTokens: 42,
         modelElapsedMs: 3000,
       },
     ],
   });
 
   assert.match(reply, /未返回 token/);
-  assert.match(reply, /只能先比较调用次数和耗时/);
+  assert.match(reply, /字符估算/);
   assert.doesNotMatch(reply, /token 用量最高/);
 });
 

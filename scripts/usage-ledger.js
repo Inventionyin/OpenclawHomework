@@ -16,9 +16,24 @@ function pickUsageNumber(usage = {}, ...keys) {
   return undefined;
 }
 
+function estimateTokensFromChars(value) {
+  const chars = numberOrUndefined(value);
+  if (chars === undefined) {
+    return undefined;
+  }
+  return Math.max(1, Math.ceil(chars / 2));
+}
+
 function buildUsageLedgerEntry(input = {}) {
   const usage = input.modelResult?.usage || input.usage || {};
   const hasUsage = usage && typeof usage === 'object' && Object.keys(usage).length > 0;
+  const promptChars = numberOrUndefined(input.promptChars);
+  const replyChars = numberOrUndefined(input.replyChars);
+  const estimatedPromptTokens = estimateTokensFromChars(promptChars);
+  const estimatedCompletionTokens = estimateTokensFromChars(replyChars);
+  const estimatedTotalTokens = estimatedPromptTokens !== undefined || estimatedCompletionTokens !== undefined
+    ? Number(estimatedPromptTokens || 0) + Number(estimatedCompletionTokens || 0)
+    : undefined;
   const route = input.route || {};
   const entry = {
     timestamp: input.timestamp || new Date().toISOString(),
@@ -31,12 +46,16 @@ function buildUsageLedgerEntry(input = {}) {
     apiKeyIndex: numberOrUndefined(input.modelResult?.apiKeyIndex ?? input.apiKeyIndex),
     elapsedMs: numberOrUndefined(input.elapsedMs),
     modelElapsedMs: numberOrUndefined(input.modelElapsedMs),
-    promptChars: numberOrUndefined(input.promptChars),
-    replyChars: numberOrUndefined(input.replyChars),
+    promptChars,
+    replyChars,
     promptTokens: pickUsageNumber(usage, 'prompt_tokens', 'input_tokens'),
     completionTokens: pickUsageNumber(usage, 'completion_tokens', 'output_tokens'),
     totalTokens: pickUsageNumber(usage, 'total_tokens'),
     usageMissing: hasUsage ? undefined : true,
+    tokenSource: hasUsage ? 'provider_usage' : (estimatedTotalTokens !== undefined ? 'estimated_chars' : undefined),
+    estimatedPromptTokens: hasUsage ? undefined : estimatedPromptTokens,
+    estimatedCompletionTokens: hasUsage ? undefined : estimatedCompletionTokens,
+    estimatedTotalTokens: hasUsage ? undefined : estimatedTotalTokens,
   };
 
   return Object.fromEntries(
