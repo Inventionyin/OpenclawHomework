@@ -77,6 +77,32 @@ function listTasks(env = process.env) {
     .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
 }
 
+function isStaleRunningTask(task, now = new Date(), staleMs = 30 * 60 * 1000) {
+  if (task?.status !== 'running') {
+    return false;
+  }
+  const updatedAt = Date.parse(task.updatedAt || task.createdAt || '');
+  if (!Number.isFinite(updatedAt)) {
+    return true;
+  }
+  return now.getTime() - updatedAt >= staleMs;
+}
+
+function listRecoverableTasks(env = process.env, options = {}) {
+  const now = options.now || new Date();
+  const staleMs = Number(options.staleMs || 30 * 60 * 1000);
+  return listTasks(env)
+    .filter((task) => (
+      task.type === 'token-factory'
+      && (
+        task.status === 'queued'
+        || task.status === 'interrupted'
+        || isStaleRunningTask(task, now, staleMs)
+      )
+    ))
+    .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+}
+
 function getLatestTask(env = process.env) {
   return listTasks(env)[0] || null;
 }
@@ -85,6 +111,7 @@ module.exports = {
   createTask,
   getLatestTask,
   getTaskDir,
+  listRecoverableTasks,
   listTasks,
   readTask,
   updateTask,

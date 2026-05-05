@@ -22,6 +22,7 @@ const {
   buildClerkAgentReply,
   buildDocAgentReply,
   buildImageChannelReply,
+  buildModelChannelReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,
   buildPlannerClarifyReply,
@@ -1694,6 +1695,68 @@ async function applyImageChannelSwitch(route, env = process.env, options = {}) {
   ].join('\n');
 }
 
+async function applyModelChannelSwitch(route, env = process.env, options = {}) {
+  const config = route.config || {};
+  if (!config.url || !config.apiKey) {
+    return buildModelChannelReply(route);
+  }
+  const envFile = options.envFile || env.FEISHU_ENV_FILE;
+  if (!envFile) {
+    return [
+      '我识别到你要切换聊天模型通道，但这次还没写入配置。',
+      '原因：当前服务没有配置 FEISHU_ENV_FILE，无法定位环境变量文件。',
+    ].join('\n');
+  }
+
+  const writer = options.envWriter || upsertEnvFileValue;
+  writer(envFile, 'FEISHU_CHAT_STREAMING_ENABLED', 'true');
+  writer(envFile, 'STREAMING_MODEL_BASE_URL', config.url);
+  writer(envFile, 'STREAMING_MODEL_API_KEY', config.apiKey);
+  writer(envFile, 'STREAMING_MODEL_ID', config.model || env.STREAMING_MODEL_ID || 'LongCat-Flash-Chat');
+  writer(envFile, 'STREAMING_MODEL_SIMPLE_ID', config.simpleModel || env.STREAMING_MODEL_SIMPLE_ID || '');
+  writer(envFile, 'STREAMING_MODEL_THINKING_ID', config.thinkingModel || env.STREAMING_MODEL_THINKING_ID || '');
+  writer(envFile, 'STREAMING_MODEL_ENDPOINT_MODE', config.endpointMode || 'chat_completions');
+
+  const fetchImpl = options.fetchImpl || fetch;
+  let modelsStatus = '未测试';
+  try {
+    const response = await fetchImpl(`${String(config.url).replace(/\/+$/, '')}/models`, {
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+    });
+    modelsStatus = response.ok ? '通过' : `失败 ${response.status}`;
+  } catch (error) {
+    modelsStatus = `失败：${error.message}`;
+  }
+
+  const serviceName = options.serviceName || getLocalBridgeService(env);
+  let restartStatus = '未重启';
+  const shouldRestart = String(options.restart ?? env.MODEL_CHANNEL_AUTO_RESTART ?? 'true').toLowerCase() !== 'false';
+  if (shouldRestart) {
+    const restart = options.restartService || ((service) => {
+      setTimeout(() => {
+        execFilePromise('systemctl', ['restart', service], { timeout: 30000 })
+          .catch((error) => console.error(`Model channel restart failed: ${error.message}`));
+      }, Number(env.MODEL_CHANNEL_RESTART_DELAY_MS || 1200));
+    });
+    restart(serviceName);
+    restartStatus = `已安排重启 ${serviceName}`;
+  }
+
+  return [
+    '聊天模型通道配置已写入。',
+    `- URL：${config.url}`,
+    `- Key：${config.maskedApiKey}`,
+    `- Model：${config.model || env.STREAMING_MODEL_ID || 'LongCat-Flash-Chat'}`,
+    config.simpleModel ? `- Simple：${config.simpleModel}` : null,
+    config.thinkingModel ? `- Thinking：${config.thinkingModel}` : null,
+    `- Endpoint：${config.endpointMode || 'chat_completions'}`,
+    `- /v1/models：${modelsStatus}`,
+    `- 重启：${restartStatus}`,
+  ].filter(Boolean).join('\n');
+}
+
 function buildTokenFactoryBackgroundReply(task) {
   return [
     'token-factory 已创建后台任务。',
@@ -3124,6 +3187,21 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
       };
     }
     return buildImageAgentReply(payload, text, env, options, route);
+  }
+
+  if (route.agent === 'model-agent') {
+    if (route.requiresAuth && !isAuthorized(payload, env)) {
+      return {
+        handled: true,
+        replyText: getUnauthorizedMessage(env),
+      };
+    }
+    return {
+      handled: true,
+      replyText: route.action === 'model-channel-switch'
+        ? await applyModelChannelSwitch(route, env, options)
+        : buildModelChannelReply(route),
+    };
   }
 
   if (route.agent === 'ops-agent') {

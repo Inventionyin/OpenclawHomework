@@ -1,6 +1,7 @@
 const {
   createTask,
   getLatestTask,
+  listRecoverableTasks,
   readTask,
   updateTask,
 } = require('./background-task-store');
@@ -68,6 +69,44 @@ async function runTokenFactoryTask(taskId, options = {}) {
   }
 }
 
+async function runRecoverableTokenFactoryTasks(options = {}) {
+  const env = options.env || process.env;
+  const tasks = listRecoverableTasks(env, {
+    now: options.now || new Date(),
+    staleMs: options.staleMs,
+  });
+  const runner = options.runner || runTokenFactoryTask;
+  const result = {
+    scanned: tasks.length,
+    completed: 0,
+    failed: 0,
+    taskIds: tasks.map((task) => task.id),
+  };
+
+  for (const task of tasks) {
+    updateTask(task.id, {
+      status: 'running',
+      error: '',
+    }, env);
+    try {
+      const saved = await runner(task.id, options);
+      if (saved?.status === 'failed') {
+        result.failed += 1;
+      } else {
+        result.completed += 1;
+      }
+    } catch (error) {
+      updateTask(task.id, {
+        status: 'failed',
+        error: String(error.message || error),
+      }, env);
+      result.failed += 1;
+    }
+  }
+
+  return result;
+}
+
 function startTokenFactoryTask(options = {}) {
   const env = options.env || process.env;
   const task = createTask({
@@ -116,6 +155,7 @@ function getTokenFactoryTaskStatus(env = process.env, id = '') {
 module.exports = {
   formatTokenFactoryTask,
   getTokenFactoryTaskStatus,
+  runRecoverableTokenFactoryTasks,
   runTokenFactoryTask,
   startTokenFactoryTask,
   summarizeTokenFactory,

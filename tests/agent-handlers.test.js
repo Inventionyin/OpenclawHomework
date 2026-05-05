@@ -8,6 +8,7 @@ const {
   buildChatAgentPrompt,
   buildClerkAgentReply,
   buildImageChannelReply,
+  buildModelChannelReply,
   buildCapabilityGuideReply,
   buildBrainGuideReply,
   buildDocAgentReply,
@@ -283,6 +284,36 @@ test('buildImageChannelReply redacts key and explains confidence', () => {
     missing: ['url'],
     config: {
       maskedApiKey: 'sk...7',
+    },
+  });
+  assert.match(clarifyReply, /先不替换/);
+  assert.match(clarifyReply, /缺少字段：url/);
+});
+
+test('buildModelChannelReply redacts key and explains confidence', () => {
+  const switchReply = buildModelChannelReply({
+    action: 'model-channel-switch',
+    confidence: 'high',
+    config: {
+      url: 'https://api.longcat.chat/openai/v1',
+      maskedApiKey: 'ak_20x...j57V (36)',
+      model: 'LongCat-Flash-Chat',
+      simpleModel: 'LongCat-Flash-Lite',
+      thinkingModel: 'LongCat-Flash-Thinking-2601',
+      endpointMode: 'chat_completions',
+    },
+  });
+  assert.match(switchReply, /切换聊天模型通道/);
+  assert.match(switchReply, /LongCat-Flash-Chat/);
+  assert.match(switchReply, /ak_20x\.\.\.j57V/);
+  assert.doesNotMatch(switchReply, /ak_20x19J9ZP74X02t1yW9tp4bJ3j57V/);
+
+  const clarifyReply = buildModelChannelReply({
+    action: 'model-channel-clarify',
+    confidence: 'low',
+    missing: ['url'],
+    config: {
+      maskedApiKey: 'ak...7',
     },
   });
   assert.match(clarifyReply, /先不替换/);

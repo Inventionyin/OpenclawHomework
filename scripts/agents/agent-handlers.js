@@ -590,6 +590,32 @@ function buildImageChannelReply(route = {}) {
   return lines.join('\n');
 }
 
+function buildModelChannelReply(route = {}) {
+  const config = route.config || {};
+  const lines = [];
+  if (route.action === 'model-channel-switch') {
+    lines.push('我识别到你要切换聊天模型通道。');
+    lines.push(`- URL：${config.url || '未提供'}`);
+    lines.push(`- Key：${config.maskedApiKey || '未提供'}`);
+    lines.push(`- Model：${config.model || '未指定，沿用当前默认模型'}`);
+    if (config.simpleModel) lines.push(`- Simple：${config.simpleModel}`);
+    if (config.thinkingModel) lines.push(`- Thinking：${config.thinkingModel}`);
+    lines.push(`- Endpoint：${config.endpointMode || 'chat_completions'}`);
+    lines.push(`- Scope：${config.scope || 'current'}`);
+    lines.push('下一步会写入当前桥服务的流式聊天环境变量、重启服务，并用 /v1/models 做轻量探测。');
+    return lines.join('\n');
+  }
+
+  lines.push('我注意到你发了聊天模型通道配置，但这次先不替换。');
+  lines.push(`- 置信度：${route.confidence || 'low'}`);
+  if (config.url) lines.push(`- URL：${config.url}`);
+  if (config.maskedApiKey) lines.push(`- Key：${config.maskedApiKey}`);
+  if (config.model) lines.push(`- Model：${config.model}`);
+  if (route.missing?.length) lines.push(`- 缺少字段：${route.missing.join(', ')}`);
+  lines.push('你可以直接说：切换聊天模型通道 url: https://... key: ak_... model: LongCat-Flash-Chat');
+  return lines.join('\n');
+}
+
 function buildMemoryAgentReply(route, memoryContext = buildMemoryContext(), options = {}) {
   if (route.action === 'brain-guide') {
     return buildBrainGuideReply(options.assistantName || 'OpenClaw');
@@ -890,6 +916,7 @@ module.exports = {
   buildClerkVerificationTestPlanReply,
   buildClerkWorkbenchReply,
   buildImageChannelReply,
+  buildModelChannelReply,
   buildDocAgentReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,

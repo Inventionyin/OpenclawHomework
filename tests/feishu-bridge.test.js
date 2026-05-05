@@ -1763,6 +1763,118 @@ test('buildRoutedAgentReply clarifies medium-confidence image channel config wit
   assert.match(reply.replyText, /先不替换/);
 });
 
+test('buildRoutedAgentReply can apply high-confidence chat model channel switch', async () => {
+  const writes = [];
+  const restarts = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-model-channel-switch',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '切换聊天模型通道 url: https://api.longcat.chat/openai/v1 key: ak-test-secret model: LongCat-Flash-Chat' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      FEISHU_ENV_FILE: '/etc/test.env',
+      FEISHU_ASSISTANT_NAME: 'Hermes',
+    },
+    {
+      envWriter: (file, key, value) => writes.push({ file, key, value }),
+      fetchImpl: async () => ({ ok: true, status: 200 }),
+      restartService: (service) => restarts.push(service),
+    },
+    {
+      agent: 'model-agent',
+      action: 'model-channel-switch',
+      confidence: 'high',
+      config: {
+        url: 'https://api.longcat.chat/openai/v1',
+        apiKey: 'ak-test-secret',
+        maskedApiKey: 'ak-tes...cret (14)',
+        model: 'LongCat-Flash-Chat',
+        simpleModel: 'LongCat-Flash-Lite',
+        thinkingModel: 'LongCat-Flash-Thinking-2601',
+        endpointMode: 'chat_completions',
+        scope: 'current',
+      },
+      missing: [],
+      requiresAuth: true,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.deepEqual(writes.map((item) => item.key), [
+    'FEISHU_CHAT_STREAMING_ENABLED',
+    'STREAMING_MODEL_BASE_URL',
+    'STREAMING_MODEL_API_KEY',
+    'STREAMING_MODEL_ID',
+    'STREAMING_MODEL_SIMPLE_ID',
+    'STREAMING_MODEL_THINKING_ID',
+    'STREAMING_MODEL_ENDPOINT_MODE',
+  ]);
+  assert.match(reply.replyText, /聊天模型通道配置已写入/);
+  assert.match(reply.replyText, /\/v1\/models：通过/);
+  assert.deepEqual(restarts, ['hermes-feishu-bridge']);
+  assert.doesNotMatch(reply.replyText, /ak-test-secret/);
+});
+
+test('buildRoutedAgentReply clarifies medium-confidence chat model config without writing', async () => {
+  const writes = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-model-channel-clarify',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: 'url: https://api.longcat.chat/openai/v1 key: ak-test-secret' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      FEISHU_ENV_FILE: '/etc/test.env',
+      FEISHU_ASSISTANT_NAME: 'Hermes',
+    },
+    {
+      envWriter: (file, key, value) => writes.push({ file, key, value }),
+    },
+    {
+      agent: 'model-agent',
+      action: 'model-channel-clarify',
+      confidence: 'medium',
+      config: {
+        url: 'https://api.longcat.chat/openai/v1',
+        apiKey: 'ak-test-secret',
+        maskedApiKey: 'ak-tes...cret (14)',
+        model: '',
+        simpleModel: '',
+        thinkingModel: '',
+        endpointMode: 'chat_completions',
+        scope: 'current',
+      },
+      missing: [],
+      requiresAuth: true,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.deepEqual(writes, []);
+  assert.match(reply.replyText, /先不替换/);
+});
+
 test('sendFeishuTextMessage fetches tenant token and sends text message', async () => {
   const calls = [];
   await sendFeishuTextMessage(

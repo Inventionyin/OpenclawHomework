@@ -487,6 +487,9 @@ FEISHU_STREAM_UPDATE_INTERVAL_MS=800
 FEISHU_USAGE_LEDGER_ENABLED=true
 FEISHU_USAGE_LEDGER_PATH=/var/log/openclaw-homework/usage-ledger.jsonl
 
+TOKEN_FACTORY_TASK_DIR=/opt/OpenclawHomework/data/tasks/token-factory
+TOKEN_FACTORY_STALE_MS=1800000
+
 EMAIL_NOTIFY_ENABLED=true
 SMTP_HOST=smtp.qq.com
 SMTP_PORT=465
@@ -530,6 +533,21 @@ Hermes 正常聊天：LongCat-Flash-Chat
 Hermes 简单任务：LongCat-Flash-Lite
 Hermes 复杂分析：LongCat-Flash-Thinking-2601
 ```
+
+自然语言模型/Key 切换：
+
+```text
+切换聊天模型通道 url: https://api.longcat.chat/openai/v1 key: ak_... model: LongCat-Flash-Chat
+```
+
+桥梁服务会先按置信度判断：只有明确说“切换/更新/配置聊天模型通道”并同时给出 URL 和 Key，才会写入 `STREAMING_MODEL_*` 环境变量并重启当前服务；只发 `url/key` 会要求确认。回复里只显示遮蔽后的 Key。
+
+token-factory 后台任务：
+
+- `文员，把 token 跑起来` 会创建 `data/tasks/token-factory/tf-*.json` 后台任务。
+- `文员，查看 token-factory 状态` 会查看最近任务。
+- `scripts/token-factory-worker.js --once` 会扫描 `queued`、`interrupted`、以及超时的 `running` 任务并恢复执行。
+- 推荐两台服务器都安装 systemd timer，避免服务重启后 token-factory 卡住。
 
 修改后重启对应服务器上的服务：
 
@@ -761,6 +779,36 @@ systemctl start hermes-homework-watchdog.service
 ```
 
 注意：上面两个 `systemctl start` 要分别在对应服务器执行，不要在 OpenClaw 服务器启动 Hermes 的 watchdog。
+
+安装或更新 token-factory 恢复 worker：
+
+OpenClaw 服务器：
+
+```bash
+cd /opt/OpenclawHomework
+bash scripts/install-token-factory-worker.sh \
+  --unit-name openclaw-token-factory-worker \
+  --env-file /etc/openclaw-feishu-bridge.env
+```
+
+Hermes 服务器：
+
+```bash
+cd /opt/OpenclawHomework
+bash scripts/install-token-factory-worker.sh \
+  --unit-name hermes-token-factory-worker \
+  --env-file /etc/hermes-feishu-bridge.env
+```
+
+验证：
+
+```bash
+systemctl list-timers '*token-factory-worker*' --no-pager
+systemctl start openclaw-token-factory-worker.service
+systemctl start hermes-token-factory-worker.service
+```
+
+注意：上面两个 `systemctl start` 要分别在对应服务器执行。
 
 ## 8.1 官方 OpenClaw/Hermes 更新流程
 

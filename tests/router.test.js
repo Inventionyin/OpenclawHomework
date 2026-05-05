@@ -313,6 +313,29 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
   });
 });
 
+test('routeAgentIntent routes office work without requiring clerk wake word', () => {
+  assert.deepEqual(routeAgentIntent('统计 Hermes 和 OpenClaw 谁更费 token'), {
+    agent: 'clerk-agent',
+    action: 'token-summary',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('把今天日报发到邮箱'), {
+    agent: 'clerk-agent',
+    action: 'daily-email',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('整理一下今天待办'), {
+    agent: 'clerk-agent',
+    action: 'todo-summary',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('今天邮箱里有哪些任务'), {
+    agent: 'clerk-agent',
+    action: 'mailbox-tasks',
+    requiresAuth: true,
+  });
+});
+
 test('routeAgentIntent routes natural-language control brain and memory discovery', () => {
   assert.deepEqual(routeAgentIntent('我现在能让你做哪些事情'), {
     agent: 'capability-agent',
@@ -325,6 +348,18 @@ test('routeAgentIntent routes natural-language control brain and memory discover
     requiresAuth: true,
   });
   assert.deepEqual(routeAgentIntent('把这段经验沉淀到知识库：UI 自动化失败先看 Allure'), {
+    agent: 'memory-agent',
+    action: 'remember',
+    note: 'UI 自动化失败先看 Allure',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('记住 workflow 今天失败了'), {
+    agent: 'memory-agent',
+    action: 'remember',
+    note: 'workflow 今天失败了',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('帮我记一下：UI 自动化失败先看 Allure'), {
     agent: 'memory-agent',
     action: 'remember',
     note: 'UI 自动化失败先看 Allure',
@@ -410,6 +445,43 @@ test('routeAgentIntent routes image channel switch by confidence', () => {
   });
 });
 
+test('routeAgentIntent routes chat model channel switch by confidence', () => {
+  assert.deepEqual(routeAgentIntent('切换聊天模型通道\nurl: https://api.longcat.chat/openai/v1\nkey: ak-test-secret\nmodel: LongCat-Flash-Chat'), {
+    agent: 'model-agent',
+    action: 'model-channel-switch',
+    confidence: 'high',
+    config: {
+      url: 'https://api.longcat.chat/openai/v1',
+      apiKey: 'ak-test-secret',
+      maskedApiKey: 'ak-tes...cret (14)',
+      model: 'LongCat-Flash-Chat',
+      simpleModel: '',
+      thinkingModel: '',
+      endpointMode: 'chat_completions',
+      scope: 'current',
+    },
+    missing: [],
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('url: https://api.longcat.chat/openai/v1\nkey: ak-test-secret'), {
+    agent: 'model-agent',
+    action: 'model-channel-clarify',
+    confidence: 'medium',
+    config: {
+      url: 'https://api.longcat.chat/openai/v1',
+      apiKey: 'ak-test-secret',
+      maskedApiKey: 'ak-tes...cret (14)',
+      model: '',
+      simpleModel: '',
+      thinkingModel: '',
+      endpointMode: 'chat_completions',
+      scope: 'current',
+    },
+    missing: [],
+    requiresAuth: true,
+  });
+});
+
 test('routeAgentIntent routes documentation questions', () => {
   assert.deepEqual(routeAgentIntent('老师任务还差哪些'), {
     agent: 'doc-agent',
@@ -439,11 +511,6 @@ test('routeAgentIntent defaults to chat agent', () => {
 });
 
 test('routeAgentIntent keeps memory and explicit UI test boundaries', () => {
-  assert.deepEqual(routeAgentIntent('记住 workflow 今天失败了'), {
-    agent: 'memory-agent',
-    action: 'show',
-    requiresAuth: true,
-  });
   assert.equal(routeAgentIntent('帮我跑测试').agent, 'ui-test-agent');
 });
 

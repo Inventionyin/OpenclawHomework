@@ -1,6 +1,9 @@
 const {
   parseImageChannelConfig,
 } = require('../image-channel-config');
+const {
+  parseModelChannelConfig,
+} = require('../model-channel-config');
 
 function normalizeText(text) {
   return extractCommandText(stripMention(String(text ?? '').trim()));
@@ -328,6 +331,57 @@ function routeClerkIntent(text) {
   return { agent: 'clerk-agent', action: 'guide', requiresAuth: true };
 }
 
+function routeOfficeIntent(text) {
+  const original = stripMention(String(text ?? '').trim());
+  const normalized = original.toLowerCase();
+  const emailLikeMatch = original.match(/\b([^\s]+@[^\s]+)\b/);
+  const emailLike = emailLikeMatch ? emailLikeMatch[1].replace(/[，。！!？?,;；]+$/u, '') : '';
+  const recipientMatch = original.match(/\b([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\b/i);
+  const recipientEmail = recipientMatch ? recipientMatch[1] : '';
+
+  if (/(token|耗时|用量|账本|谁更费|谁更省|统计|对比).{0,30}(hermes|openclaw|模型|调用|今天|最近)?/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'token-summary', requiresAuth: true };
+  }
+
+  const looksLikeDailyDeliveryWithInvalidEmail = (
+    (/(发送|发|寄).{0,12}(日报|周报|报告).{0,16}(给|到|到达|寄给|发给|寄到)?/i.test(normalized)
+      || /((发到|发给|寄到|寄给).{0,20}(日报|周报|报告)|(日报|周报|报告).{0,20}(发到|发给|寄到|寄给))/i.test(normalized))
+    && emailLike
+    && !recipientEmail
+  );
+  if (looksLikeDailyDeliveryWithInvalidEmail) {
+    return {
+      agent: 'clerk-agent',
+      action: 'daily-email-invalid-recipient',
+      invalidRecipient: emailLike,
+      requiresAuth: true,
+    };
+  }
+
+  if (/(发送|发|寄|给我).{0,12}(今天|当前|今儿)?.{0,8}(日报|周报|报告).{0,20}(邮箱|邮件|给|到|发给|发到|寄给|寄到)/i.test(normalized)
+    || /(今天|当前|今儿)?.{0,8}(日报|周报|报告).{0,20}(发送|发|寄|邮箱|邮件|发给|发到)/i.test(normalized)
+    || /((发到|发给|寄到|寄给).{0,24}[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i.test(normalized)) {
+    return {
+      agent: 'clerk-agent',
+      action: 'daily-email',
+      ...(recipientEmail ? { recipientEmail } : {}),
+      requiresAuth: true,
+    };
+  }
+
+  if (/(今天|当前|现在).{0,12}(邮箱|邮件).{0,12}(任务|队列|待办|有什么|有哪些)/i.test(normalized)
+    || /(邮箱|邮件).{0,12}(任务|队列|待办).{0,12}(今天|当前|现在|有哪些|有什么)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'mailbox-tasks', requiresAuth: true };
+  }
+
+  if (/(整理|列一下|看看|汇总).{0,12}(今天|当前|项目)?.{0,12}(待办|todo|清单|还没|未完成|下一步)/i.test(normalized)
+    || /(待办|todo|清单|还没|未完成|下一步).{0,12}(整理|列一下|看看|汇总)?/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'todo-summary', requiresAuth: true };
+  }
+
+  return null;
+}
+
 function routeCapabilityIntent(text) {
   const normalized = String(text ?? '').trim().toLowerCase();
   if (/(你|我)?(现在)?(能|可以|会).{0,12}(做|干|玩).{0,20}(什么|哪些|啥|事情|功能)/i.test(normalized)
@@ -440,7 +494,16 @@ function routeAgentIntent(text) {
       requiresAuth: true,
     };
   }
-  if (/^\/memory\b/i.test(normalized) || /(记住|记忆|项目状态)/.test(normalized)) {
+  const rememberNaturalMatch = original.match(/^(?:帮我)?(?:记住|记一下|记个|保存|沉淀|记录)(?:一下|下来)?[:：\s]+(.+)$/i);
+  if (rememberNaturalMatch) {
+    return {
+      agent: 'memory-agent',
+      action: 'remember',
+      note: rememberNaturalMatch[1].trim(),
+      requiresAuth: true,
+    };
+  }
+  if (/^\/memory\b/i.test(normalized) || /(记忆|项目状态)/.test(normalized)) {
     return { agent: 'memory-agent', action: 'show', requiresAuth: true };
   }
 
@@ -452,6 +515,27 @@ function routeAgentIntent(text) {
   const brainMemoryRoute = routeBrainMemoryIntent(original);
   if (brainMemoryRoute) {
     return brainMemoryRoute;
+  }
+
+  const modelChannel = parseModelChannelConfig(original);
+  if (modelChannel.hasCandidateFields) {
+    return {
+      agent: 'model-agent',
+      action: modelChannel.confidence === 'high' ? 'model-channel-switch' : 'model-channel-clarify',
+      confidence: modelChannel.confidence,
+      config: {
+        url: modelChannel.url,
+        apiKey: modelChannel.apiKey,
+        maskedApiKey: modelChannel.maskedApiKey,
+        model: modelChannel.model,
+        simpleModel: modelChannel.simpleModel,
+        thinkingModel: modelChannel.thinkingModel,
+        endpointMode: modelChannel.endpointMode,
+        scope: modelChannel.scope,
+      },
+      missing: modelChannel.missing,
+      requiresAuth: true,
+    };
   }
 
   const imageChannel = parseImageChannelConfig(original);
@@ -494,6 +578,11 @@ function routeAgentIntent(text) {
   const clerkRoute = routeClerkIntent(original);
   if (clerkRoute) {
     return clerkRoute;
+  }
+
+  const officeRoute = routeOfficeIntent(original);
+  if (officeRoute) {
+    return officeRoute;
   }
 
   const qaAssetRoute = routeQaAssetIntent(normalized);
@@ -545,6 +634,7 @@ module.exports = {
   routeBroadPlannerIntent,
   routeCapabilityIntent,
   routeClerkIntent,
+  routeOfficeIntent,
   routeQaAssetIntent,
   routeNaturalLanguageOps,
   stripMention,
