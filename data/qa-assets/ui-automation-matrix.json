@@ -1,0 +1,542 @@
+[
+  {
+    "id": "ui-001",
+    "area": "auth",
+    "scenario": "邮箱注册：输入合法邮箱，接收验证码并完成注册",
+    "priority": "P0",
+    "expected": "注册成功，用户进入首页",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "verify"
+  },
+  {
+    "id": "ui-002",
+    "area": "auth",
+    "scenario": "邮箱注册：验证码错误三次",
+    "priority": "P0",
+    "expected": "提示错误并限制频率，不创建账号",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "verify"
+  },
+  {
+    "id": "ui-003",
+    "area": "auth",
+    "scenario": "登录：正确账号密码",
+    "priority": "P0",
+    "expected": "登录成功并保持会话",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "verify"
+  },
+  {
+    "id": "ui-004",
+    "area": "auth",
+    "scenario": "登录：错误密码",
+    "priority": "P0",
+    "expected": "明确提示，不泄露账号是否存在",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "verify"
+  },
+  {
+    "id": "ui-005",
+    "area": "catalog",
+    "scenario": "首页商品列表加载",
+    "priority": "P0",
+    "expected": "商品卡片、价格、库存状态展示正确",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-006",
+    "area": "catalog",
+    "scenario": "搜索商品关键词",
+    "priority": "P0",
+    "expected": "返回匹配商品并支持空结果",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-007",
+    "area": "catalog",
+    "scenario": "分类筛选和排序组合",
+    "priority": "P1",
+    "expected": "筛选条件可叠加，排序稳定",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-008",
+    "area": "cart",
+    "scenario": "加入购物车",
+    "priority": "P0",
+    "expected": "购物车数量和金额更新",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-009",
+    "area": "cart",
+    "scenario": "修改购物车数量",
+    "priority": "P0",
+    "expected": "库存限制和金额联动正确",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-010",
+    "area": "cart",
+    "scenario": "删除购物车商品",
+    "priority": "P1",
+    "expected": "商品移除，空购物车状态正确",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-011",
+    "area": "checkout",
+    "scenario": "提交订单",
+    "priority": "P0",
+    "expected": "订单创建，金额与商品明细一致",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-012",
+    "area": "checkout",
+    "scenario": "优惠券结算",
+    "priority": "P0",
+    "expected": "优惠金额、实付金额正确",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-013",
+    "area": "checkout",
+    "scenario": "地址缺失提交",
+    "priority": "P0",
+    "expected": "阻止提交并提示补全地址",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-014",
+    "area": "payment",
+    "scenario": "模拟支付成功",
+    "priority": "P0",
+    "expected": "订单状态变为已支付",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-015",
+    "area": "payment",
+    "scenario": "模拟支付失败",
+    "priority": "P1",
+    "expected": "订单保留待支付，不重复扣款",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-016",
+    "area": "ai-support",
+    "scenario": "打开 AI 智能客服入口",
+    "priority": "P0",
+    "expected": "客服窗口出现并可输入问题",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "support"
+  },
+  {
+    "id": "ui-017",
+    "area": "ai-support",
+    "scenario": "咨询退款规则",
+    "priority": "P0",
+    "expected": "回答包含退款路径和时效",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "support"
+  },
+  {
+    "id": "ui-018",
+    "area": "ai-support",
+    "scenario": "要求转人工",
+    "priority": "P1",
+    "expected": "提供转人工入口或排队提示",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "support"
+  },
+  {
+    "id": "ui-019",
+    "area": "ai-support",
+    "scenario": "连续追问上下文",
+    "priority": "P1",
+    "expected": "客服能理解上一轮订单或问题",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "support"
+  },
+  {
+    "id": "ui-020",
+    "area": "report",
+    "scenario": "失败截图和 Allure 附件上传",
+    "priority": "P0",
+    "expected": "GitHub Actions 可下载 artifact",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-021",
+    "area": "auth",
+    "scenario": "邮箱注册：输入合法邮箱，接收验证码并完成注册",
+    "priority": "P0",
+    "expected": "注册成功，用户进入首页",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "verify"
+  },
+  {
+    "id": "ui-022",
+    "area": "auth",
+    "scenario": "邮箱注册：验证码错误三次",
+    "priority": "P0",
+    "expected": "提示错误并限制频率，不创建账号",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "verify"
+  },
+  {
+    "id": "ui-023",
+    "area": "auth",
+    "scenario": "登录：正确账号密码",
+    "priority": "P0",
+    "expected": "登录成功并保持会话",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "verify"
+  },
+  {
+    "id": "ui-024",
+    "area": "auth",
+    "scenario": "登录：错误密码",
+    "priority": "P0",
+    "expected": "明确提示，不泄露账号是否存在",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "verify"
+  },
+  {
+    "id": "ui-025",
+    "area": "catalog",
+    "scenario": "首页商品列表加载",
+    "priority": "P0",
+    "expected": "商品卡片、价格、库存状态展示正确",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-026",
+    "area": "catalog",
+    "scenario": "搜索商品关键词",
+    "priority": "P0",
+    "expected": "返回匹配商品并支持空结果",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-027",
+    "area": "catalog",
+    "scenario": "分类筛选和排序组合",
+    "priority": "P1",
+    "expected": "筛选条件可叠加，排序稳定",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-028",
+    "area": "cart",
+    "scenario": "加入购物车",
+    "priority": "P0",
+    "expected": "购物车数量和金额更新",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-029",
+    "area": "cart",
+    "scenario": "修改购物车数量",
+    "priority": "P0",
+    "expected": "库存限制和金额联动正确",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-030",
+    "area": "cart",
+    "scenario": "删除购物车商品",
+    "priority": "P1",
+    "expected": "商品移除，空购物车状态正确",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-031",
+    "area": "checkout",
+    "scenario": "提交订单",
+    "priority": "P0",
+    "expected": "订单创建，金额与商品明细一致",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-032",
+    "area": "checkout",
+    "scenario": "优惠券结算",
+    "priority": "P0",
+    "expected": "优惠金额、实付金额正确",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-033",
+    "area": "checkout",
+    "scenario": "地址缺失提交",
+    "priority": "P0",
+    "expected": "阻止提交并提示补全地址",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-034",
+    "area": "payment",
+    "scenario": "模拟支付成功",
+    "priority": "P0",
+    "expected": "订单状态变为已支付",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-035",
+    "area": "payment",
+    "scenario": "模拟支付失败",
+    "priority": "P1",
+    "expected": "订单保留待支付，不重复扣款",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-036",
+    "area": "ai-support",
+    "scenario": "打开 AI 智能客服入口",
+    "priority": "P0",
+    "expected": "客服窗口出现并可输入问题",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "support"
+  },
+  {
+    "id": "ui-037",
+    "area": "ai-support",
+    "scenario": "咨询退款规则",
+    "priority": "P0",
+    "expected": "回答包含退款路径和时效",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "support"
+  },
+  {
+    "id": "ui-038",
+    "area": "ai-support",
+    "scenario": "要求转人工",
+    "priority": "P1",
+    "expected": "提供转人工入口或排队提示",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "support"
+  },
+  {
+    "id": "ui-039",
+    "area": "ai-support",
+    "scenario": "连续追问上下文",
+    "priority": "P1",
+    "expected": "客服能理解上一轮订单或问题",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "support"
+  },
+  {
+    "id": "ui-040",
+    "area": "report",
+    "scenario": "失败截图和 Allure 附件上传",
+    "priority": "P0",
+    "expected": "GitHub Actions 可下载 artifact",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-041",
+    "area": "auth",
+    "scenario": "邮箱注册：输入合法邮箱，接收验证码并完成注册",
+    "priority": "P0",
+    "expected": "注册成功，用户进入首页",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "verify"
+  },
+  {
+    "id": "ui-042",
+    "area": "auth",
+    "scenario": "邮箱注册：验证码错误三次",
+    "priority": "P0",
+    "expected": "提示错误并限制频率，不创建账号",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "verify"
+  },
+  {
+    "id": "ui-043",
+    "area": "auth",
+    "scenario": "登录：正确账号密码",
+    "priority": "P0",
+    "expected": "登录成功并保持会话",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "verify"
+  },
+  {
+    "id": "ui-044",
+    "area": "auth",
+    "scenario": "登录：错误密码",
+    "priority": "P0",
+    "expected": "明确提示，不泄露账号是否存在",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "verify"
+  },
+  {
+    "id": "ui-045",
+    "area": "catalog",
+    "scenario": "首页商品列表加载",
+    "priority": "P0",
+    "expected": "商品卡片、价格、库存状态展示正确",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-046",
+    "area": "catalog",
+    "scenario": "搜索商品关键词",
+    "priority": "P0",
+    "expected": "返回匹配商品并支持空结果",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-047",
+    "area": "catalog",
+    "scenario": "分类筛选和排序组合",
+    "priority": "P1",
+    "expected": "筛选条件可叠加，排序稳定",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-048",
+    "area": "cart",
+    "scenario": "加入购物车",
+    "priority": "P0",
+    "expected": "购物车数量和金额更新",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-049",
+    "area": "cart",
+    "scenario": "修改购物车数量",
+    "priority": "P0",
+    "expected": "库存限制和金额联动正确",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-050",
+    "area": "cart",
+    "scenario": "删除购物车商品",
+    "priority": "P1",
+    "expected": "商品移除，空购物车状态正确",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-051",
+    "area": "checkout",
+    "scenario": "提交订单",
+    "priority": "P0",
+    "expected": "订单创建，金额与商品明细一致",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-052",
+    "area": "checkout",
+    "scenario": "优惠券结算",
+    "priority": "P0",
+    "expected": "优惠金额、实付金额正确",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-053",
+    "area": "checkout",
+    "scenario": "地址缺失提交",
+    "priority": "P0",
+    "expected": "阻止提交并提示补全地址",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-054",
+    "area": "payment",
+    "scenario": "模拟支付成功",
+    "priority": "P0",
+    "expected": "订单状态变为已支付",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-055",
+    "area": "payment",
+    "scenario": "模拟支付失败",
+    "priority": "P1",
+    "expected": "订单保留待支付，不重复扣款",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "report"
+  },
+  {
+    "id": "ui-056",
+    "area": "ai-support",
+    "scenario": "打开 AI 智能客服入口",
+    "priority": "P0",
+    "expected": "客服窗口出现并可输入问题",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "support"
+  },
+  {
+    "id": "ui-057",
+    "area": "ai-support",
+    "scenario": "咨询退款规则",
+    "priority": "P0",
+    "expected": "回答包含退款路径和时效",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "support"
+  },
+  {
+    "id": "ui-058",
+    "area": "ai-support",
+    "scenario": "要求转人工",
+    "priority": "P1",
+    "expected": "提供转人工入口或排队提示",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "support"
+  },
+  {
+    "id": "ui-059",
+    "area": "ai-support",
+    "scenario": "连续追问上下文",
+    "priority": "P1",
+    "expected": "客服能理解上一轮订单或问题",
+    "frameworkHint": "Playwright",
+    "mailboxAction": "support"
+  },
+  {
+    "id": "ui-060",
+    "area": "report",
+    "scenario": "失败截图和 Allure 附件上传",
+    "priority": "P0",
+    "expected": "GitHub Actions 可下载 artifact",
+    "frameworkHint": "Cypress",
+    "mailboxAction": "report"
+  }
+]

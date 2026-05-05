@@ -1,0 +1,2738 @@
+[
+  {
+    "id": "cs-case-001",
+    "topic": "refund",
+    "customerMessage": "我刚下单就想退款，钱什么时候退？",
+    "expectedReply": "先确认订单状态和支付方式，说明退款路径、到账时效和可协助创建售后单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-002",
+    "topic": "refund",
+    "customerMessage": "商品到了但不想要了，能七天无理由吗？",
+    "expectedReply": "确认商品类目和完好状态，说明七天无理由条件、运费承担和退货步骤。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-003",
+    "topic": "shipping",
+    "customerMessage": "物流三天没动了，是不是丢件？",
+    "expectedReply": "安抚用户，查询物流节点，给出催查、补发或退款的后续承诺。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-004",
+    "topic": "shipping",
+    "customerMessage": "我想改收货地址，还来得及吗？",
+    "expectedReply": "根据发货状态区分可修改、拦截、联系快递和重新下单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-005",
+    "topic": "coupon",
+    "customerMessage": "优惠券为什么用不了？",
+    "expectedReply": "检查门槛、品类、有效期、叠加规则和账号限制。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-006",
+    "topic": "coupon",
+    "customerMessage": "我刚买完就降价了，可以补差价吗？",
+    "expectedReply": "说明价保规则、申请入口、时间限制和审核结果。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-007",
+    "topic": "account",
+    "customerMessage": "登录一直提示验证码错误怎么办？",
+    "expectedReply": "建议刷新验证码、检查邮箱/短信、清缓存、限制频率和人工协助。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-008",
+    "topic": "account",
+    "customerMessage": "注册收不到邮箱验证码",
+    "expectedReply": "检查垃圾箱、邮箱拼写、发送频率、换邮箱和人工补发流程。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-009",
+    "topic": "ai-support",
+    "customerMessage": "你是机器人吗？我想找人工客服",
+    "expectedReply": "承认 AI 助手身份，提供转人工条件并继续收集问题。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-010",
+    "topic": "ai-support",
+    "customerMessage": "客服刚才答非所问，我要投诉",
+    "expectedReply": "道歉、记录问题、升级人工、给出投诉编号或后续时限。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-011",
+    "topic": "order",
+    "customerMessage": "订单显示支付成功但没有生成订单",
+    "expectedReply": "提示支付同步延迟，收集支付单号，建议等待或人工核查。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-012",
+    "topic": "order",
+    "customerMessage": "我想取消其中一个商品，不想取消整单",
+    "expectedReply": "根据拆单和发货状态说明部分取消能力。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-013",
+    "topic": "refund",
+    "customerMessage": "我刚下单就想退款，钱什么时候退？",
+    "expectedReply": "先确认订单状态和支付方式，说明退款路径、到账时效和可协助创建售后单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-014",
+    "topic": "refund",
+    "customerMessage": "商品到了但不想要了，能七天无理由吗？",
+    "expectedReply": "确认商品类目和完好状态，说明七天无理由条件、运费承担和退货步骤。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-015",
+    "topic": "shipping",
+    "customerMessage": "物流三天没动了，是不是丢件？",
+    "expectedReply": "安抚用户，查询物流节点，给出催查、补发或退款的后续承诺。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-016",
+    "topic": "shipping",
+    "customerMessage": "我想改收货地址，还来得及吗？",
+    "expectedReply": "根据发货状态区分可修改、拦截、联系快递和重新下单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-017",
+    "topic": "coupon",
+    "customerMessage": "优惠券为什么用不了？",
+    "expectedReply": "检查门槛、品类、有效期、叠加规则和账号限制。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-018",
+    "topic": "coupon",
+    "customerMessage": "我刚买完就降价了，可以补差价吗？",
+    "expectedReply": "说明价保规则、申请入口、时间限制和审核结果。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-019",
+    "topic": "account",
+    "customerMessage": "登录一直提示验证码错误怎么办？",
+    "expectedReply": "建议刷新验证码、检查邮箱/短信、清缓存、限制频率和人工协助。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-020",
+    "topic": "account",
+    "customerMessage": "注册收不到邮箱验证码",
+    "expectedReply": "检查垃圾箱、邮箱拼写、发送频率、换邮箱和人工补发流程。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-021",
+    "topic": "ai-support",
+    "customerMessage": "你是机器人吗？我想找人工客服",
+    "expectedReply": "承认 AI 助手身份，提供转人工条件并继续收集问题。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-022",
+    "topic": "ai-support",
+    "customerMessage": "客服刚才答非所问，我要投诉",
+    "expectedReply": "道歉、记录问题、升级人工、给出投诉编号或后续时限。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-023",
+    "topic": "order",
+    "customerMessage": "订单显示支付成功但没有生成订单",
+    "expectedReply": "提示支付同步延迟，收集支付单号，建议等待或人工核查。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-024",
+    "topic": "order",
+    "customerMessage": "我想取消其中一个商品，不想取消整单",
+    "expectedReply": "根据拆单和发货状态说明部分取消能力。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-025",
+    "topic": "refund",
+    "customerMessage": "我刚下单就想退款，钱什么时候退？",
+    "expectedReply": "先确认订单状态和支付方式，说明退款路径、到账时效和可协助创建售后单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-026",
+    "topic": "refund",
+    "customerMessage": "商品到了但不想要了，能七天无理由吗？",
+    "expectedReply": "确认商品类目和完好状态，说明七天无理由条件、运费承担和退货步骤。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-027",
+    "topic": "shipping",
+    "customerMessage": "物流三天没动了，是不是丢件？",
+    "expectedReply": "安抚用户，查询物流节点，给出催查、补发或退款的后续承诺。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-028",
+    "topic": "shipping",
+    "customerMessage": "我想改收货地址，还来得及吗？",
+    "expectedReply": "根据发货状态区分可修改、拦截、联系快递和重新下单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-029",
+    "topic": "coupon",
+    "customerMessage": "优惠券为什么用不了？",
+    "expectedReply": "检查门槛、品类、有效期、叠加规则和账号限制。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-030",
+    "topic": "coupon",
+    "customerMessage": "我刚买完就降价了，可以补差价吗？",
+    "expectedReply": "说明价保规则、申请入口、时间限制和审核结果。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-031",
+    "topic": "account",
+    "customerMessage": "登录一直提示验证码错误怎么办？",
+    "expectedReply": "建议刷新验证码、检查邮箱/短信、清缓存、限制频率和人工协助。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-032",
+    "topic": "account",
+    "customerMessage": "注册收不到邮箱验证码",
+    "expectedReply": "检查垃圾箱、邮箱拼写、发送频率、换邮箱和人工补发流程。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-033",
+    "topic": "ai-support",
+    "customerMessage": "你是机器人吗？我想找人工客服",
+    "expectedReply": "承认 AI 助手身份，提供转人工条件并继续收集问题。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-034",
+    "topic": "ai-support",
+    "customerMessage": "客服刚才答非所问，我要投诉",
+    "expectedReply": "道歉、记录问题、升级人工、给出投诉编号或后续时限。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-035",
+    "topic": "order",
+    "customerMessage": "订单显示支付成功但没有生成订单",
+    "expectedReply": "提示支付同步延迟，收集支付单号，建议等待或人工核查。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-036",
+    "topic": "order",
+    "customerMessage": "我想取消其中一个商品，不想取消整单",
+    "expectedReply": "根据拆单和发货状态说明部分取消能力。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-037",
+    "topic": "refund",
+    "customerMessage": "我刚下单就想退款，钱什么时候退？",
+    "expectedReply": "先确认订单状态和支付方式，说明退款路径、到账时效和可协助创建售后单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-038",
+    "topic": "refund",
+    "customerMessage": "商品到了但不想要了，能七天无理由吗？",
+    "expectedReply": "确认商品类目和完好状态，说明七天无理由条件、运费承担和退货步骤。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-039",
+    "topic": "shipping",
+    "customerMessage": "物流三天没动了，是不是丢件？",
+    "expectedReply": "安抚用户，查询物流节点，给出催查、补发或退款的后续承诺。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-040",
+    "topic": "shipping",
+    "customerMessage": "我想改收货地址，还来得及吗？",
+    "expectedReply": "根据发货状态区分可修改、拦截、联系快递和重新下单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-041",
+    "topic": "coupon",
+    "customerMessage": "优惠券为什么用不了？",
+    "expectedReply": "检查门槛、品类、有效期、叠加规则和账号限制。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-042",
+    "topic": "coupon",
+    "customerMessage": "我刚买完就降价了，可以补差价吗？",
+    "expectedReply": "说明价保规则、申请入口、时间限制和审核结果。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-043",
+    "topic": "account",
+    "customerMessage": "登录一直提示验证码错误怎么办？",
+    "expectedReply": "建议刷新验证码、检查邮箱/短信、清缓存、限制频率和人工协助。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-044",
+    "topic": "account",
+    "customerMessage": "注册收不到邮箱验证码",
+    "expectedReply": "检查垃圾箱、邮箱拼写、发送频率、换邮箱和人工补发流程。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-045",
+    "topic": "ai-support",
+    "customerMessage": "你是机器人吗？我想找人工客服",
+    "expectedReply": "承认 AI 助手身份，提供转人工条件并继续收集问题。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-046",
+    "topic": "ai-support",
+    "customerMessage": "客服刚才答非所问，我要投诉",
+    "expectedReply": "道歉、记录问题、升级人工、给出投诉编号或后续时限。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-047",
+    "topic": "order",
+    "customerMessage": "订单显示支付成功但没有生成订单",
+    "expectedReply": "提示支付同步延迟，收集支付单号，建议等待或人工核查。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-048",
+    "topic": "order",
+    "customerMessage": "我想取消其中一个商品，不想取消整单",
+    "expectedReply": "根据拆单和发货状态说明部分取消能力。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-049",
+    "topic": "refund",
+    "customerMessage": "我刚下单就想退款，钱什么时候退？",
+    "expectedReply": "先确认订单状态和支付方式，说明退款路径、到账时效和可协助创建售后单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-050",
+    "topic": "refund",
+    "customerMessage": "商品到了但不想要了，能七天无理由吗？",
+    "expectedReply": "确认商品类目和完好状态，说明七天无理由条件、运费承担和退货步骤。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-051",
+    "topic": "shipping",
+    "customerMessage": "物流三天没动了，是不是丢件？",
+    "expectedReply": "安抚用户，查询物流节点，给出催查、补发或退款的后续承诺。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-052",
+    "topic": "shipping",
+    "customerMessage": "我想改收货地址，还来得及吗？",
+    "expectedReply": "根据发货状态区分可修改、拦截、联系快递和重新下单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-053",
+    "topic": "coupon",
+    "customerMessage": "优惠券为什么用不了？",
+    "expectedReply": "检查门槛、品类、有效期、叠加规则和账号限制。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-054",
+    "topic": "coupon",
+    "customerMessage": "我刚买完就降价了，可以补差价吗？",
+    "expectedReply": "说明价保规则、申请入口、时间限制和审核结果。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-055",
+    "topic": "account",
+    "customerMessage": "登录一直提示验证码错误怎么办？",
+    "expectedReply": "建议刷新验证码、检查邮箱/短信、清缓存、限制频率和人工协助。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-056",
+    "topic": "account",
+    "customerMessage": "注册收不到邮箱验证码",
+    "expectedReply": "检查垃圾箱、邮箱拼写、发送频率、换邮箱和人工补发流程。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-057",
+    "topic": "ai-support",
+    "customerMessage": "你是机器人吗？我想找人工客服",
+    "expectedReply": "承认 AI 助手身份，提供转人工条件并继续收集问题。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-058",
+    "topic": "ai-support",
+    "customerMessage": "客服刚才答非所问，我要投诉",
+    "expectedReply": "道歉、记录问题、升级人工、给出投诉编号或后续时限。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-059",
+    "topic": "order",
+    "customerMessage": "订单显示支付成功但没有生成订单",
+    "expectedReply": "提示支付同步延迟，收集支付单号，建议等待或人工核查。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-060",
+    "topic": "order",
+    "customerMessage": "我想取消其中一个商品，不想取消整单",
+    "expectedReply": "根据拆单和发货状态说明部分取消能力。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-061",
+    "topic": "refund",
+    "customerMessage": "我刚下单就想退款，钱什么时候退？",
+    "expectedReply": "先确认订单状态和支付方式，说明退款路径、到账时效和可协助创建售后单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-062",
+    "topic": "refund",
+    "customerMessage": "商品到了但不想要了，能七天无理由吗？",
+    "expectedReply": "确认商品类目和完好状态，说明七天无理由条件、运费承担和退货步骤。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-063",
+    "topic": "shipping",
+    "customerMessage": "物流三天没动了，是不是丢件？",
+    "expectedReply": "安抚用户，查询物流节点，给出催查、补发或退款的后续承诺。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-064",
+    "topic": "shipping",
+    "customerMessage": "我想改收货地址，还来得及吗？",
+    "expectedReply": "根据发货状态区分可修改、拦截、联系快递和重新下单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-065",
+    "topic": "coupon",
+    "customerMessage": "优惠券为什么用不了？",
+    "expectedReply": "检查门槛、品类、有效期、叠加规则和账号限制。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-066",
+    "topic": "coupon",
+    "customerMessage": "我刚买完就降价了，可以补差价吗？",
+    "expectedReply": "说明价保规则、申请入口、时间限制和审核结果。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-067",
+    "topic": "account",
+    "customerMessage": "登录一直提示验证码错误怎么办？",
+    "expectedReply": "建议刷新验证码、检查邮箱/短信、清缓存、限制频率和人工协助。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-068",
+    "topic": "account",
+    "customerMessage": "注册收不到邮箱验证码",
+    "expectedReply": "检查垃圾箱、邮箱拼写、发送频率、换邮箱和人工补发流程。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-069",
+    "topic": "ai-support",
+    "customerMessage": "你是机器人吗？我想找人工客服",
+    "expectedReply": "承认 AI 助手身份，提供转人工条件并继续收集问题。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-070",
+    "topic": "ai-support",
+    "customerMessage": "客服刚才答非所问，我要投诉",
+    "expectedReply": "道歉、记录问题、升级人工、给出投诉编号或后续时限。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-071",
+    "topic": "order",
+    "customerMessage": "订单显示支付成功但没有生成订单",
+    "expectedReply": "提示支付同步延迟，收集支付单号，建议等待或人工核查。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-072",
+    "topic": "order",
+    "customerMessage": "我想取消其中一个商品，不想取消整单",
+    "expectedReply": "根据拆单和发货状态说明部分取消能力。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-073",
+    "topic": "refund",
+    "customerMessage": "我刚下单就想退款，钱什么时候退？",
+    "expectedReply": "先确认订单状态和支付方式，说明退款路径、到账时效和可协助创建售后单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-074",
+    "topic": "refund",
+    "customerMessage": "商品到了但不想要了，能七天无理由吗？",
+    "expectedReply": "确认商品类目和完好状态，说明七天无理由条件、运费承担和退货步骤。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-075",
+    "topic": "shipping",
+    "customerMessage": "物流三天没动了，是不是丢件？",
+    "expectedReply": "安抚用户，查询物流节点，给出催查、补发或退款的后续承诺。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-076",
+    "topic": "shipping",
+    "customerMessage": "我想改收货地址，还来得及吗？",
+    "expectedReply": "根据发货状态区分可修改、拦截、联系快递和重新下单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-077",
+    "topic": "coupon",
+    "customerMessage": "优惠券为什么用不了？",
+    "expectedReply": "检查门槛、品类、有效期、叠加规则和账号限制。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-078",
+    "topic": "coupon",
+    "customerMessage": "我刚买完就降价了，可以补差价吗？",
+    "expectedReply": "说明价保规则、申请入口、时间限制和审核结果。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-079",
+    "topic": "account",
+    "customerMessage": "登录一直提示验证码错误怎么办？",
+    "expectedReply": "建议刷新验证码、检查邮箱/短信、清缓存、限制频率和人工协助。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-080",
+    "topic": "account",
+    "customerMessage": "注册收不到邮箱验证码",
+    "expectedReply": "检查垃圾箱、邮箱拼写、发送频率、换邮箱和人工补发流程。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-081",
+    "topic": "ai-support",
+    "customerMessage": "你是机器人吗？我想找人工客服",
+    "expectedReply": "承认 AI 助手身份，提供转人工条件并继续收集问题。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-082",
+    "topic": "ai-support",
+    "customerMessage": "客服刚才答非所问，我要投诉",
+    "expectedReply": "道歉、记录问题、升级人工、给出投诉编号或后续时限。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-083",
+    "topic": "order",
+    "customerMessage": "订单显示支付成功但没有生成订单",
+    "expectedReply": "提示支付同步延迟，收集支付单号，建议等待或人工核查。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-084",
+    "topic": "order",
+    "customerMessage": "我想取消其中一个商品，不想取消整单",
+    "expectedReply": "根据拆单和发货状态说明部分取消能力。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-085",
+    "topic": "refund",
+    "customerMessage": "我刚下单就想退款，钱什么时候退？",
+    "expectedReply": "先确认订单状态和支付方式，说明退款路径、到账时效和可协助创建售后单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-086",
+    "topic": "refund",
+    "customerMessage": "商品到了但不想要了，能七天无理由吗？",
+    "expectedReply": "确认商品类目和完好状态，说明七天无理由条件、运费承担和退货步骤。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-087",
+    "topic": "shipping",
+    "customerMessage": "物流三天没动了，是不是丢件？",
+    "expectedReply": "安抚用户，查询物流节点，给出催查、补发或退款的后续承诺。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-088",
+    "topic": "shipping",
+    "customerMessage": "我想改收货地址，还来得及吗？",
+    "expectedReply": "根据发货状态区分可修改、拦截、联系快递和重新下单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-089",
+    "topic": "coupon",
+    "customerMessage": "优惠券为什么用不了？",
+    "expectedReply": "检查门槛、品类、有效期、叠加规则和账号限制。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-090",
+    "topic": "coupon",
+    "customerMessage": "我刚买完就降价了，可以补差价吗？",
+    "expectedReply": "说明价保规则、申请入口、时间限制和审核结果。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-091",
+    "topic": "account",
+    "customerMessage": "登录一直提示验证码错误怎么办？",
+    "expectedReply": "建议刷新验证码、检查邮箱/短信、清缓存、限制频率和人工协助。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-092",
+    "topic": "account",
+    "customerMessage": "注册收不到邮箱验证码",
+    "expectedReply": "检查垃圾箱、邮箱拼写、发送频率、换邮箱和人工补发流程。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-093",
+    "topic": "ai-support",
+    "customerMessage": "你是机器人吗？我想找人工客服",
+    "expectedReply": "承认 AI 助手身份，提供转人工条件并继续收集问题。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-094",
+    "topic": "ai-support",
+    "customerMessage": "客服刚才答非所问，我要投诉",
+    "expectedReply": "道歉、记录问题、升级人工、给出投诉编号或后续时限。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-095",
+    "topic": "order",
+    "customerMessage": "订单显示支付成功但没有生成订单",
+    "expectedReply": "提示支付同步延迟，收集支付单号，建议等待或人工核查。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-096",
+    "topic": "order",
+    "customerMessage": "我想取消其中一个商品，不想取消整单",
+    "expectedReply": "根据拆单和发货状态说明部分取消能力。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-097",
+    "topic": "refund",
+    "customerMessage": "我刚下单就想退款，钱什么时候退？",
+    "expectedReply": "先确认订单状态和支付方式，说明退款路径、到账时效和可协助创建售后单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-098",
+    "topic": "refund",
+    "customerMessage": "商品到了但不想要了，能七天无理由吗？",
+    "expectedReply": "确认商品类目和完好状态，说明七天无理由条件、运费承担和退货步骤。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-099",
+    "topic": "shipping",
+    "customerMessage": "物流三天没动了，是不是丢件？",
+    "expectedReply": "安抚用户，查询物流节点，给出催查、补发或退款的后续承诺。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-100",
+    "topic": "shipping",
+    "customerMessage": "我想改收货地址，还来得及吗？",
+    "expectedReply": "根据发货状态区分可修改、拦截、联系快递和重新下单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-101",
+    "topic": "coupon",
+    "customerMessage": "优惠券为什么用不了？",
+    "expectedReply": "检查门槛、品类、有效期、叠加规则和账号限制。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-102",
+    "topic": "coupon",
+    "customerMessage": "我刚买完就降价了，可以补差价吗？",
+    "expectedReply": "说明价保规则、申请入口、时间限制和审核结果。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-103",
+    "topic": "account",
+    "customerMessage": "登录一直提示验证码错误怎么办？",
+    "expectedReply": "建议刷新验证码、检查邮箱/短信、清缓存、限制频率和人工协助。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-104",
+    "topic": "account",
+    "customerMessage": "注册收不到邮箱验证码",
+    "expectedReply": "检查垃圾箱、邮箱拼写、发送频率、换邮箱和人工补发流程。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-105",
+    "topic": "ai-support",
+    "customerMessage": "你是机器人吗？我想找人工客服",
+    "expectedReply": "承认 AI 助手身份，提供转人工条件并继续收集问题。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-106",
+    "topic": "ai-support",
+    "customerMessage": "客服刚才答非所问，我要投诉",
+    "expectedReply": "道歉、记录问题、升级人工、给出投诉编号或后续时限。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-107",
+    "topic": "order",
+    "customerMessage": "订单显示支付成功但没有生成订单",
+    "expectedReply": "提示支付同步延迟，收集支付单号，建议等待或人工核查。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-108",
+    "topic": "order",
+    "customerMessage": "我想取消其中一个商品，不想取消整单",
+    "expectedReply": "根据拆单和发货状态说明部分取消能力。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-109",
+    "topic": "refund",
+    "customerMessage": "我刚下单就想退款，钱什么时候退？",
+    "expectedReply": "先确认订单状态和支付方式，说明退款路径、到账时效和可协助创建售后单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-110",
+    "topic": "refund",
+    "customerMessage": "商品到了但不想要了，能七天无理由吗？",
+    "expectedReply": "确认商品类目和完好状态，说明七天无理由条件、运费承担和退货步骤。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-111",
+    "topic": "shipping",
+    "customerMessage": "物流三天没动了，是不是丢件？",
+    "expectedReply": "安抚用户，查询物流节点，给出催查、补发或退款的后续承诺。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-112",
+    "topic": "shipping",
+    "customerMessage": "我想改收货地址，还来得及吗？",
+    "expectedReply": "根据发货状态区分可修改、拦截、联系快递和重新下单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-113",
+    "topic": "coupon",
+    "customerMessage": "优惠券为什么用不了？",
+    "expectedReply": "检查门槛、品类、有效期、叠加规则和账号限制。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-114",
+    "topic": "coupon",
+    "customerMessage": "我刚买完就降价了，可以补差价吗？",
+    "expectedReply": "说明价保规则、申请入口、时间限制和审核结果。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-115",
+    "topic": "account",
+    "customerMessage": "登录一直提示验证码错误怎么办？",
+    "expectedReply": "建议刷新验证码、检查邮箱/短信、清缓存、限制频率和人工协助。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-116",
+    "topic": "account",
+    "customerMessage": "注册收不到邮箱验证码",
+    "expectedReply": "检查垃圾箱、邮箱拼写、发送频率、换邮箱和人工补发流程。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-117",
+    "topic": "ai-support",
+    "customerMessage": "你是机器人吗？我想找人工客服",
+    "expectedReply": "承认 AI 助手身份，提供转人工条件并继续收集问题。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-118",
+    "topic": "ai-support",
+    "customerMessage": "客服刚才答非所问，我要投诉",
+    "expectedReply": "道歉、记录问题、升级人工、给出投诉编号或后续时限。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-119",
+    "topic": "order",
+    "customerMessage": "订单显示支付成功但没有生成订单",
+    "expectedReply": "提示支付同步延迟，收集支付单号，建议等待或人工核查。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-120",
+    "topic": "order",
+    "customerMessage": "我想取消其中一个商品，不想取消整单",
+    "expectedReply": "根据拆单和发货状态说明部分取消能力。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-121",
+    "topic": "refund",
+    "customerMessage": "我刚下单就想退款，钱什么时候退？",
+    "expectedReply": "先确认订单状态和支付方式，说明退款路径、到账时效和可协助创建售后单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-122",
+    "topic": "refund",
+    "customerMessage": "商品到了但不想要了，能七天无理由吗？",
+    "expectedReply": "确认商品类目和完好状态，说明七天无理由条件、运费承担和退货步骤。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-123",
+    "topic": "shipping",
+    "customerMessage": "物流三天没动了，是不是丢件？",
+    "expectedReply": "安抚用户，查询物流节点，给出催查、补发或退款的后续承诺。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-124",
+    "topic": "shipping",
+    "customerMessage": "我想改收货地址，还来得及吗？",
+    "expectedReply": "根据发货状态区分可修改、拦截、联系快递和重新下单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-125",
+    "topic": "coupon",
+    "customerMessage": "优惠券为什么用不了？",
+    "expectedReply": "检查门槛、品类、有效期、叠加规则和账号限制。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-126",
+    "topic": "coupon",
+    "customerMessage": "我刚买完就降价了，可以补差价吗？",
+    "expectedReply": "说明价保规则、申请入口、时间限制和审核结果。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-127",
+    "topic": "account",
+    "customerMessage": "登录一直提示验证码错误怎么办？",
+    "expectedReply": "建议刷新验证码、检查邮箱/短信、清缓存、限制频率和人工协助。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-128",
+    "topic": "account",
+    "customerMessage": "注册收不到邮箱验证码",
+    "expectedReply": "检查垃圾箱、邮箱拼写、发送频率、换邮箱和人工补发流程。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-129",
+    "topic": "ai-support",
+    "customerMessage": "你是机器人吗？我想找人工客服",
+    "expectedReply": "承认 AI 助手身份，提供转人工条件并继续收集问题。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-130",
+    "topic": "ai-support",
+    "customerMessage": "客服刚才答非所问，我要投诉",
+    "expectedReply": "道歉、记录问题、升级人工、给出投诉编号或后续时限。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-131",
+    "topic": "order",
+    "customerMessage": "订单显示支付成功但没有生成订单",
+    "expectedReply": "提示支付同步延迟，收集支付单号，建议等待或人工核查。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-132",
+    "topic": "order",
+    "customerMessage": "我想取消其中一个商品，不想取消整单",
+    "expectedReply": "根据拆单和发货状态说明部分取消能力。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-133",
+    "topic": "refund",
+    "customerMessage": "我刚下单就想退款，钱什么时候退？",
+    "expectedReply": "先确认订单状态和支付方式，说明退款路径、到账时效和可协助创建售后单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-134",
+    "topic": "refund",
+    "customerMessage": "商品到了但不想要了，能七天无理由吗？",
+    "expectedReply": "确认商品类目和完好状态，说明七天无理由条件、运费承担和退货步骤。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-135",
+    "topic": "shipping",
+    "customerMessage": "物流三天没动了，是不是丢件？",
+    "expectedReply": "安抚用户，查询物流节点，给出催查、补发或退款的后续承诺。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-136",
+    "topic": "shipping",
+    "customerMessage": "我想改收货地址，还来得及吗？",
+    "expectedReply": "根据发货状态区分可修改、拦截、联系快递和重新下单。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-137",
+    "topic": "coupon",
+    "customerMessage": "优惠券为什么用不了？",
+    "expectedReply": "检查门槛、品类、有效期、叠加规则和账号限制。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-138",
+    "topic": "coupon",
+    "customerMessage": "我刚买完就降价了，可以补差价吗？",
+    "expectedReply": "说明价保规则、申请入口、时间限制和审核结果。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-139",
+    "topic": "account",
+    "customerMessage": "登录一直提示验证码错误怎么办？",
+    "expectedReply": "建议刷新验证码、检查邮箱/短信、清缓存、限制频率和人工协助。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-140",
+    "topic": "account",
+    "customerMessage": "注册收不到邮箱验证码",
+    "expectedReply": "检查垃圾箱、邮箱拼写、发送频率、换邮箱和人工补发流程。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-141",
+    "topic": "ai-support",
+    "customerMessage": "你是机器人吗？我想找人工客服",
+    "expectedReply": "承认 AI 助手身份，提供转人工条件并继续收集问题。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "thinking"
+  },
+  {
+    "id": "cs-case-142",
+    "topic": "ai-support",
+    "customerMessage": "客服刚才答非所问，我要投诉",
+    "expectedReply": "道歉、记录问题、升级人工、给出投诉编号或后续时限。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-143",
+    "topic": "order",
+    "customerMessage": "订单显示支付成功但没有生成订单",
+    "expectedReply": "提示支付同步延迟，收集支付单号，建议等待或人工核查。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  },
+  {
+    "id": "cs-case-144",
+    "topic": "order",
+    "customerMessage": "我想取消其中一个商品，不想取消整单",
+    "expectedReply": "根据拆单和发货状态说明部分取消能力。",
+    "scoring": {
+      "mustHave": [
+        "安抚用户",
+        "给出下一步",
+        "不编造订单状态"
+      ],
+      "avoid": [
+        "承诺无法保证的赔偿",
+        "要求用户提供敏感密码",
+        "直接拒绝处理"
+      ]
+    },
+    "suggestedModelTier": "flash-lite"
+  }
+]

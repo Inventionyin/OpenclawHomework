@@ -1,0 +1,82 @@
+[
+  {
+    "id": "mail-01",
+    "mailbox": "watchee.task@claw.163.com",
+    "action": "收到“run smoke main”邮件后触发 GitHub Actions UI 自动化",
+    "actionName": "task",
+    "inputExample": "run smoke main",
+    "output": "结构化摘要邮件"
+  },
+  {
+    "id": "mail-02",
+    "mailbox": "watchee.report@claw.163.com",
+    "action": "接收 UI 自动化成功/失败摘要和 Allure 链接",
+    "actionName": "report",
+    "inputExample": "请归档 report 相关结果",
+    "output": "结构化摘要邮件"
+  },
+  {
+    "id": "mail-03",
+    "mailbox": "evasan.verify@claw.163.com",
+    "action": "作为电商注册、登录、找回密码验证码测试收件箱",
+    "actionName": "verify",
+    "inputExample": "请归档 verify 相关结果",
+    "output": "验证码记录和注册结果"
+  },
+  {
+    "id": "mail-04",
+    "mailbox": "evasan.account@claw.163.com",
+    "action": "归档账号体系专项测试结果",
+    "actionName": "account",
+    "inputExample": "请归档 account 相关结果",
+    "output": "结构化摘要邮件"
+  },
+  {
+    "id": "mail-05",
+    "mailbox": "evasan.shop@claw.163.com",
+    "action": "归档商品、购物车、订单、支付链路专项结果",
+    "actionName": "shop",
+    "inputExample": "请归档 shop 相关结果",
+    "output": "结构化摘要邮件"
+  },
+  {
+    "id": "mail-06",
+    "mailbox": "agent4.support@claw.163.com",
+    "action": "模拟买家客服邮件，Hermes 分类并生成回复草稿",
+    "actionName": "support",
+    "inputExample": "请归档 support 相关结果",
+    "output": "结构化摘要邮件"
+  },
+  {
+    "id": "mail-07",
+    "mailbox": "hagent.eval@claw.163.com",
+    "action": "接收 Agent 评测任务、评分结果和模型对比",
+    "actionName": "eval",
+    "inputExample": "请归档 eval 相关结果",
+    "output": "结构化摘要邮件"
+  },
+  {
+    "id": "mail-08",
+    "mailbox": "agent3.files@claw.163.com",
+    "action": "保存截图、trace、video、Allure artifact 链接",
+    "actionName": "files",
+    "inputExample": "请归档 files 相关结果",
+    "output": "结构化摘要邮件"
+  },
+  {
+    "id": "mail-09",
+    "mailbox": "agent3.archive@claw.163.com",
+    "action": "归档训练语料、失败样本、日报和复盘材料",
+    "actionName": "archive",
+    "inputExample": "请归档 archive 相关结果",
+    "output": "结构化摘要邮件"
+  },
+  {
+    "id": "mail-10",
+    "mailbox": "agent4.daily@claw.163.com",
+    "action": "每天凌晨接收服务器状态、测试趋势和失败摘要",
+    "actionName": "daily",
+    "inputExample": "请归档 daily 相关结果",
+    "output": "结构化摘要邮件"
+  }
+]

@@ -46,3 +46,19 @@ test('resolveMailboxAction returns second-phase business mailbox metadata', () =
   assert.equal(shop.enabled, true);
   assert.equal(support.enabled, true);
 });
+
+test('resolveMailboxAction returns QA training and mailbox dispatch metadata', () => {
+  const task = resolveMailboxAction('task');
+  const evalAction = resolveMailboxAction('eval');
+  const verify = resolveMailboxAction('verify');
+  const archive = resolveMailboxAction('archive');
+
+  assert.equal(task.mailbox, 'watchee.task@claw.163.com');
+  assert.equal(evalAction.mailbox, 'hagent.eval@claw.163.com');
+  assert.equal(verify.mailbox, 'evasan.verify@claw.163.com');
+  assert.equal(archive.mailbox, 'agent3.archive@claw.163.com');
+  assert.equal(task.enabled, true);
+  assert.equal(evalAction.enabled, true);
+  assert.equal(verify.enabled, true);
+  assert.equal(archive.enabled, true);
+});
