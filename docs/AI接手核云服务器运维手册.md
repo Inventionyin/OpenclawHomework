@@ -271,6 +271,46 @@ TXT   _dmarc            v=DMARC1; p=none; rua=mailto:admin@evanshine.me; adkim=s
 - 当前唯一未完成的邮件信誉项是 PTR 反向解析：`38.76.188.94 -> mail.evanshine.me`。
 - 邮件系统出问题时，先确认 `hermes-feishu-bridge` 和 `hermes-gateway` 是否仍正常，避免把邮件容器问题误判为 Hermes 主链路问题。
 
+## 2.4 2026-05-05 邮件链路现状与推荐矩阵
+
+当前两台桥梁服务都已经升级到支持 `REPORT_SMTP_*` 和 `MAIL_ACTION_PROVIDER_OVERRIDES` 的版本：
+
+```text
+OpenClaw 服务器 38.76.178.91 -> e31dab0
+Hermes   服务器 38.76.188.94 -> e31dab0
+```
+
+2026-05-05 当天实际联调结论：
+
+- OpenClaw：默认 QQ SMTP 真实发 `report` 成功，SMTP 返回 `250 OK: queued as.`
+- OpenClaw：`daily` 调用链路无报错，桥梁服务健康正常
+- Hermes：`report@evanshine.me` 可成功通过 `mail.evanshine.me:587` 认证登录
+- Hermes：当 `daily/report` 强制走 `evanshine.me` 第二 SMTP，并继续投递到 `claw.163.com` 收件域时，邮件会卡在自建邮局外发队列，错误表现为连接对端 MX `25` 端口超时
+- 因此当前生产推荐仍是：`daily/report` 默认走 QQ SMTP；`evanshine.me` 先保留为第二 SMTP 能力储备，不在生产上强制覆盖
+
+推荐矩阵：
+
+| 用途 | 推荐通道 | 当前是否可用 | 风险 / 备注 |
+| --- | --- | --- | --- |
+| `report` 正式报告 | 默认 QQ SMTP | 可用 | OpenClaw 已真实联调成功；当前最稳 |
+| `daily` 日报 | 默认 QQ SMTP | 可用 | 当前推荐继续走默认 SMTP，不强制切 `evanshine.me` |
+| `report` 品牌域名发件身份 | `evanshine.me` 第二 SMTP | 部分可用 | 应用到自建邮局这一步是通的；继续向 `claw.163.com` 外发会受目标 MX `25` 连接影响 |
+| `daily` 品牌域名发件身份 | `evanshine.me` 第二 SMTP | 暂不建议生产启用 | 同上，当前测试到 `agent4.daily@claw.163.com` 会在自建邮局外发阶段超时 |
+| `verify` 注册 / 验证码 | ClawEmail mailbox action | 可用 | 用 `evasan.verify@claw.163.com`；这是收件 / 动作入口，不依赖 `evanshine.me` |
+| `files` 附件 / artifact | ClawEmail mailbox action | 可用 | `agent3.files@claw.163.com`，只做收件与归档提示 |
+| `archive` 归档 / 训练样本 | ClawEmail mailbox action | 可用 | `agent3.archive@claw.163.com`，不建议改到外部 SMTP |
+| `account` / `shop` / `support` 业务动作 | ClawEmail mailbox action | 可用 | 继续按动作邮箱收件，不建议为了品牌域名去强制改发件通道 |
+| QQ 外部收件测试 | 默认 QQ SMTP | 可用 | 当前最稳定、最适合作为生产兜底 |
+| `evanshine.me` 域内收件 | 自建邮箱系统 | 可用 | 自建域内投递正常，适合内部品牌邮箱、测试和身份储备 |
+
+操作建议：
+
+```text
+短期生产：保持默认 QQ SMTP 发送 report / daily
+中期优化：为 evanshine.me 增加专业 SMTP 中继 / smarthost，再考虑把 report 改回品牌域名发件
+长期观察：补齐 PTR，持续观察自建邮局直投外部域的稳定性，但不要把 PTR 当成短期必然修复手段
+```
+
 阿里云 2H2G 服务器建议只做轻量辅助，不建议跑第二套完整邮件服务器。适合的用途：
 
 ```text
