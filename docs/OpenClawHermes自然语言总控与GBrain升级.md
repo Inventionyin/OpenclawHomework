@@ -119,6 +119,7 @@ bash scripts/sync-gbrain-knowledge.sh
 - `workbench`：汇总文员当天可做的低风险工作，把 token 账本、QA 数据、daily/archive 邮箱入口串起来。
 - `mailbox-workbench`：列出 ClawEmail 动作分工，例如 `task/report/verify/support/eval/files/archive/daily`。
 - `training-data`：把电商客服训练数据、Agent 评测题和邮箱归档动作组织成训练工作流。
+- `token-lab`：启动高 token 训练场，批量调用 LongCat 生成/质检 QA 资产，写 token 账本，并归档到邮箱动作。
 - `todo-summary`：给出待办整理模板和下一步清单，不执行危险动作。
 - `daily-report`：给出日报结构，后续可接定时任务和邮箱发送。
 - `daily-email`：只有明确说“发送日报到邮箱”时，才调用邮件发送，把日报发到 `daily` 邮箱动作。
@@ -129,6 +130,7 @@ bash scripts/sync-gbrain-knowledge.sh
 - 文员，今天可以帮我干嘛
 - 文员，邮箱平台现在怎么结合起来玩
 - 文员，帮我生成一批电商平台客服训练数据
+- 文员，启动高 token 训练场
 - 文员，发送今天日报到邮箱
 
 第二阶段再接入自动调度：

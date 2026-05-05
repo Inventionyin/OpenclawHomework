@@ -348,6 +348,18 @@ function buildClerkAgentReply(route = {}, options = {}) {
     return buildClerkTrainingDataReply();
   }
 
+  if (route.action === 'token-lab') {
+    return [
+      '文员高 token 训练场：',
+      '- 用 LongCat 批量生成电商客服、Agent 评测、UI 自动化、邮箱调度样本。',
+      '- 每次模型调用都会写入 token/耗时账本；没有 usage 时会做字符估算。',
+      '- 产物会写到 data/qa-token-lab，并把摘要归档到 archive/eval/report 邮箱动作。',
+      '- 默认小批量运行；要加大火力可以配置 QA_TOKEN_LAB_BATCH_SIZE。',
+      '',
+      '启动口令：文员，启动高 token 训练场。',
+    ].join('\n');
+  }
+
   if (route.action === 'todo-summary') {
     return [
       '文员待办整理：',

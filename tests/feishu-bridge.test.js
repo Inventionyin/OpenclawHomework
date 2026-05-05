@@ -876,6 +876,62 @@ test('buildRoutedAgentReply can send clerk daily summary email when explicitly r
   assert.match(reply.replyText, /agent4\.daily@claw\.163\.com/);
 });
 
+test('buildRoutedAgentReply can run clerk token lab when explicitly requested', async () => {
+  const sent = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-clerk-token-lab',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '文员，启动高 token 训练场' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      QA_TOKEN_LAB_BATCH_SIZE: '2',
+    },
+    {
+      tokenLabRunner: async (runnerOptions) => {
+        await runnerOptions.emailSender({ action: 'archive', mailbox: 'agent3.archive@claw.163.com' });
+        sent.push('runner-called');
+        return {
+          report: {
+            totalJobs: 2,
+            totalTokens: 300,
+            estimatedTotalTokens: 0,
+            text: 'QA Token Lab 训练场报告',
+          },
+          files: {
+            report: '/tmp/qa-token-lab/report.md',
+            items: '/tmp/qa-token-lab/items.json',
+          },
+          emailMessages: [
+            { action: 'archive', mailbox: 'agent3.archive@claw.163.com' },
+          ],
+        };
+      },
+      emailSender: async (message) => {
+        sent.push(message.action);
+        return { sent: true };
+      },
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.deepEqual(sent, ['archive', 'runner-called']);
+  assert.match(reply.replyText, /高 token 训练场已完成/);
+  assert.match(reply.replyText, /2/);
+  assert.match(reply.replyText, /300/);
+  assert.match(reply.replyText, /report\.md/);
+});
+
 test('sendFeishuTextMessage fetches tenant token and sends text message', async () => {
   const calls = [];
   await sendFeishuTextMessage(

@@ -142,6 +142,14 @@ test('buildClerkAgentReply turns training data into a clerk workflow', () => {
   assert.match(reply, /agent3\.archive@claw\.163\.com/);
 });
 
+test('buildClerkAgentReply explains token lab before execution', () => {
+  const reply = buildClerkAgentReply({ action: 'token-lab' });
+  assert.match(reply, /高 token 训练场/);
+  assert.match(reply, /LongCat/);
+  assert.match(reply, /archive/);
+  assert.match(reply, /eval/);
+});
+
 test('buildDocAgentReply answers project progress from memory', () => {
   const memoryContext = [
     '# Memory Context',

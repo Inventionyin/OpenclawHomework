@@ -222,6 +222,12 @@ function routeClerkIntent(text) {
     return { agent: 'clerk-agent', action: 'training-data', requiresAuth: true };
   }
 
+  if (/(启动|开始|跑|执行|开).{0,12}(高\s*token|token).{0,20}(训练场|实验室|lab|额度|数据|训练|烧|消耗)/i.test(normalized)
+    || /(高\s*token|token).{0,20}(训练场|实验室|lab|额度|烧|消耗)/i.test(normalized)
+    || /(烧|消耗|花完).{0,12}(token|额度).{0,20}(训练|数据|训练场)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'token-lab', requiresAuth: true };
+  }
+
   if (/(token|耗时|用量|账本|谁更费|谁更省|统计|对比)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'token-summary', requiresAuth: true };
   }

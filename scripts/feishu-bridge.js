@@ -49,6 +49,9 @@ const {
   editImage,
   generateImage,
 } = require('./image-client');
+const {
+  runTokenLab,
+} = require('./qa-token-lab');
 
 const VALID_RUN_MODES = new Set(['contracts', 'smoke', 'all']);
 let openClawCliQueue = Promise.resolve();
@@ -2602,6 +2605,33 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
   }
 
   if (route.agent === 'clerk-agent') {
+    if (route.action === 'token-lab') {
+      const tokenLabRunner = options.tokenLabRunner || ((runnerOptions) => runTokenLab(runnerOptions));
+      const result = await tokenLabRunner({
+        env,
+        batchSize: env.QA_TOKEN_LAB_BATCH_SIZE,
+        outputDir: env.QA_TOKEN_LAB_OUTPUT_DIR,
+        emailSender: options.emailSender
+          ? (message, senderEnv) => options.emailSender(message, senderEnv)
+          : (message, senderEnv) => sendMailboxActionEmail(message, senderEnv, options),
+      });
+      const report = result.report || {};
+      const files = result.files || {};
+      return {
+        handled: true,
+        replyText: [
+          '高 token 训练场已完成。',
+          `- 任务数：${report.totalJobs || 0}`,
+          `- 真实 token：${report.totalTokens || 0}`,
+          report.estimatedTotalTokens ? `- 字符估算 token：${report.estimatedTotalTokens}` : null,
+          files.report ? `- 报告：${files.report}` : null,
+          files.items ? `- 产物：${files.items}` : null,
+          '',
+          '摘要已按邮箱动作归档；你可以继续说：文员，统计今天 Hermes 和 OpenClaw 谁更费 token。',
+        ].filter(Boolean).join('\n'),
+      };
+    }
+
     if (route.action === 'daily-email') {
       const messages = await sendDailySummaryNotification([], env, options);
       const mailbox = messages[0]?.mailbox || 'daily 邮箱';
