@@ -21,6 +21,7 @@ const {
   buildChatAgentPrompt,
   buildClerkAgentReply,
   buildDocAgentReply,
+  buildImageChannelReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,
   buildPlannerClarifyReply,
@@ -59,6 +60,11 @@ const {
 const {
   runMultiAgentLab,
 } = require('./multi-agent-lab');
+const {
+  formatTokenFactoryTask,
+  getTokenFactoryTaskStatus,
+  startTokenFactoryTask,
+} = require('./task-runner');
 
 const VALID_RUN_MODES = new Set(['contracts', 'smoke', 'all']);
 let openClawCliQueue = Promise.resolve();
@@ -1631,6 +1637,73 @@ function parseEmailRecipients(value) {
     .filter(Boolean);
 }
 
+async function applyImageChannelSwitch(route, env = process.env, options = {}) {
+  const config = route.config || {};
+  if (!config.url || !config.apiKey) {
+    return buildImageChannelReply(route);
+  }
+  const envFile = options.envFile || env.FEISHU_ENV_FILE;
+  if (!envFile) {
+    return [
+      '我识别到你要切换生图通道，但这次还没写入配置。',
+      '原因：当前服务没有配置 FEISHU_ENV_FILE，无法定位环境变量文件。',
+    ].join('\n');
+  }
+
+  const writer = options.envWriter || upsertEnvFileValue;
+  writer(envFile, 'IMAGE_MODEL_BASE_URL', config.url);
+  writer(envFile, 'IMAGE_MODEL_API_KEY', config.apiKey);
+  writer(envFile, 'IMAGE_MODEL_ID', config.model || 'auto');
+  writer(envFile, 'IMAGE_MODEL_SIZE', config.size || '1024x1024');
+
+  const fetchImpl = options.fetchImpl || fetch;
+  let modelsStatus = '未测试';
+  try {
+    const response = await fetchImpl(`${String(config.url).replace(/\/+$/, '')}/v1/models`, {
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+    });
+    modelsStatus = response.ok ? '通过' : `失败 ${response.status}`;
+  } catch (error) {
+    modelsStatus = `失败：${error.message}`;
+  }
+
+  const serviceName = options.serviceName || getLocalBridgeService(env);
+  let restartStatus = '未重启';
+  const shouldRestart = String(options.restart ?? env.IMAGE_CHANNEL_AUTO_RESTART ?? 'true').toLowerCase() !== 'false';
+  if (shouldRestart) {
+    const restart = options.restartService || ((service) => {
+      setTimeout(() => {
+        execFilePromise('systemctl', ['restart', service], { timeout: 30000 })
+          .catch((error) => console.error(`Image channel restart failed: ${error.message}`));
+      }, Number(env.IMAGE_CHANNEL_RESTART_DELAY_MS || 1200));
+    });
+    restart(serviceName);
+    restartStatus = `已安排重启 ${serviceName}`;
+  }
+
+  return [
+    '生图通道配置已写入。',
+    `- URL：${config.url}`,
+    `- Key：${config.maskedApiKey}`,
+    `- Model：${config.model || 'auto'}`,
+    `- Size：${config.size || '1024x1024'}`,
+    `- /v1/models：${modelsStatus}`,
+    `- 重启：${restartStatus}`,
+  ].join('\n');
+}
+
+function buildTokenFactoryBackgroundReply(task) {
+  return [
+    'token-factory 已创建后台任务。',
+    `- 任务 ID：${task.id}`,
+    `- 状态：${task.status}`,
+    '我会在后台跑高 token 训练场和多 Agent 训练场。',
+    '你可以说：文员，查看 token-factory 状态。',
+  ].join('\n');
+}
+
 function mergeEmailRecipients(...groups) {
   const merged = [];
   const seen = new Set();
@@ -2824,6 +2897,13 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
   }
 
   if (route.agent === 'clerk-agent') {
+    if (route.action === 'token-factory-status') {
+      return {
+        handled: true,
+        replyText: formatTokenFactoryTask(getTokenFactoryTaskStatus(env, route.taskId)),
+      };
+    }
+
     if (route.action === 'token-factory') {
       if (options.receiptSender) {
         await sendTimedFeishuMessage(
@@ -2839,17 +2919,7 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
           console.error(`Feishu token factory receipt failed: ${error.message}`);
         });
       }
-
       const tokenLabRunner = options.tokenLabRunner || ((runnerOptions) => runTokenLab(runnerOptions));
-      const tokenLabResult = await tokenLabRunner({
-        env,
-        batchSize: env.QA_TOKEN_LAB_BATCH_SIZE,
-        outputDir: env.QA_TOKEN_LAB_OUTPUT_DIR,
-        emailSender: options.emailSender
-          ? (message, senderEnv) => options.emailSender(message, senderEnv)
-          : (message, senderEnv) => sendMailboxActionEmail(message, senderEnv, options),
-      });
-
       const multiAgentLabRunner = options.multiAgentLabRunner || (async (runnerOptions) => {
         const base = await runMultiAgentLab(runnerOptions);
         return {
@@ -2864,37 +2934,23 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
           files: base.files || {},
         };
       });
-      const multiAgentResult = await multiAgentLabRunner({
+      const emailSender = options.emailSender
+        ? (message, senderEnv) => options.emailSender(message, senderEnv)
+        : (message, senderEnv) => sendMailboxActionEmail(message, senderEnv, options);
+      const starter = options.tokenFactoryStarter || ((starterOptions) => startTokenFactoryTask(starterOptions));
+      const started = starter({
         env,
-        batchSize: env.MULTI_AGENT_LAB_BATCH_SIZE || env.QA_TOKEN_LAB_BATCH_SIZE,
-        outputDir: env.MULTI_AGENT_LAB_OUTPUT_DIR || env.QA_TOKEN_LAB_OUTPUT_DIR,
-        emailSender: options.emailSender
-          ? (message, senderEnv) => options.emailSender(message, senderEnv)
-          : (message, senderEnv) => sendMailboxActionEmail(message, senderEnv, options),
+        tokenLabRunner,
+        multiAgentLabRunner,
+        emailSender,
       });
-
-      const tokenReport = tokenLabResult.report || {};
-      const tokenFiles = tokenLabResult.files || {};
-      const multiSummary = multiAgentResult.summary || {};
-      const multiFiles = multiAgentResult.files || {};
-      const totalRealTokens = Number(tokenReport.totalTokens || 0) + Number(multiSummary.totalTokens || 0);
-      const totalEstimatedTokens = Number(tokenReport.estimatedTotalTokens || 0) + Number(multiSummary.estimatedTotalTokens || 0);
+      if (started.promise && options.trackBackgroundTasks) {
+        options.trackBackgroundTasks.push(started.promise);
+      }
 
       return {
         handled: true,
-        replyText: [
-          '整套 token 工厂已完成（高 token 训练场 + 多 Agent 训练场）。',
-          `- 训练场任务数：${tokenReport.totalJobs || 0}`,
-          `- 训练场样本数：${multiSummary.totalItems || 0}`,
-          `- 真实 token：${totalRealTokens}`,
-          totalEstimatedTokens ? `- 估算 token：${totalEstimatedTokens}` : null,
-          multiSummary.winner ? `- 赢家：${multiSummary.winner}` : null,
-          tokenFiles.report ? `- token 训练场报告：${tokenFiles.report}` : null,
-          tokenFiles.items ? `- token 训练场产物：${tokenFiles.items}` : null,
-          multiFiles.report ? `- 多 Agent 报告：${multiFiles.report}` : null,
-          multiFiles.items ? `- 多 Agent 产物：${multiFiles.items}` : null,
-          multiFiles.summary ? `- 多 Agent 摘要：${multiFiles.summary}` : null,
-        ].filter(Boolean).join('\n'),
+        replyText: buildTokenFactoryBackgroundReply(started.task),
       };
     }
 
@@ -3057,6 +3113,14 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
       return {
         handled: true,
         replyText: getUnauthorizedMessage(env),
+      };
+    }
+    if (route.action === 'image-channel-clarify' || route.action === 'image-channel-switch') {
+      return {
+        handled: true,
+        replyText: route.action === 'image-channel-switch'
+          ? await applyImageChannelSwitch(route, env, options)
+          : buildImageChannelReply(route),
       };
     }
     return buildImageAgentReply(payload, text, env, options, route);

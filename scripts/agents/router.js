@@ -1,3 +1,7 @@
+const {
+  parseImageChannelConfig,
+} = require('../image-channel-config');
+
 function normalizeText(text) {
   return extractCommandText(stripMention(String(text ?? '').trim()));
 }
@@ -260,6 +264,17 @@ function routeClerkIntent(text) {
     return { agent: 'clerk-agent', action: 'token-factory', requiresAuth: true };
   }
 
+  if (/(token.?factory|token\s*工厂).{0,20}(状态|进度|跑到哪|怎么样|查询|查看)/i.test(normalized)
+    || /(状态|进度|跑到哪|怎么样|查询|查看).{0,20}(token.?factory|token\s*工厂)/i.test(normalized)) {
+    const taskMatch = original.match(/\b(tf-[a-z0-9-]+)\b/i);
+    return {
+      agent: 'clerk-agent',
+      action: 'token-factory-status',
+      ...(taskMatch ? { taskId: taskMatch[1] } : {}),
+      requiresAuth: true,
+    };
+  }
+
   if (/(启动|开始|跑|执行|开).{0,12}(高\s*token|token).{0,20}(训练场|实验室|lab|额度|数据|训练|烧|消耗)/i.test(normalized)
     || /(高\s*token|token).{0,20}(训练场|实验室|lab|额度|烧|消耗)/i.test(normalized)
     || /(烧|消耗|花完).{0,12}(token|额度).{0,20}(训练|数据|训练场)/i.test(normalized)) {
@@ -437,6 +452,25 @@ function routeAgentIntent(text) {
   const brainMemoryRoute = routeBrainMemoryIntent(original);
   if (brainMemoryRoute) {
     return brainMemoryRoute;
+  }
+
+  const imageChannel = parseImageChannelConfig(original);
+  if (imageChannel.hasCandidateFields) {
+    return {
+      agent: 'image-agent',
+      action: imageChannel.confidence === 'high' ? 'image-channel-switch' : 'image-channel-clarify',
+      confidence: imageChannel.confidence,
+      config: {
+        url: imageChannel.url,
+        apiKey: imageChannel.apiKey,
+        maskedApiKey: imageChannel.maskedApiKey,
+        model: imageChannel.model,
+        size: imageChannel.size,
+        scope: imageChannel.scope,
+      },
+      missing: imageChannel.missing,
+      requiresAuth: true,
+    };
   }
 
   if (looksLikeImageGenerationRequest(normalized)) {

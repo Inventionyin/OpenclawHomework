@@ -567,6 +567,29 @@ function buildClerkAgentReply(route = {}, options = {}) {
   ].join('\n');
 }
 
+function buildImageChannelReply(route = {}) {
+  const config = route.config || {};
+  const lines = [];
+  if (route.action === 'image-channel-switch') {
+    lines.push('我识别到你要切换生图通道。');
+    lines.push(`- URL：${config.url || '未提供'}`);
+    lines.push(`- Key：${config.maskedApiKey || '未提供'}`);
+    lines.push(`- Model：${config.model || 'auto'}`);
+    lines.push(`- Size：${config.size || '1024x1024'}`);
+    lines.push(`- Scope：${config.scope || 'both'}`);
+    lines.push('下一步会写入对应桥服务环境变量、重启服务，并自动测试 /v1/models 和生图接口。');
+    return lines.join('\n');
+  }
+
+  lines.push('我注意到你发了生图通道配置，但这次先不替换。');
+  lines.push(`- 置信度：${route.confidence || 'low'}`);
+  if (config.url) lines.push(`- URL：${config.url}`);
+  if (config.maskedApiKey) lines.push(`- Key：${config.maskedApiKey}`);
+  if (route.missing?.length) lines.push(`- 缺少字段：${route.missing.join(', ')}`);
+  lines.push('你可以直接说：切换生图通道 url: https://... key: sk-...');
+  return lines.join('\n');
+}
+
 function buildMemoryAgentReply(route, memoryContext = buildMemoryContext(), options = {}) {
   if (route.action === 'brain-guide') {
     return buildBrainGuideReply(options.assistantName || 'OpenClaw');
@@ -866,6 +889,7 @@ module.exports = {
   buildClerkTrainingDataReply,
   buildClerkVerificationTestPlanReply,
   buildClerkWorkbenchReply,
+  buildImageChannelReply,
   buildDocAgentReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,

@@ -7,6 +7,7 @@ const test = require('node:test');
 const {
   buildChatAgentPrompt,
   buildClerkAgentReply,
+  buildImageChannelReply,
   buildCapabilityGuideReply,
   buildBrainGuideReply,
   buildDocAgentReply,
@@ -258,6 +259,34 @@ test('buildClerkAgentReply explains multi-agent lab before execution', () => {
   assert.match(reply, /archive/);
   assert.match(reply, /eval/);
   assert.match(reply, /report/);
+});
+
+test('buildImageChannelReply redacts key and explains confidence', () => {
+  const switchReply = buildImageChannelReply({
+    action: 'image-channel-switch',
+    confidence: 'high',
+    config: {
+      url: 'https://img2.suneora.com',
+      maskedApiKey: 'sk-ep1...BxKP (35)',
+      model: 'auto',
+      size: '1024x1024',
+      scope: 'both',
+    },
+  });
+  assert.match(switchReply, /切换生图通道/);
+  assert.match(switchReply, /sk-ep1\.\.\.BxKP/);
+  assert.doesNotMatch(switchReply, /sk-ep1cS_k4u0Jw/);
+
+  const clarifyReply = buildImageChannelReply({
+    action: 'image-channel-clarify',
+    confidence: 'low',
+    missing: ['url'],
+    config: {
+      maskedApiKey: 'sk...7',
+    },
+  });
+  assert.match(clarifyReply, /先不替换/);
+  assert.match(clarifyReply, /缺少字段：url/);
 });
 
 test('buildDocAgentReply answers project progress from memory', () => {

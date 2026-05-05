@@ -284,6 +284,11 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'token-factory',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，查看 token-factory 状态'), {
+    agent: 'clerk-agent',
+    action: 'token-factory-status',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，启动多 Agent 训练场，用邮箱归档结果'), {
     agent: 'clerk-agent',
     action: 'multi-agent-lab',
@@ -353,6 +358,54 @@ test('routeAgentIntent routes image generation requests', () => {
     agent: 'image-agent',
     action: 'generate',
     prompt: '极简科技风商品主图',
+    requiresAuth: true,
+  });
+});
+
+test('routeAgentIntent routes image channel switch by confidence', () => {
+  assert.deepEqual(routeAgentIntent('切换生图通道\nurl: https://img2.suneora.com\nkey: sk-test-secret'), {
+    agent: 'image-agent',
+    action: 'image-channel-switch',
+    confidence: 'high',
+    config: {
+      url: 'https://img2.suneora.com',
+      apiKey: 'sk-test-secret',
+      maskedApiKey: 'sk-tes...cret (14)',
+      model: 'auto',
+      size: '1024x1024',
+      scope: 'both',
+    },
+    missing: [],
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('url: https://img2.suneora.com\napikey: sk-test-secret'), {
+    agent: 'image-agent',
+    action: 'image-channel-clarify',
+    confidence: 'medium',
+    config: {
+      url: 'https://img2.suneora.com',
+      apiKey: 'sk-test-secret',
+      maskedApiKey: 'sk-tes...cret (14)',
+      model: 'auto',
+      size: '1024x1024',
+      scope: 'both',
+    },
+    missing: [],
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('更新图片 key: sk-only'), {
+    agent: 'image-agent',
+    action: 'image-channel-clarify',
+    confidence: 'low',
+    config: {
+      url: '',
+      apiKey: 'sk-only',
+      maskedApiKey: 'sk...7',
+      model: 'auto',
+      size: '1024x1024',
+      scope: 'both',
+    },
+    missing: ['url'],
     requiresAuth: true,
   });
 });

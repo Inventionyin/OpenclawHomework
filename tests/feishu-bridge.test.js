@@ -1548,7 +1548,7 @@ test('buildRoutedAgentReply can run clerk multi-agent lab when explicitly reques
   assert.match(reply.replyText, /summary\.json/);
 });
 
-test('buildRoutedAgentReply can run clerk token factory by chaining token and multi-agent labs', async () => {
+test('buildRoutedAgentReply creates clerk token factory background task without blocking', async () => {
   const calls = [];
   const reply = await buildRoutedAgentReply(
     {
@@ -1569,34 +1569,14 @@ test('buildRoutedAgentReply can run clerk token factory by chaining token and mu
       FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
     },
     {
-      tokenLabRunner: async () => {
-        calls.push('token-lab');
+      tokenFactoryStarter: () => {
+        calls.push('starter');
         return {
-          report: {
-            totalJobs: 2,
-            totalTokens: 300,
-            estimatedTotalTokens: 350,
+          task: {
+            id: 'tf-test-001',
+            status: 'queued',
           },
-          files: {
-            report: '/tmp/qa-token-lab/report.md',
-            items: '/tmp/qa-token-lab/items.json',
-          },
-        };
-      },
-      multiAgentLabRunner: async () => {
-        calls.push('multi-agent-lab');
-        return {
-          summary: {
-            totalItems: 9,
-            totalTokens: 900,
-            estimatedTotalTokens: 1200,
-            winner: 'Hermes',
-          },
-          files: {
-            report: '/tmp/multi-agent-lab/report.md',
-            items: '/tmp/multi-agent-lab/items.json',
-            summary: '/tmp/multi-agent-lab/summary.json',
-          },
+          promise: Promise.resolve(),
         };
       },
     },
@@ -1604,15 +1584,10 @@ test('buildRoutedAgentReply can run clerk token factory by chaining token and mu
   );
 
   assert.equal(reply.handled, true);
-  assert.deepEqual(calls, ['token-lab', 'multi-agent-lab']);
-  assert.match(reply.replyText, /整套 token 工厂已完成/);
-  assert.match(reply.replyText, /训练场任务数：2/);
-  assert.match(reply.replyText, /训练场样本数：9/);
-  assert.match(reply.replyText, /真实 token：1200/);
-  assert.match(reply.replyText, /估算 token：1550/);
-  assert.match(reply.replyText, /赢家：Hermes/);
-  assert.match(reply.replyText, /qa-token-lab\/report\.md/);
-  assert.match(reply.replyText, /multi-agent-lab\/summary\.json/);
+  assert.deepEqual(calls, ['starter']);
+  assert.match(reply.replyText, /后台任务/);
+  assert.match(reply.replyText, /tf-test-001/);
+  assert.match(reply.replyText, /查看 token-factory 状态/);
 });
 
 test('buildRoutedAgentReply sends token factory receipt before long execution', async () => {
@@ -1640,13 +1615,12 @@ test('buildRoutedAgentReply sends token factory receipt before long execution', 
         sent.push(JSON.parse(message.content).text);
         return { message_id: 'reply-token-factory' };
       },
-      tokenLabRunner: async () => ({
-        report: { totalJobs: 1, totalTokens: 10, estimatedTotalTokens: 12 },
-        files: {},
-      }),
-      multiAgentLabRunner: async () => ({
-        summary: { totalItems: 1, totalTokens: 20, estimatedTotalTokens: 25, winner: '平手' },
-        files: {},
+      tokenFactoryStarter: () => ({
+        task: {
+          id: 'tf-test-002',
+          status: 'queued',
+        },
+        promise: Promise.resolve(),
       }),
     },
     { agent: 'clerk-agent', action: 'token-factory', requiresAuth: true },
@@ -1654,6 +1628,139 @@ test('buildRoutedAgentReply sends token factory receipt before long execution', 
 
   assert.match(sent[0], /收到/);
   assert.match(sent[0], /整套 token 工厂/);
+});
+
+test('buildRoutedAgentReply can query latest token factory task status', async () => {
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-clerk-token-factory-status',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '文员，查看 token-factory 状态' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {},
+    { agent: 'clerk-agent', action: 'token-factory-status', requiresAuth: true },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /token-factory|还没有/);
+});
+
+test('buildRoutedAgentReply can apply high-confidence image channel switch', async () => {
+  const writes = [];
+  const restarts = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-image-channel-switch',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '切换生图通道 url: https://img2.suneora.com key: sk-test-secret' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      FEISHU_ENV_FILE: '/etc/test.env',
+      FEISHU_ASSISTANT_NAME: 'OpenClaw',
+    },
+    {
+      envWriter: (file, key, value) => writes.push({ file, key, value }),
+      fetchImpl: async () => ({ ok: true, status: 200 }),
+      restartService: (service) => restarts.push(service),
+    },
+    {
+      agent: 'image-agent',
+      action: 'image-channel-switch',
+      confidence: 'high',
+      config: {
+        url: 'https://img2.suneora.com',
+        apiKey: 'sk-test-secret',
+        maskedApiKey: 'sk-tes...cret (14)',
+        model: 'auto',
+        size: '1024x1024',
+        scope: 'both',
+      },
+      missing: [],
+      requiresAuth: true,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.deepEqual(writes.map((item) => item.key), [
+    'IMAGE_MODEL_BASE_URL',
+    'IMAGE_MODEL_API_KEY',
+    'IMAGE_MODEL_ID',
+    'IMAGE_MODEL_SIZE',
+  ]);
+  assert.match(reply.replyText, /配置已写入/);
+  assert.match(reply.replyText, /\/v1\/models：通过/);
+  assert.deepEqual(restarts, ['openclaw-feishu-bridge']);
+  assert.match(reply.replyText, /已安排重启 openclaw-feishu-bridge/);
+  assert.doesNotMatch(reply.replyText, /sk-test-secret/);
+});
+
+test('buildRoutedAgentReply clarifies medium-confidence image channel config without writing', async () => {
+  const writes = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-image-channel-clarify',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: 'url: https://img2.suneora.com key: sk-test-secret' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      FEISHU_ENV_FILE: '/etc/test.env',
+      FEISHU_ASSISTANT_NAME: 'OpenClaw',
+    },
+    {
+      envWriter: (file, key, value) => writes.push({ file, key, value }),
+    },
+    {
+      agent: 'image-agent',
+      action: 'image-channel-clarify',
+      confidence: 'medium',
+      config: {
+        url: 'https://img2.suneora.com',
+        apiKey: 'sk-test-secret',
+        maskedApiKey: 'sk-tes...cret (14)',
+        model: 'auto',
+        size: '1024x1024',
+        scope: 'both',
+      },
+      missing: [],
+      requiresAuth: true,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.deepEqual(writes, []);
+  assert.match(reply.replyText, /先不替换/);
 });
 
 test('sendFeishuTextMessage fetches tenant token and sends text message', async () => {
