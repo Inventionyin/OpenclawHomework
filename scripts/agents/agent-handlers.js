@@ -241,8 +241,12 @@ function buildTokenSummaryReply(entries = []) {
   });
 
   const top = rows[0];
-  if (top) {
-    lines.push(`目前样本里 token 用量最高的是：${top.assistant} / ${top.model}。`);
+  const tokenRows = rows.filter((row) => row.tokenCalls > 0);
+  if (tokenRows.length) {
+    const tokenTop = tokenRows.sort((a, b) => b.totalTokens - a.totalTokens || b.calls - a.calls)[0];
+    lines.push(`目前样本里 token 用量最高的是：${tokenTop.assistant} / ${tokenTop.model}。`);
+  } else if (top) {
+    lines.push('这些记录的模型接口未返回 token，只能先比较调用次数和耗时。');
   }
   return lines.join('\n');
 }

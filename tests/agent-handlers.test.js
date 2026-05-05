@@ -78,6 +78,25 @@ test('buildClerkAgentReply summarizes token usage from ledger lines', () => {
   assert.match(reply, /未返回 token/);
 });
 
+test('buildClerkAgentReply does not claim token winner when every entry lacks usage', () => {
+  const reply = buildClerkAgentReply({
+    action: 'token-summary',
+  }, {
+    readUsageLedger: () => [
+      {
+        assistant: 'Hermes',
+        model: 'LongCat-Flash-Lite',
+        usageMissing: true,
+        modelElapsedMs: 3000,
+      },
+    ],
+  });
+
+  assert.match(reply, /未返回 token/);
+  assert.match(reply, /只能先比较调用次数和耗时/);
+  assert.doesNotMatch(reply, /token 用量最高/);
+});
+
 test('buildClerkAgentReply gives safe office playbook for todos and reports', () => {
   const todoReply = buildClerkAgentReply({ action: 'todo-summary' });
   assert.match(todoReply, /待办/);
