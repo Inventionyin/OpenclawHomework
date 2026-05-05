@@ -27,6 +27,9 @@ const {
   buildQaAgentReply,
 } = require('./agents/agent-handlers');
 const {
+  buildIntentDiagnosis,
+} = require('./agents/intent-diagnoser');
+const {
   runPeerSshAction,
 } = require('./peer-client');
 const {
@@ -2755,6 +2758,7 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
   }
 
   const text = extractFeishuText(payload);
+  const diagnosis = buildIntentDiagnosis(text, route);
   if (route.requiresAuth && !isAuthorized(payload, env)) {
     return {
       handled: true,
@@ -2900,6 +2904,18 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
       };
     }
 
+    if (route.action === 'daily-email-invalid-recipient') {
+      return {
+        handled: true,
+        replyText: [
+          `我理解你想${diagnosis.intentLabel}。`,
+          '这次我先没执行。',
+          `原因：你给的邮箱格式不对：${route.invalidRecipient}`,
+          diagnosis.nextStep,
+        ].filter(Boolean).join('\n'),
+      };
+    }
+
     if (route.action === 'daily-email') {
       const messages = await sendDailySummaryNotification([], env, {
         ...options,
@@ -2917,10 +2933,24 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
       return {
         handled: true,
         replyText: [
+          diagnosis.reason,
           status,
           '',
           buildClerkAgentReply(route, { env }),
         ].join('\n'),
+      };
+    }
+    if (route.action === 'daily-report' && diagnosis.outcome === 'clarify') {
+      return {
+        handled: true,
+        replyText: [
+          `我理解你想${diagnosis.intentLabel}。`,
+          '这次我先没执行发送。',
+          `原因：${diagnosis.reason}`,
+          diagnosis.nextStep,
+          '',
+          buildClerkAgentReply(route, { env }),
+        ].filter(Boolean).join('\n'),
       };
     }
     return {
@@ -2961,7 +2991,14 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
     };
     return {
       handled: true,
-      replyText: await buildOpsAgentReply(route, { runOpsCheck: bridgedRunOpsCheck }),
+      replyText: diagnosis.outcome === 'clarify'
+        ? [
+          `我理解你想做的是：${diagnosis.intentLabel}。`,
+          '这次我先没执行。',
+          `原因：${diagnosis.reason}`,
+          diagnosis.nextStep ? `你可以直接说：${diagnosis.nextStep}` : null,
+        ].filter(Boolean).join('\n')
+        : await buildOpsAgentReply(route, { runOpsCheck: bridgedRunOpsCheck }),
     };
   }
 

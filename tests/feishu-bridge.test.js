@@ -1241,6 +1241,106 @@ test('buildRoutedAgentReply can send clerk daily summary email to explicit user 
   assert.match(reply.replyText, /1693457391@qq\.com/);
 });
 
+test('buildRoutedAgentReply warns when clerk daily email recipient is invalid', async () => {
+  const sent = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-clerk-daily-invalid',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '文员，把今日日报发给 1693457391@.com' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      EMAIL_NOTIFY_ENABLED: 'true',
+    },
+    {
+      emailSender: async (message) => {
+        sent.push(message);
+        return { sent: true };
+      },
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.equal(sent.length, 0);
+  assert.match(reply.replyText, /我理解你想发送今日日报到邮箱/);
+  assert.match(reply.replyText, /邮箱格式/);
+  assert.match(reply.replyText, /1693457391@\.com/);
+  assert.match(reply.replyText, /1693457391@qq\.com/);
+});
+
+test('buildRoutedAgentReply explains daily report preview is not yet an email send', async () => {
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-clerk-daily-preview',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '文员，把今天 UI 自动化结果发到邮箱' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /我理解你想查看日报预览/);
+  assert.match(reply.replyText, /先没执行发送/);
+  assert.match(reply.replyText, /发送今天日报到邮箱/);
+});
+
+test('buildRoutedAgentReply explains why medium-confidence ops request was not executed', async () => {
+  let called = false;
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-ops-medium',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '你重起一下' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {
+      runOpsCheck: async () => {
+        called = true;
+        return {};
+      },
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.equal(called, false);
+  assert.match(reply.replyText, /我理解你想做的是：服务器运维操作/);
+  assert.match(reply.replyText, /这次我先没执行/);
+  assert.match(reply.replyText, /危险操作/);
+  assert.match(reply.replyText, /重启你自己/);
+});
+
 test('buildRoutedAgentReply can run clerk token lab when explicitly requested', async () => {
   const sent = [];
   const reply = await buildRoutedAgentReply(
@@ -3842,7 +3942,10 @@ test('createServer does not execute medium-confidence restart requests in async 
     assert.equal(response.status, 200);
     await waitForCondition(() => Boolean(reply), { timeoutMs: 2000 });
     assert.equal(called, false);
-    assert.match(JSON.parse(reply.content).text, /你是想让我重启/);
+    const text = JSON.parse(reply.content).text;
+    assert.match(text, /这次我先没执行/);
+    assert.match(text, /危险操作/);
+    assert.match(text, /重启你自己/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

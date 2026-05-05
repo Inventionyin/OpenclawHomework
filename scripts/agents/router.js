@@ -209,6 +209,8 @@ function routeQaAssetIntent(text) {
 function routeClerkIntent(text) {
   const original = stripMention(String(text ?? '').trim());
   const normalized = original.toLowerCase();
+  const emailLikeMatch = original.match(/\b([^\s]+@[^\s]+)\b/);
+  const emailLike = emailLikeMatch ? emailLikeMatch[1].replace(/[，。！!？?,;；]+$/u, '') : '';
   const recipientMatch = original.match(/\b([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\b/i);
   const recipientEmail = recipientMatch ? recipientMatch[1] : '';
   if (!/(文员|秘书|助理|clerk|office)/i.test(normalized)) {
@@ -258,6 +260,21 @@ function routeClerkIntent(text) {
 
   if (/(token|耗时|用量|账本|谁更费|谁更省|统计|对比)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'token-summary', requiresAuth: true };
+  }
+
+  const looksLikeDailyDeliveryWithInvalidEmail = (
+    (/(发送|发|寄).{0,12}(日报|周报|报告).{0,16}(给|到|到达|寄给|发给|寄到)?/i.test(normalized)
+      || /((发到|发给|寄到|寄给).{0,20}(日报|周报|报告)|(日报|周报|报告).{0,20}(发到|发给|寄到|寄给))/i.test(normalized))
+    && emailLike
+    && !recipientEmail
+  );
+  if (looksLikeDailyDeliveryWithInvalidEmail) {
+    return {
+      agent: 'clerk-agent',
+      action: 'daily-email-invalid-recipient',
+      invalidRecipient: emailLike,
+      requiresAuth: true,
+    };
   }
 
   if (/(发送|发|寄).{0,12}(日报|周报|报告).{0,12}(邮箱|邮件)|((日报|周报|报告).{0,12}(发送|发|寄).{0,12}(邮箱|邮件))|((发到|发给|寄到|寄给).{0,24}[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i.test(normalized)) {
