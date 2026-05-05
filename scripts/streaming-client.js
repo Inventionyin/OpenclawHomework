@@ -2,12 +2,67 @@ function normalizeBaseUrl(value) {
   return String(value || '').trim().replace(/\/+$/, '');
 }
 
+function splitList(value) {
+  return String(value || '')
+    .split(/[,;\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function buildStreamingChatConfig(env = process.env) {
+  const apiKey = String(env.STREAMING_MODEL_API_KEY || env.OPENAI_API_KEY || env.XFYUN_API_KEY || '').trim();
+  const apiKeys = splitList(env.STREAMING_MODEL_API_KEYS || env.LONGCAT_API_KEYS || '')
+    .concat(apiKey ? [apiKey] : [])
+    .filter((key, index, keys) => keys.indexOf(key) === index);
+
   return {
     baseUrl: normalizeBaseUrl(env.STREAMING_MODEL_BASE_URL || env.OPENAI_BASE_URL || env.XFYUN_BASE_URL || ''),
-    apiKey: String(env.STREAMING_MODEL_API_KEY || env.OPENAI_API_KEY || env.XFYUN_API_KEY || '').trim(),
+    apiKey,
+    apiKeys,
     model: String(env.STREAMING_MODEL_ID || env.OPENAI_MODEL || env.XFYUN_MODEL || '').trim(),
+    simpleModel: String(env.STREAMING_MODEL_SIMPLE_ID || env.LONGCAT_SIMPLE_MODEL || '').trim(),
+    thinkingModel: String(env.STREAMING_MODEL_THINKING_ID || env.LONGCAT_THINKING_MODEL || '').trim(),
     endpointMode: String(env.STREAMING_MODEL_ENDPOINT_MODE || 'auto').trim().toLowerCase(),
+  };
+}
+
+function classifyStreamingPrompt(prompt, forcedTier = '') {
+  const tier = String(forcedTier || '').trim().toLowerCase();
+  if (['simple', 'chat', 'thinking'].includes(tier)) {
+    return tier;
+  }
+
+  const text = String(prompt || '').toLowerCase();
+  if (/(复杂|深入|分析|排查|修复|方案|规划|为什么|原因|架构|设计|debug|debugging|root cause|troubleshoot|plan)/i.test(text)) {
+    return 'thinking';
+  }
+
+  if (/(内存|硬盘|磁盘|状态|帮助|你会做什么|能做什么|你好|hello|hi|在吗|ping|status|memory|disk|help)/i.test(text)
+    || text.length <= 80) {
+    return 'simple';
+  }
+
+  return 'chat';
+}
+
+function resolveStreamingModelProfile(prompt, config = {}, options = {}) {
+  const tier = classifyStreamingPrompt(prompt, options.modelTier || options.tier);
+  const model = tier === 'simple'
+    ? config.simpleModel || config.model
+    : tier === 'thinking'
+      ? config.thinkingModel || config.model
+      : config.model;
+  const apiKeys = Array.isArray(config.apiKeys) && config.apiKeys.length
+    ? config.apiKeys
+    : [config.apiKey].filter(Boolean);
+  const index = Math.max(0, Number(options.apiKeyIndex || 0)) % Math.max(1, apiKeys.length);
+
+  return {
+    ...config,
+    apiKey: apiKeys[index] || config.apiKey || '',
+    apiKeyIndex: index,
+    model,
+    tier,
   };
 }
 
@@ -153,6 +208,9 @@ async function streamEndpoint(endpoint, prompt, config, options) {
   return {
     text,
     endpoint,
+    model: config.model,
+    tier: config.tier || 'chat',
+    apiKeyIndex: config.apiKeyIndex || 0,
   };
 }
 
@@ -160,26 +218,35 @@ async function streamModelText(prompt, options = {}) {
   const envConfig = buildStreamingChatConfig(options.env || process.env);
   const config = {
     ...envConfig,
-    ...Object.fromEntries(Object.entries(options).filter(([key]) => ['baseUrl', 'apiKey', 'model', 'endpointMode'].includes(key))),
+    ...Object.fromEntries(Object.entries(options).filter(([key]) => [
+      'baseUrl',
+      'apiKey',
+      'apiKeys',
+      'model',
+      'simpleModel',
+      'thinkingModel',
+      'endpointMode',
+    ].includes(key))),
   };
   config.baseUrl = normalizeBaseUrl(config.baseUrl);
+  const profile = resolveStreamingModelProfile(prompt, config, options);
 
-  if (!config.baseUrl || !config.apiKey || !config.model) {
+  if (!profile.baseUrl || !profile.apiKey || !profile.model) {
     throw new Error('Missing streaming model config.');
   }
 
-  if (config.endpointMode === 'responses') {
-    return streamEndpoint('responses', prompt, config, options);
+  if (profile.endpointMode === 'responses') {
+    return streamEndpoint('responses', prompt, profile, options);
   }
 
-  if (config.endpointMode === 'chat_completions' || config.endpointMode === 'chat-completions') {
-    return streamEndpoint('chat_completions', prompt, config, options);
+  if (profile.endpointMode === 'chat_completions' || profile.endpointMode === 'chat-completions') {
+    return streamEndpoint('chat_completions', prompt, profile, options);
   }
 
   try {
-    return await streamEndpoint('responses', prompt, config, options);
+    return await streamEndpoint('responses', prompt, profile, options);
   } catch {
-    return streamEndpoint('chat_completions', prompt, config, options);
+    return streamEndpoint('chat_completions', prompt, profile, options);
   }
 }
 
@@ -187,5 +254,6 @@ module.exports = {
   buildStreamingChatConfig,
   parseChatCompletionSseEvent,
   parseResponsesSseEvent,
+  resolveStreamingModelProfile,
   streamModelText,
 };

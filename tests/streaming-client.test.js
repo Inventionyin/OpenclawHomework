@@ -5,6 +5,7 @@ const {
   buildStreamingChatConfig,
   parseChatCompletionSseEvent,
   parseResponsesSseEvent,
+  resolveStreamingModelProfile,
   streamModelText,
 } = require('../scripts/streaming-client');
 
@@ -56,6 +57,37 @@ test('buildStreamingChatConfig prefers explicit streaming env values', () => {
   assert.equal(config.endpointMode, 'responses');
 });
 
+test('buildStreamingChatConfig supports LongCat model tiers and multiple keys', () => {
+  const config = buildStreamingChatConfig({
+    STREAMING_MODEL_BASE_URL: 'https://api.longcat.chat/openai/v1',
+    STREAMING_MODEL_API_KEY: 'primary',
+    STREAMING_MODEL_API_KEYS: 'primary, backup',
+    STREAMING_MODEL_ID: 'LongCat-Flash-Chat',
+    STREAMING_MODEL_SIMPLE_ID: 'LongCat-Flash-Lite',
+    STREAMING_MODEL_THINKING_ID: 'LongCat-Flash-Thinking-2601',
+    STREAMING_MODEL_ENDPOINT_MODE: 'chat_completions',
+  });
+
+  assert.deepEqual(config.apiKeys, ['primary', 'backup']);
+  assert.equal(config.model, 'LongCat-Flash-Chat');
+  assert.equal(config.simpleModel, 'LongCat-Flash-Lite');
+  assert.equal(config.thinkingModel, 'LongCat-Flash-Thinking-2601');
+});
+
+test('resolveStreamingModelProfile routes simple prompts to Flash-Lite', () => {
+  const profile = resolveStreamingModelProfile('你现在内存多少', {
+    model: 'LongCat-Flash-Chat',
+    simpleModel: 'LongCat-Flash-Lite',
+    thinkingModel: 'LongCat-Flash-Thinking-2601',
+    apiKey: 'primary',
+    apiKeys: ['primary', 'backup'],
+  });
+
+  assert.equal(profile.model, 'LongCat-Flash-Lite');
+  assert.equal(profile.apiKey, 'primary');
+  assert.equal(profile.tier, 'simple');
+});
+
 test('streamModelText falls back from non-SSE responses endpoint to chat completions', async () => {
   const calls = [];
   const deltas = [];
@@ -85,10 +117,35 @@ test('streamModelText falls back from non-SSE responses endpoint to chat complet
   assert.match(calls[1].url, /\/chat\/completions$/);
   assert.equal(JSON.parse(calls[1].options.body).stream, true);
   assert.deepEqual(deltas, ['你', '好']);
-  assert.deepEqual(result, {
-    text: '你好',
-    endpoint: 'chat_completions',
+  assert.equal(result.text, '你好');
+  assert.equal(result.endpoint, 'chat_completions');
+  assert.equal(result.model, 'model-a');
+});
+
+test('streamModelText uses simple model tier for lightweight prompts', async () => {
+  const calls = [];
+  const result = await streamModelText('你现在内存多少', {
+    baseUrl: 'https://example.test/v1',
+    apiKey: 'primary',
+    apiKeys: ['primary', 'backup'],
+    model: 'LongCat-Flash-Chat',
+    simpleModel: 'LongCat-Flash-Lite',
+    thinkingModel: 'LongCat-Flash-Thinking-2601',
+    endpointMode: 'chat_completions',
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return sseResponse([
+        'data: {"choices":[{"delta":{"content":"正常"}}]}\n\n',
+        'data: [DONE]\n\n',
+      ], { 'content-type': 'text/event-stream' });
+    },
   });
+
+  assert.equal(JSON.parse(calls[0].options.body).model, 'LongCat-Flash-Lite');
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer primary');
+  assert.equal(result.text, '正常');
+  assert.equal(result.model, 'LongCat-Flash-Lite');
+  assert.equal(result.tier, 'simple');
 });
 
 test('streamModelText streams responses endpoint deltas when supported', async () => {

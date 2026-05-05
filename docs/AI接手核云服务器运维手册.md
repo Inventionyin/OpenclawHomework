@@ -429,7 +429,10 @@ FEISHU_RUN_NOTIFICATION_DEDUP_TTL_MS=300000
 FEISHU_CHAT_STREAMING_ENABLED=true
 STREAMING_MODEL_BASE_URL=https://api.longcat.chat/openai/v1
 STREAMING_MODEL_API_KEY=...
+STREAMING_MODEL_API_KEYS=主 key,备用 key
 STREAMING_MODEL_ID=LongCat-Flash-Chat
+STREAMING_MODEL_SIMPLE_ID=LongCat-Flash-Lite
+STREAMING_MODEL_THINKING_ID=LongCat-Flash-Thinking-2601
 STREAMING_MODEL_ENDPOINT_MODE=chat_completions
 FEISHU_STREAM_UPDATE_INTERVAL_MS=800
 
@@ -463,7 +466,9 @@ EMAIL_TO=收件邮箱，多个用逗号分隔
 
 ```text
 OpenClaw 主链路：讯飞 CodingPlan
-Hermes 主链路：LongCat-Flash-Chat
+Hermes 正常聊天：LongCat-Flash-Chat
+Hermes 简单任务：LongCat-Flash-Lite
+Hermes 复杂分析：LongCat-Flash-Thinking-2601
 ```
 
 修改后重启对应服务器上的服务：
