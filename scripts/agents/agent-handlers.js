@@ -464,6 +464,19 @@ function buildClerkAgentReply(route = {}, options = {}) {
     ].join('\n');
   }
 
+  if (route.action === 'multi-agent-lab') {
+    return [
+      '文员多 Agent 训练场：',
+      '- 第 1 段生成：批量产出客服回复、测试思路、UI 自动化建议。',
+      '- 第 2 段评审：让另一轮模型从风险、完整性、可执行性、是否乱编四个角度挑错打分。',
+      '- 第 3 段总结：汇总赢家、失败模式和高价值样本。',
+      '- 归档：训练样本进 archive，评测结果进 eval，综合摘要进 report。',
+      '',
+      '这套流程比普通高 token 训练场更像“生成 -> 评审 -> 总结”的多轮对打，token 消耗更高，也更容易沉淀测试资产。',
+      '启动口令：文员，启动多 Agent 训练场。',
+    ].join('\n');
+  }
+
   if (route.action === 'todo-summary') {
     return [
       '文员待办整理：',

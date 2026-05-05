@@ -9,6 +9,7 @@
     "test": "node --test tests/*.test.js",
     "register:platform": "node scripts/browser-registration-runner.js",
     "qa:token-lab": "node scripts/qa-token-lab.js",
+    "qa:multi-agent-lab": "node scripts/multi-agent-lab.js",
     "trigger:ui": "node scripts/trigger-ui-tests.js",
     "watchdog": "node scripts/server-watchdog.js"
   },

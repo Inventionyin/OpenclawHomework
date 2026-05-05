@@ -52,6 +52,9 @@ const {
 const {
   runTokenLab,
 } = require('./qa-token-lab');
+const {
+  runMultiAgentLab,
+} = require('./multi-agent-lab');
 
 const VALID_RUN_MODES = new Set(['contracts', 'smoke', 'all']);
 let openClawCliQueue = Promise.resolve();
@@ -2738,6 +2741,61 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
           files.items ? `- 产物：${files.items}` : null,
           '',
           '摘要已按邮箱动作归档；你可以继续说：文员，统计今天 Hermes 和 OpenClaw 谁更费 token。',
+        ].filter(Boolean).join('\n'),
+      };
+    }
+
+    if (route.action === 'multi-agent-lab') {
+      if (options.receiptSender) {
+        await sendTimedFeishuMessage(
+          options.receiptSender,
+          buildFeishuTextMessage(payload, '收到，开始跑多 Agent 训练场。这会多轮调用模型做生成、评审和总结，完成后我会发报告和产物路径。', env, {
+            status: '运行中',
+            elapsedMs: elapsedMs(options.timingContext?.startedAt),
+          }),
+          env,
+          options.timingContext,
+          'multi-agent-lab-receipt',
+        ).catch((error) => {
+          console.error(`Feishu multi-agent lab receipt failed: ${error.message}`);
+        });
+      }
+      const multiAgentLabRunner = options.multiAgentLabRunner || (async (runnerOptions) => {
+        const base = await runMultiAgentLab(runnerOptions);
+        return {
+          summary: {
+            totalRounds: Number(base.plan?.rounds?.length || 3),
+            totalItems: Number(base.summary?.totalItems || 0),
+            totalTokens: Number(base.summary?.totalTokens || 0),
+            winner: base.summary?.winner || '平手',
+          },
+          files: base.files || {},
+        };
+      });
+      const result = await multiAgentLabRunner({
+        env,
+        batchSize: env.MULTI_AGENT_LAB_BATCH_SIZE || env.QA_TOKEN_LAB_BATCH_SIZE,
+        outputDir: env.MULTI_AGENT_LAB_OUTPUT_DIR || env.QA_TOKEN_LAB_OUTPUT_DIR,
+        emailSender: options.emailSender
+          ? (message, senderEnv) => options.emailSender(message, senderEnv)
+          : (message, senderEnv) => sendMailboxActionEmail(message, senderEnv, options),
+      });
+      const summary = result.summary || {};
+      const files = result.files || {};
+      return {
+        handled: true,
+        replyText: [
+          '多 Agent 训练场已完成。',
+          `- 轮次：${summary.totalRounds || 0}`,
+          `- 样本数：${summary.totalItems || 0}`,
+          `- 真实 token：${summary.totalTokens || 0}`,
+          summary.estimatedTotalTokens ? `- 字符估算 token：${summary.estimatedTotalTokens}` : null,
+          summary.failedJobs ? `- 失败样本：${summary.failedJobs}` : null,
+          summary.winner ? `- 当前赢家：${summary.winner}` : null,
+          files.report ? `- 报告：${files.report}` : null,
+          files.items ? `- 产物：${files.items}` : null,
+          '',
+          '摘要建议归档到 archive / eval / report；后面可以继续把它扩成真正的 OpenClaw vs Hermes 对打流水线。',
         ].filter(Boolean).join('\n'),
       };
     }

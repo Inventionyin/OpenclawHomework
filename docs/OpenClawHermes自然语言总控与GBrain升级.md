@@ -120,6 +120,7 @@ bash scripts/sync-gbrain-knowledge.sh
 - `mailbox-workbench`：列出 ClawEmail 动作分工，例如 `task/report/verify/support/eval/files/archive/daily`。
 - `training-data`：把电商客服训练数据、Agent 评测题和邮箱归档动作组织成训练工作流。
 - `token-lab`：启动高 token 训练场，批量调用 LongCat 生成/质检 QA 资产，写 token 账本，并归档到邮箱动作。
+- `multi-agent-lab`：启动真实的 `OpenClaw generate -> Hermes review -> Clerk summary` 三段式训练流水线，把结果归档到 `archive/eval/report`。
 - `todo-summary`：给出待办整理模板和下一步清单，不执行危险动作。
 - `daily-report`：给出日报结构，后续可接定时任务和邮箱发送。
 - `daily-email`：只有明确说“发送日报到邮箱”时，才调用邮件发送，把日报发到 `daily` 邮箱动作。

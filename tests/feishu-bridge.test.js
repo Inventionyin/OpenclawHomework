@@ -1185,6 +1185,65 @@ test('buildRoutedAgentReply sends a token lab receipt before long execution', as
   assert.match(sent[0], /高 token 训练场/);
 });
 
+test('buildRoutedAgentReply can run clerk multi-agent lab when explicitly requested', async () => {
+  const sent = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-clerk-multi-agent-lab',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '文员，启动多 Agent 训练场，用邮箱归档结果' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {
+      multiAgentLabRunner: async (runnerOptions) => {
+        await runnerOptions.emailSender({ action: 'archive', mailbox: 'agent3.archive@claw.163.com' });
+        await runnerOptions.emailSender({ action: 'eval', mailbox: 'hagent.eval@claw.163.com' });
+        sent.push('runner-called');
+        return {
+          summary: {
+            totalRounds: 3,
+            totalItems: 9,
+            totalTokens: 900,
+            estimatedTotalTokens: 1200,
+            failedJobs: 1,
+            winner: 'Hermes',
+          },
+          files: {
+            report: '/tmp/multi-agent-lab/report.md',
+            items: '/tmp/multi-agent-lab/items.json',
+          },
+        };
+      },
+      emailSender: async (message) => {
+        sent.push(message.action);
+        return { sent: true };
+      },
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.deepEqual(sent, ['archive', 'eval', 'runner-called']);
+  assert.match(reply.replyText, /多 Agent 训练场已完成/);
+  assert.match(reply.replyText, /3/);
+  assert.match(reply.replyText, /9/);
+  assert.match(reply.replyText, /900/);
+  assert.match(reply.replyText, /1200/);
+  assert.match(reply.replyText, /1/);
+  assert.match(reply.replyText, /Hermes/);
+  assert.match(reply.replyText, /report\.md/);
+});
+
 test('sendFeishuTextMessage fetches tenant token and sends text message', async () => {
   const calls = [];
   await sendFeishuTextMessage(

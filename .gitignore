@@ -6,6 +6,8 @@ playwright-report/
 test-results/
 allure-results/
 allure-report/
+data/qa-token-lab/
+data/multi-agent-lab/
 .env
 .playwright-mcp/
 .worktrees/

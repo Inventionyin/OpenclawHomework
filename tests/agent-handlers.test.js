@@ -189,6 +189,17 @@ test('buildClerkAgentReply explains token lab before execution', () => {
   assert.match(reply, /eval/);
 });
 
+test('buildClerkAgentReply explains multi-agent lab before execution', () => {
+  const reply = buildClerkAgentReply({ action: 'multi-agent-lab' });
+  assert.match(reply, /多 Agent 训练场/);
+  assert.match(reply, /生成/);
+  assert.match(reply, /评审/);
+  assert.match(reply, /总结/);
+  assert.match(reply, /archive/);
+  assert.match(reply, /eval/);
+  assert.match(reply, /report/);
+});
+
 test('buildDocAgentReply answers project progress from memory', () => {
   const memoryContext = [
     '# Memory Context',

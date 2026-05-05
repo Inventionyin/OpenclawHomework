@@ -244,3 +244,28 @@ agent3.files@claw.163.com
 3. 客服语料扩展器：用 Flash-Lite 把 144 条扩成 3000 条，再用 Thinking 抽检。
 4. UI 用例生成器：把 `ui-automation-matrix.json` 自动转成 Playwright/Cypress 测试骨架。
 5. 邮箱日报：每天汇总测试、客服、验证码、服务器状态并发到 `agent4.daily@claw.163.com`。
+
+## 多 Agent 高 token 训练场
+
+现在除了普通的 `高 token 训练场`，还可以直接让文员启动一套更像真实对打的多 Agent 流水线：
+
+```text
+文员，启动多 Agent 训练场
+文员，启动多 Agent 训练场，用邮箱归档结果
+```
+
+最小流程分三段：
+
+1. 生成：批量产出电商客服回复、测试思路、UI 自动化建议
+2. 评审：用第二轮模型从风险、完整性、可执行性、是否乱编四个角度打分挑错
+3. 总结：汇总赢家、失败模式和高价值样本
+
+当前归档建议：
+
+```text
+archive -> 训练样本、失败样本、可复用提示词
+eval    -> 模型对打结果、评分结论
+report  -> 综合摘要、可发到飞书/邮箱的训练场结论
+```
+
+这套玩法比普通 token lab 更适合“烧 token 但沉淀测试资产”，后面可以继续扩成 OpenClaw vs Hermes 的真实多轮对打。

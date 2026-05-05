@@ -259,6 +259,11 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'token-lab',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，启动多 Agent 训练场，用邮箱归档结果'), {
+    agent: 'clerk-agent',
+    action: 'multi-agent-lab',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，发送今天日报到邮箱'), {
     agent: 'clerk-agent',
     action: 'daily-email',

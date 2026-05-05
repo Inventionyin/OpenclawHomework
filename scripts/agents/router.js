@@ -232,6 +232,11 @@ function routeClerkIntent(text) {
     return { agent: 'clerk-agent', action: 'mailbox-tasks', requiresAuth: true };
   }
 
+  if (/(启动|开始|跑|执行|开).{0,12}(多\s*agent|多智能体|agent).{0,20}(训练场|实验室|lab|对打|评测|生成|归档)/i.test(normalized)
+    || /(多\s*agent|多智能体|agent).{0,20}(训练场|实验室|lab|对打|评测|生成|归档)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'multi-agent-lab', requiresAuth: true };
+  }
+
   if (/(邮箱平台|邮箱|clawemail).{0,24}(怎么玩|玩法|调度|归档|验证码|结合|分工|工作台)/i.test(normalized)
     || /(怎么玩|玩法|调度|归档|验证码|结合|分工|工作台).{0,24}(邮箱平台|邮箱|clawemail)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'mailbox-workbench', requiresAuth: true };
