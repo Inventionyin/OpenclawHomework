@@ -44,6 +44,7 @@ const {
 } = require('./streaming-client');
 const {
   appendUsageLedgerEntry,
+  readUsageLedgerEntries,
 } = require('./usage-ledger');
 const {
   editImage,
@@ -556,6 +557,53 @@ function readDiskAuditState(filePath) {
 function writeDiskAuditState(filePath, state) {
   mkdirSync(dirname(filePath), { recursive: true });
   writeFileSync(filePath, JSON.stringify(state, null, 2), 'utf8');
+}
+
+function readJsonFileSafe(filePath) {
+  if (!filePath || !existsSync(filePath)) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(readFileSync(filePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function getDailySummaryStateFile(env = process.env) {
+  return env.DAILY_SUMMARY_STATE_FILE || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'memory', 'daily-summary-state.json');
+}
+
+function readDailySummaryState(env = process.env) {
+  return readJsonFileSafe(getDailySummaryStateFile(env)) || { runs: [] };
+}
+
+function writeDailySummaryState(env = process.env, state = {}) {
+  const filePath = getDailySummaryStateFile(env);
+  mkdirSync(dirname(filePath), { recursive: true });
+  writeFileSync(filePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+}
+
+function appendDailySummaryRun(env = process.env, job = {}, run = {}) {
+  const state = readDailySummaryState(env);
+  const runs = Array.isArray(state.runs) ? state.runs : [];
+  const runUrl = run.html_url || job.actionsUrl || '';
+  const artifactsUrl = buildRunArtifactsUrl(runUrl);
+  const next = [
+    ...runs,
+    {
+      id: run.id || null,
+      conclusion: run.conclusion || run.status || 'unknown',
+      runUrl,
+      artifactsUrl,
+      targetRef: job.targetRef || job.config?.inputs?.target_ref || '',
+      runMode: job.runMode || job.config?.inputs?.run_mode || '',
+      updatedAt: run.updated_at || new Date().toISOString(),
+    },
+  ].slice(-20);
+  writeDailySummaryState(env, { runs: next });
+  return next;
 }
 
 function parseDuSummary(output) {
@@ -1957,7 +2005,20 @@ async function sendDailySummaryNotification(runs, env = process.env, options = {
     return [];
   }
 
-  const summary = buildDailySummary(runs);
+  const usageEntries = options.readUsageLedger
+    ? options.readUsageLedger(env)
+    : readUsageLedgerEntries(env);
+  const savedRuns = Array.isArray(runs) && runs.length
+    ? runs
+    : readDailySummaryState(env).runs || [];
+  const multiAgentSummary = readJsonFileSafe(
+    join(env.MULTI_AGENT_LAB_OUTPUT_DIR || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'multi-agent-lab'), 'summary.json'),
+  );
+  const summary = buildDailySummary({
+    runs: savedRuns,
+    usageEntries,
+    multiAgentSummary,
+  });
   const message = {
     action: 'daily',
     mailbox: resolvedAction.mailbox,
@@ -2009,6 +2070,7 @@ async function notifyFeishuRunResult(job, env = process.env, fetchImpl = fetch, 
   })).catch((error) => {
     console.error(`Email result notification failed: ${error.message}`);
   });
+  appendDailySummaryRun(env, job, completedRun);
   return completedRun;
 }
 

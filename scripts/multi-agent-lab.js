@@ -211,6 +211,80 @@ function buildMultiAgentLabSummary(items = []) {
 
 function buildEmailMessages(summary, files, plan, env = process.env) {
   const actions = plan.mailboxActions || getMailboxActions(env);
+  const esc = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  const metricCard = (label, value, tone = 'neutral') => [
+    `<div class="metric-card tone-${tone}">`,
+    `<div class="metric-label">${esc(label)}</div>`,
+    `<div class="metric-value">${esc(value)}</div>`,
+    '</div>',
+  ].join('');
+
+  const boardRow = (title, items) => [
+    '<section class="board-row">',
+    `<div class="board-title">${esc(title)}</div>`,
+    '<div class="board-items">',
+    items.join(''),
+    '</div>',
+    '</section>',
+  ].join('');
+
+  const dashboard = [
+    '<div class="multi-agent-lab-dashboard">',
+    '<style>',
+    '.multi-agent-lab-dashboard{font-family:Inter,Arial,sans-serif;font-size:14px;line-height:1.5;color:#172033;background:#f6f8fc;padding:16px;border:1px solid #dde4f0;border-radius:8px}',
+    '.multi-agent-lab-dashboard h2{margin:0 0 12px;font-size:18px}',
+    '.agent-board{display:block}',
+    '.board-row{margin-top:12px}',
+    '.board-title{font-weight:700;margin-bottom:8px;color:#24324a}',
+    '.board-items{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}',
+    '.metric-card{background:#fff;border:1px solid #d8e1ee;border-radius:8px;padding:10px 12px;min-height:64px}',
+    '.metric-label{font-size:12px;color:#63708a;margin-bottom:4px}',
+    '.metric-value{font-size:16px;font-weight:700;color:#152033;word-break:break-word}',
+    '.tone-neutral{box-shadow:inset 0 0 0 1px rgba(88,102,128,.02)}',
+    '.tone-positive{border-color:#a9d7b2;background:#f2fbf4}',
+    '.tone-warning{border-color:#f0d38a;background:#fffaf0}',
+    '.tone-accent{border-color:#a8c4f5;background:#f3f7ff}',
+    '.list-box{background:#fff;border:1px solid #d8e1ee;border-radius:8px;padding:10px 12px}',
+    '.list-box ul{margin:0;padding-left:18px}',
+    '.list-box li{margin:4px 0}',
+    '.footer-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}',
+    '.footer-card{background:#fff;border:1px solid #d8e1ee;border-radius:8px;padding:10px 12px}',
+    '.footer-label{font-size:12px;color:#63708a;margin-bottom:4px}',
+    '.footer-value{font-size:13px;color:#152033;word-break:break-word}',
+    '@media (max-width: 720px){.board-items,.footer-grid{grid-template-columns:1fr}}',
+    '</style>',
+    '<h2>Multi-Agent Lab 训练场报告</h2>',
+    '<div class="agent-board">',
+    boardRow('核心指标', [
+      metricCard('总样本', summary.totalItems, 'accent'),
+      metricCard('失败样本', summary.failedJobs, summary.failedJobs > 0 ? 'warning' : 'positive'),
+      metricCard('当前赢家', summary.winner, 'positive'),
+    ]),
+    boardRow('角色对比', [
+      metricCard('OpenClaw token', summary.byAssistant.OpenClaw.totalTokens || 0, 'neutral'),
+      metricCard('Hermes token', summary.byAssistant.Hermes.totalTokens || 0, 'neutral'),
+      metricCard('平手', summary.draws || 0, 'accent'),
+    ]),
+    boardRow('样本分布', [
+      `<div class="list-box"><ul><li>OpenClaw 胜场：${esc(summary.openClawWins || 0)}</li><li>Hermes 胜场：${esc(summary.hermesWins || 0)}</li><li>平手：${esc(summary.draws || 0)}</li></ul></div>`,
+      `<div class="list-box"><ul><li>真实 token：${esc(summary.totalTokens || 0)}</li><li>字符估算：${esc(summary.estimatedTotalTokens || 0)}</li></ul></div>`,
+      `<div class="list-box"><ul><li>报告：${esc(files.report)}</li><li>摘要：${esc(files.summary)}</li><li>产物：${esc(files.items)}</li></ul></div>`,
+    ]),
+    '<div class="footer-grid">',
+    `<div class="footer-card"><div class="footer-label">产物</div><div class="footer-value">${esc(files.items)}</div></div>`,
+    `<div class="footer-card"><div class="footer-label">摘要</div><div class="footer-value">${esc(files.summary)}</div></div>`,
+    `<div class="footer-card"><div class="footer-label">报告</div><div class="footer-value">${esc(files.report)}</div></div>`,
+    '</div>',
+    '</div>',
+    '</div>',
+  ].join('\n');
+
   return ['archive', 'eval', 'report']
     .filter((actionName) => actions[actionName]?.enabled && actions[actionName]?.mailbox)
     .map((actionName) => {
@@ -227,13 +301,7 @@ function buildEmailMessages(summary, files, plan, env = process.env) {
           `摘要：${files.summary}`,
           `报告：${files.report}`,
         ].join('\n'),
-        html: [
-          '<h2>Multi-Agent Lab 训练场报告</h2>',
-          `<pre>${summary.text.replace(/[&<>]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[char]))}</pre>`,
-          `<p>产物：${files.items}</p>`,
-          `<p>摘要：${files.summary}</p>`,
-          `<p>报告：${files.report}</p>`,
-        ].join('\n'),
+        html: dashboard,
       };
     });
 }

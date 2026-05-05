@@ -107,6 +107,12 @@ test('runMultiAgentLab writes artifacts and routes archive eval and report email
     assert.match(readFileSync(result.files.summary, 'utf8'), /"byAssistant"/);
     assert.match(result.emailMessages[0].text, /summary\.json/);
     assert.match(result.emailMessages[0].text, /OpenClaw token：240/);
+    assert.match(result.emailMessages[0].html, /multi-agent-lab-dashboard/);
+    assert.match(result.emailMessages[0].html, /metric-card/);
+    assert.match(result.emailMessages[0].html, /agent-board/);
+    assert.match(result.emailMessages[0].html, /OpenClaw/);
+    assert.match(result.emailMessages[0].html, /Hermes/);
+    assert.match(result.emailMessages[0].html, /summary\.json/);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

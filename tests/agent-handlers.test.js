@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
+const { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const test = require('node:test');
@@ -109,8 +109,58 @@ test('buildClerkAgentReply gives safe office playbook for todos and reports', ()
 
   const reportReply = buildClerkAgentReply({ action: 'daily-report' });
   assert.match(reportReply, /日报/);
-  assert.match(reportReply, /UI 自动化/);
-  assert.match(reportReply, /邮箱/);
+  assert.match(reportReply, /最近一次任务/);
+  assert.match(reportReply, /服务器部分仍建议只引用状态摘要/);
+});
+
+test('buildClerkAgentReply previews a richer daily report from local artifacts', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'clerk-daily-preview-'));
+  const ledgerFile = join(tempDir, 'usage.jsonl');
+  const stateFile = join(tempDir, 'daily-state.json');
+  const multiAgentDir = join(tempDir, 'multi-agent-lab');
+
+  try {
+    mkdirSync(multiAgentDir, { recursive: true });
+    writeFileSync(ledgerFile, [
+      JSON.stringify({ assistant: 'Hermes', totalTokens: 66, modelElapsedMs: 3000 }),
+      JSON.stringify({ assistant: 'OpenClaw', totalTokens: 33, modelElapsedMs: 1500 }),
+    ].join('\n'), 'utf8');
+
+    writeFileSync(stateFile, `${JSON.stringify({
+      runs: [
+        {
+          conclusion: 'success',
+          runUrl: 'https://example.com/run-1',
+          artifactsUrl: 'https://example.com/run-1#artifacts',
+          targetRef: 'main',
+          runMode: 'smoke',
+        },
+      ],
+    }, null, 2)}\n`, 'utf8');
+
+    writeFileSync(join(multiAgentDir, 'summary.json'), `${JSON.stringify({
+      totalItems: 3,
+      failedJobs: 0,
+      winner: 'OpenClaw',
+      totalTokens: 300,
+    }, null, 2)}\n`, 'utf8');
+
+    const reportReply = buildClerkAgentReply({ action: 'daily-report' }, {
+      env: {
+        FEISHU_USAGE_LEDGER_PATH: ledgerFile,
+        DAILY_SUMMARY_STATE_FILE: stateFile,
+        MULTI_AGENT_LAB_OUTPUT_DIR: multiAgentDir,
+      },
+    });
+
+    assert.match(reportReply, /文员日报预览/);
+    assert.match(reportReply, /run-1#artifacts/);
+    assert.match(reportReply, /Hermes：66 tokens/);
+    assert.match(reportReply, /OpenClaw：33 tokens/);
+    assert.match(reportReply, /多 Agent 训练场：3 个样本/);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('buildClerkAgentReply shows practical workbench with mailbox and qa assets', () => {

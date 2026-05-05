@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
+const { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const test = require('node:test');
@@ -1054,6 +1054,76 @@ test('sendDailySummaryNotification can use evanshine SMTP profile for daily acti
   assert.equal(transports[0].user, 'report@evanshine.me');
   assert.equal(transports[0].from, 'report@evanshine.me');
   assert.deepEqual(transports[0].to, ['agent4.daily@claw.163.com']);
+});
+
+test('sendDailySummaryNotification builds a richer daily report from saved state and usage ledger', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'daily-summary-rich-'));
+  const ledgerFile = join(tempDir, 'usage.jsonl');
+  const stateFile = join(tempDir, 'daily-state.json');
+  const multiAgentDir = join(tempDir, 'multi-agent-lab');
+  const sent = [];
+
+  try {
+    mkdirSync(multiAgentDir, { recursive: true });
+    writeFileSync(ledgerFile, [
+      JSON.stringify({ assistant: 'Hermes', totalTokens: 120, modelElapsedMs: 2400 }),
+      JSON.stringify({ assistant: 'OpenClaw', totalTokens: 80, modelElapsedMs: 1600 }),
+    ].join('\n'), 'utf8');
+
+    writeFileSync(stateFile, `${JSON.stringify({
+      runs: [
+        {
+          conclusion: 'success',
+          runUrl: 'https://github.com/example/repo/actions/runs/1',
+          artifactsUrl: 'https://github.com/example/repo/actions/runs/1#artifacts',
+          targetRef: 'main',
+          runMode: 'smoke',
+        },
+        {
+          conclusion: 'failure',
+          runUrl: 'https://github.com/example/repo/actions/runs/2',
+          artifactsUrl: 'https://github.com/example/repo/actions/runs/2#artifacts',
+          targetRef: 'develop',
+          runMode: 'contracts',
+        },
+      ],
+    }, null, 2)}\n`, 'utf8');
+
+    writeFileSync(join(multiAgentDir, 'summary.json'), `${JSON.stringify({
+      totalItems: 6,
+      failedJobs: 1,
+      winner: 'Hermes',
+      totalTokens: 900,
+    }, null, 2)}\n`, 'utf8');
+
+    await sendDailySummaryNotification(
+      [],
+      {
+        EMAIL_NOTIFY_ENABLED: 'true',
+        FEISHU_USAGE_LEDGER_PATH: ledgerFile,
+        DAILY_SUMMARY_STATE_FILE: stateFile,
+        MULTI_AGENT_LAB_OUTPUT_DIR: multiAgentDir,
+      },
+      {
+        emailSender: async (message) => {
+          sent.push(message);
+          return { sent: true };
+        },
+      },
+    );
+
+    assert.equal(sent.length, 1);
+    assert.match(sent[0].text, /develop/);
+    assert.match(sent[0].text, /contracts/);
+    assert.match(sent[0].text, /Hermes：120 tokens/);
+    assert.match(sent[0].text, /OpenClaw：80 tokens/);
+    assert.match(sent[0].text, /多 Agent 训练场：6 个样本/);
+    assert.match(sent[0].text, /赢家：Hermes/);
+    assert.match(sent[0].html, /日报看板/);
+    assert.match(sent[0].html, /actions\/runs\/2#artifacts/);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('buildRoutedAgentReply can send clerk daily summary email when explicitly requested', async () => {

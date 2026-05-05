@@ -20,10 +20,14 @@ const {
 } = require('./gbrain-client');
 const {
   getUsageLedgerPath,
+  readUsageLedgerEntries,
 } = require('../usage-ledger');
 const {
   resolveMailboxAction,
 } = require('../mailbox-action-router');
+const {
+  buildDailySummary,
+} = require('../daily-summary');
 const {
   buildRegistrationPlan,
   parseRegistrationTaskRequest,
@@ -168,24 +172,38 @@ function buildPlannerClarifyReply(text = '') {
 }
 
 function defaultReadUsageLedger(env = process.env, limit = 200) {
-  const file = getUsageLedgerPath(env);
-  if (!file || !existsSync(file)) {
-    return [];
+  return readUsageLedgerEntries(env, limit);
+}
+
+function readJsonFileSafe(filePath) {
+  if (!filePath || !existsSync(filePath)) {
+    return null;
   }
 
-  return readFileSync(file, 'utf8')
-    .trim()
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .slice(-limit)
-    .map((line) => {
-      try {
-        return JSON.parse(line);
-      } catch {
-        return null;
-      }
-    })
-    .filter(Boolean);
+  try {
+    return JSON.parse(readFileSync(filePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function getDailySummaryStateFile(env = process.env) {
+  return env.DAILY_SUMMARY_STATE_FILE || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'memory', 'daily-summary-state.json');
+}
+
+function loadDailySummaryArtifacts(env = process.env, options = {}) {
+  const readUsage = options.readUsageLedger || defaultReadUsageLedger;
+  const usageEntries = readUsage(env);
+  const state = (options.readJsonFile || readJsonFileSafe)(getDailySummaryStateFile(env)) || {};
+  const multiAgentSummary = (options.readJsonFile || readJsonFileSafe)(
+    join(env.MULTI_AGENT_LAB_OUTPUT_DIR || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'multi-agent-lab'), 'summary.json'),
+  );
+
+  return {
+    runs: Array.isArray(state.runs) ? state.runs : [],
+    usageEntries,
+    multiAgentSummary,
+  };
 }
 
 function summarizeUsageLedger(entries = []) {
@@ -489,14 +507,12 @@ function buildClerkAgentReply(route = {}, options = {}) {
   }
 
   if (route.action === 'daily-report') {
+    const summary = buildDailySummary(loadDailySummaryArtifacts(options.env || process.env, options));
     return [
-      '文员日报模板：',
-      '- UI 自动化：汇总 GitHub Actions、Allure 链接、失败用例。',
-      '- 模型用量：读取 token/耗时账本，对比 Hermes 和 OpenClaw。',
-      '- 服务器：只引用状态摘要，不执行修复。',
-      '- 邮箱：可以把日报发到配置好的报告邮箱。',
+      '文员日报预览：',
+      summary.text,
       '',
-      '下一步可以接定时任务：每天 0 点跑测试，完成后自动生成日报并发邮箱。',
+      '服务器部分仍建议只引用状态摘要，不在日报阶段执行修复。',
     ].join('\n');
   }
 

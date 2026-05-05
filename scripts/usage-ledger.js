@@ -1,4 +1,4 @@
-const { appendFileSync, mkdirSync } = require('node:fs');
+const { appendFileSync, existsSync, mkdirSync, readFileSync } = require('node:fs');
 const { dirname } = require('node:path');
 
 function numberOrUndefined(value) {
@@ -86,9 +86,31 @@ function appendUsageLedgerEntry(env = process.env, input = {}) {
   return true;
 }
 
+function readUsageLedgerEntries(env = process.env, limit = 200) {
+  const file = getUsageLedgerPath(env);
+  if (!file || !existsSync(file)) {
+    return [];
+  }
+
+  return readFileSync(file, 'utf8')
+    .trim()
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .slice(-limit)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
 module.exports = {
   appendUsageLedgerEntry,
   buildUsageLedgerEntry,
   getUsageLedgerPath,
   isUsageLedgerEnabled,
+  readUsageLedgerEntries,
 };
