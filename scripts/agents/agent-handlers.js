@@ -11,6 +11,9 @@ const {
   isSafeMemoryText,
   rememberMemoryNote,
 } = require('./memory-store');
+const {
+  listCapabilities,
+} = require('./capability-registry');
 
 const OPS_SECRET_PATTERNS = [
   /\bauthorization\s*:\s*\S+/i,
@@ -77,6 +80,7 @@ function buildDocAgentReply(text, memoryContext = buildMemoryContext()) {
 }
 
 function buildCapabilityGuideReply(assistantName = 'OpenClaw') {
+  const capabilities = listCapabilities();
   return [
     `${assistantName} 当前适合这样玩：`,
     '',
@@ -96,7 +100,15 @@ function buildCapabilityGuideReply(assistantName = 'OpenClaw') {
     '- /memory',
     '- /memory search session lock',
     '- /memory remember 今天修复了某个非敏感问题',
+    '- Obsidian 存储和 GBrain 工作流怎么结合',
+    '- 把这段经验沉淀到知识库：UI 自动化失败先看 Allure',
     '- 老师任务还差哪些',
+    '',
+    'QA 数据资产：',
+    '- 帮我生成一批电商平台客服训练数据',
+    '- 生成电商客服训练数据',
+    '- 帮我做一轮 OpenClaw 和 Hermes 的能力评测',
+    '- 整理一下 UI 自动化测试矩阵',
     '',
     '邮箱和报告：',
     '- UI 自动化完成后发报告到飞书和邮箱',
@@ -105,10 +117,47 @@ function buildCapabilityGuideReply(assistantName = 'OpenClaw') {
     '图片生成：',
     '- 生成一张图片：赛博风电商客服机器人海报',
     '- /image 极简科技风商品主图',
+    '',
+    `已注册能力：${capabilities.map((capability) => capability.name).join('、')}`,
+  ].join('\n');
+}
+
+function buildBrainGuideReply(assistantName = 'OpenClaw') {
+  return [
+    `${assistantName} 的长期记忆建议这样搭：`,
+    '',
+    'Obsidian：给你自己看的项目笔记库，适合放服务器接手手册、测试经验、邮箱规划、模型对比。',
+    'GBrain：给 Agent 用的“脑库层”，后面接 MCP/技能后，可以把 Markdown、检索、知识图谱和定时任务接进 OpenClaw/Hermes。',
+    '',
+    '推荐分工：',
+    '- OpenClaw：保留讯飞 CodingPlan，做稳定对照和 UI 自动化入口',
+    '- Hermes：继续用 LongCat，做自然语言总控、资料生成、评测和知识整理',
+    '- Obsidian/GBrain：沉淀长期记忆，不直接保存密钥',
+    '',
+    '你可以直接说：把这段经验沉淀到知识库：xxx',
+  ].join('\n');
+}
+
+function buildPlannerClarifyReply(text = '') {
+  return [
+    '我可以继续，但这个需求有点大，我先帮你拆成可执行方向。',
+    '',
+    '你可以直接说其中一种：',
+    '- 升级自然语言：让 OpenClaw/Hermes 更会聊天、更会判断任务',
+    '- 优化服务器：看硬盘、内存、日志、重启和互修',
+    '- 强化 UI 自动化：补用例、跑 GitHub Actions、整理 Allure 报告',
+    '- 建知识库：把经验写进 Obsidian/GBrain 风格的长期记忆',
+    '- 生成 QA 数据：电商客服训练数据、Agent 评测题、邮箱测试玩法',
+    '',
+    `我刚收到的是：${trimForReply(text, 120)}`,
   ].join('\n');
 }
 
 function buildMemoryAgentReply(route, memoryContext = buildMemoryContext(), options = {}) {
+  if (route.action === 'brain-guide') {
+    return buildBrainGuideReply(options.assistantName || 'OpenClaw');
+  }
+
   if (route.action === 'remember') {
     try {
       rememberMemoryNote(
@@ -358,7 +407,9 @@ async function buildOpsAgentReply(route, options = {}) {
 
 function buildChatAgentPrompt(text, memoryContext = '') {
   const parts = [
-    '请基于以上记忆，用中文简洁回答用户。不要编造服务器状态；需要实时状态时提示用户使用 /status。',
+    '请基于以上记忆，用中文自然回答用户，像一个会一起做项目的助手。',
+    '不要编造实时服务器状态；如果用户要实时状态，建议他说“你现在内存多少”“你硬盘还剩多少”或“看看服务器状态”。',
+    '如果用户在聊想法，先正常解释和拆解，不要机械要求用户先查 /status。',
     `用户消息：${text}`,
   ];
 
@@ -372,10 +423,12 @@ function buildChatAgentPrompt(text, memoryContext = '') {
 module.exports = {
   ALLOWED_OPS_ACTIONS,
   buildCapabilityGuideReply,
+  buildBrainGuideReply,
   buildChatAgentPrompt,
   buildDocAgentReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,
+  buildPlannerClarifyReply,
   buildQaAgentReply,
   isSafeOpsText,
   sanitizeReplyField,

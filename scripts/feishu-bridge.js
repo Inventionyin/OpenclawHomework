@@ -22,6 +22,7 @@ const {
   buildDocAgentReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,
+  buildPlannerClarifyReply,
   buildQaAgentReply,
 } = require('./agents/agent-handlers');
 const {
@@ -2534,10 +2535,26 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
     };
   }
 
+  if (route.agent === 'capability-agent') {
+    return {
+      handled: true,
+      replyText: buildCapabilityGuideReply(getAssistantName(env)),
+    };
+  }
+
+  if (route.agent === 'planner-agent') {
+    return {
+      handled: true,
+      replyText: buildPlannerClarifyReply(text),
+    };
+  }
+
   if (route.agent === 'memory-agent') {
     return {
       handled: true,
-      replyText: buildMemoryAgentReply(route),
+      replyText: buildMemoryAgentReply(route, undefined, {
+        assistantName: getAssistantName(env),
+      }),
     };
   }
 

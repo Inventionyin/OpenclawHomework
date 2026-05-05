@@ -119,6 +119,7 @@ test('parseSmallTalkMessage supports capability discovery phrases', () => {
   assert.match(reply, /服务器/);
   assert.match(reply, /记忆/);
   assert.match(reply, /邮箱/);
+  assert.match(reply, /GBrain|Obsidian/);
 });
 
 test('runLocalOpsAction returns summary data for memory and disk views', async () => {

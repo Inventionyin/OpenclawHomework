@@ -206,6 +206,53 @@ function routeQaAssetIntent(text) {
   return null;
 }
 
+function routeCapabilityIntent(text) {
+  const normalized = String(text ?? '').trim().toLowerCase();
+  if (/(你|我)?(现在)?(能|可以|会).{0,12}(做|干|玩).{0,20}(什么|哪些|啥|事情|功能)/i.test(normalized)
+    || /(有哪些|有什么).{0,16}(功能|能力|玩法|指令|命令|技能)/i.test(normalized)
+    || /^(帮助|help|怎么用|使用说明|你会做什么|你能做什么|怎么玩|玩法)$/i.test(normalized)) {
+    return { agent: 'capability-agent', action: 'guide', requiresAuth: false };
+  }
+  return null;
+}
+
+function routeBrainMemoryIntent(text) {
+  const original = stripMention(String(text ?? '').trim());
+  const normalized = original.toLowerCase();
+
+  const knowledgeNoteMatch = original.match(/(?:沉淀|保存|记住|记录).{0,12}(?:知识库|记忆|经验|笔记)?[:：]\s*(.+)$/i);
+  if (knowledgeNoteMatch) {
+    return {
+      agent: 'memory-agent',
+      action: 'remember',
+      note: knowledgeNoteMatch[1].trim(),
+      requiresAuth: true,
+    };
+  }
+
+  if (/(obsidian|gbrain|知识库|长期记忆|记忆系统|脑库|brain).{0,30}(怎么|如何|结合|接入|玩法|工作流|存储|分析)/i.test(normalized)
+    || /(怎么|如何).{0,30}(obsidian|gbrain|知识库|长期记忆|记忆系统|脑库|brain)/i.test(normalized)) {
+    return { agent: 'memory-agent', action: 'brain-guide', requiresAuth: true };
+  }
+
+  return null;
+}
+
+function routeBroadPlannerIntent(text) {
+  const normalized = String(text ?? '').trim().toLowerCase();
+  if (/(帮我|给我|把|将|来).{0,12}(项目|机器人|openclaw|hermes|龙虾|系统).{0,18}(优化|升级|完善|搞好|弄好|改好|二改|重构|增强)/i.test(normalized)
+    || /(搞|做|整|安排).{0,12}(完整|全套|一套|重度).{0,16}(工作流|系统|方案|agent|智能体)/i.test(normalized)) {
+    return {
+      agent: 'planner-agent',
+      action: 'clarify',
+      confidence: 'low',
+      requiresAuth: false,
+    };
+  }
+
+  return null;
+}
+
 function routeAgentIntent(text) {
   const original = stripMention(text);
   if (looksLikeTestHowToQuestion(original)) {
@@ -265,6 +312,16 @@ function routeAgentIntent(text) {
     return { agent: 'memory-agent', action: 'show', requiresAuth: true };
   }
 
+  const capabilityRoute = routeCapabilityIntent(normalized);
+  if (capabilityRoute) {
+    return capabilityRoute;
+  }
+
+  const brainMemoryRoute = routeBrainMemoryIntent(original);
+  if (brainMemoryRoute) {
+    return brainMemoryRoute;
+  }
+
   if (looksLikeImageGenerationRequest(normalized)) {
     return {
       agent: 'image-agent',
@@ -309,6 +366,11 @@ function routeAgentIntent(text) {
     return { agent: 'doc-agent', action: 'answer', requiresAuth: true };
   }
 
+  const broadPlannerRoute = routeBroadPlannerIntent(normalized);
+  if (broadPlannerRoute) {
+    return broadPlannerRoute;
+  }
+
   return { agent: 'chat-agent', action: 'chat', requiresAuth: false };
 }
 
@@ -323,6 +385,9 @@ module.exports = {
   normalizeText,
   normalizeNaturalLanguageOpsText,
   routeAgentIntent,
+  routeBrainMemoryIntent,
+  routeBroadPlannerIntent,
+  routeCapabilityIntent,
   routeQaAssetIntent,
   routeNaturalLanguageOps,
   stripMention,

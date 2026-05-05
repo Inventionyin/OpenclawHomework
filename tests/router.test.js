@@ -191,6 +191,40 @@ test('routeAgentIntent routes natural-language QA asset requests', () => {
   });
 });
 
+test('routeAgentIntent routes natural-language control brain and memory discovery', () => {
+  assert.deepEqual(routeAgentIntent('我现在能让你做哪些事情'), {
+    agent: 'capability-agent',
+    action: 'guide',
+    requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('Obsidian 存储和 GBrain 工作流怎么结合'), {
+    agent: 'memory-agent',
+    action: 'brain-guide',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('把这段经验沉淀到知识库：UI 自动化失败先看 Allure'), {
+    agent: 'memory-agent',
+    action: 'remember',
+    note: 'UI 自动化失败先看 Allure',
+    requiresAuth: true,
+  });
+});
+
+test('routeAgentIntent asks for clarification on broad natural-language work requests', () => {
+  assert.deepEqual(routeAgentIntent('帮我把项目优化一下'), {
+    agent: 'planner-agent',
+    action: 'clarify',
+    confidence: 'low',
+    requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('帮我搞一个完整工作流'), {
+    agent: 'planner-agent',
+    action: 'clarify',
+    confidence: 'low',
+    requiresAuth: false,
+  });
+});
+
 test('routeAgentIntent routes image generation requests', () => {
   assert.deepEqual(routeAgentIntent('/image 赛博风电商客服机器人海报'), {
     agent: 'image-agent',

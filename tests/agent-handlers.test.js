@@ -7,9 +7,11 @@ const test = require('node:test');
 const {
   buildChatAgentPrompt,
   buildCapabilityGuideReply,
+  buildBrainGuideReply,
   buildDocAgentReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,
+  buildPlannerClarifyReply,
   buildQaAgentReply,
   sanitizeReplyField,
 } = require('../scripts/agents/agent-handlers');
@@ -21,6 +23,24 @@ test('buildCapabilityGuideReply explains practical agent playbook', () => {
   assert.match(reply, /服务器/);
   assert.match(reply, /记忆/);
   assert.match(reply, /邮箱/);
+  assert.match(reply, /GBrain|Obsidian/);
+  assert.match(reply, /电商客服训练数据/);
+});
+
+test('buildBrainGuideReply explains Obsidian and GBrain memory upgrade', () => {
+  const reply = buildBrainGuideReply('Hermes');
+  assert.match(reply, /Hermes/);
+  assert.match(reply, /Obsidian/);
+  assert.match(reply, /GBrain/);
+  assert.match(reply, /知识库/);
+});
+
+test('buildPlannerClarifyReply turns vague requests into natural choices', () => {
+  const reply = buildPlannerClarifyReply('帮我把项目优化一下');
+  assert.match(reply, /我可以继续/);
+  assert.match(reply, /自然语言/);
+  assert.match(reply, /服务器/);
+  assert.match(reply, /UI 自动化/);
 });
 
 test('buildDocAgentReply answers project progress from memory', () => {
@@ -40,6 +60,15 @@ test('buildMemoryAgentReply shows memory context', () => {
   const reply = buildMemoryAgentReply({ action: 'show' }, '# Memory Context\nOpenClaw 已部署');
   assert.match(reply, /当前记忆摘要/);
   assert.match(reply, /OpenClaw/);
+});
+
+test('buildMemoryAgentReply explains brain-guide action', () => {
+  const reply = buildMemoryAgentReply({ action: 'brain-guide' }, '', {
+    assistantName: 'OpenClaw',
+  });
+  assert.match(reply, /OpenClaw/);
+  assert.match(reply, /Obsidian/);
+  assert.match(reply, /GBrain/);
 });
 
 test('buildMemoryAgentReply supports keyword search', () => {
