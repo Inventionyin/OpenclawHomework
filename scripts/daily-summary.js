@@ -110,7 +110,7 @@ function buildDailySummary(input = []) {
   ].join('\n');
 
   return {
-    subject: '[Daily Summary] 自动化测试日报',
+    subject: '自动化测试日报',
     text,
     html,
   };

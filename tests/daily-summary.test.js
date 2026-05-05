@@ -9,7 +9,7 @@ test('buildDailySummary returns summary counts and latest run link', () => {
     { conclusion: 'failure', runUrl: 'https://example.com/2' },
   ]);
 
-  assert.match(summary.subject, /Daily Summary/);
+  assert.equal(summary.subject, '自动化测试日报');
   assert.match(summary.text, /成功 1/);
   assert.match(summary.text, /失败 1/);
   assert.match(summary.text, /https:\/\/example.com\/2/);
