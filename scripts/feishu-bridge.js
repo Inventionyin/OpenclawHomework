@@ -22,6 +22,7 @@ const {
   buildDocAgentReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,
+  buildQaAgentReply,
 } = require('./agents/agent-handlers');
 const {
   runPeerSshAction,
@@ -2537,6 +2538,13 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
     return {
       handled: true,
       replyText: buildMemoryAgentReply(route),
+    };
+  }
+
+  if (route.agent === 'qa-agent') {
+    return {
+      handled: true,
+      replyText: buildQaAgentReply(route),
     };
   }
 

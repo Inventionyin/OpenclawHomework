@@ -2653,6 +2653,63 @@ test('createServer keeps chat-agent test failure questions out of workflow dispa
   }
 });
 
+test('createServer routes natural-language QA data requests without chat fallback', async () => {
+  let reply;
+  let chatCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      OPENCLAW_CHAT_ENABLED: 'true',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+    },
+    {
+      receiptSender: async (message) => {
+        reply = message;
+      },
+      chat: async () => {
+        chatCalled = true;
+        return 'should not be used';
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '帮我生成一批电商平台客服训练数据' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(chatCalled, false);
+    assert.match(JSON.parse(reply.content).text, /电商客服训练数据/);
+    assert.doesNotMatch(JSON.parse(reply.content).text, /\/status/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('createServer does not dispatch negated run-ui-test command', async () => {
   let dispatchCalled = false;
   let parserCalled = false;

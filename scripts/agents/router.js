@@ -177,6 +177,35 @@ function routeNaturalLanguageOps(text) {
   return null;
 }
 
+function routeQaAssetIntent(text) {
+  const normalized = String(text ?? '').trim().toLowerCase();
+
+  if (/(客服|客户|售后|support).{0,20}(训练|语料|数据|案例|用例|评测|评分)/i.test(normalized)
+    || /(训练|生成|整理).{0,20}(电商|商城|购物).{0,20}(客服|售后)/i.test(normalized)) {
+    return { agent: 'qa-agent', action: 'customer-service-data', requiresAuth: true };
+  }
+
+  if (/(agent|openclaw|hermes|龙虾).{0,30}(评测|评分|对比|能力测试|排行榜)/i.test(normalized)
+    || /(评测|评分|对比).{0,20}(agent|openclaw|hermes|龙虾)/i.test(normalized)) {
+    return { agent: 'qa-agent', action: 'agent-eval', requiresAuth: true };
+  }
+
+  if (/(ui|自动化|测试矩阵|测试用例).{0,20}(矩阵|清单|补|整理|生成|覆盖)/i.test(normalized)
+    || /(整理|生成|补).{0,20}(ui|自动化).{0,20}(测试|用例|矩阵)/i.test(normalized)) {
+    return { agent: 'qa-agent', action: 'ui-matrix', requiresAuth: true };
+  }
+
+  if (/(邮箱平台|邮箱|clawemail).{0,20}(怎么玩|玩法|调度|归档|验证码|结合)/i.test(normalized)) {
+    return { agent: 'qa-agent', action: 'email-playbook', requiresAuth: true };
+  }
+
+  if (/(qa\s*数据资产|数据资产|训练场|评测集)/i.test(normalized)) {
+    return { agent: 'qa-agent', action: 'overview', requiresAuth: true };
+  }
+
+  return null;
+}
+
 function routeAgentIntent(text) {
   const original = stripMention(text);
   if (looksLikeTestHowToQuestion(original)) {
@@ -254,6 +283,11 @@ function routeAgentIntent(text) {
     };
   }
 
+  const qaAssetRoute = routeQaAssetIntent(normalized);
+  if (qaAssetRoute) {
+    return qaAssetRoute;
+  }
+
   const naturalLanguageOpsRoute = routeNaturalLanguageOps(normalized);
   if (naturalLanguageOpsRoute) {
     return naturalLanguageOpsRoute;
@@ -289,6 +323,7 @@ module.exports = {
   normalizeText,
   normalizeNaturalLanguageOpsText,
   routeAgentIntent,
+  routeQaAssetIntent,
   routeNaturalLanguageOps,
   stripMention,
 };

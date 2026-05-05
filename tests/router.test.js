@@ -168,6 +168,29 @@ test('routeAgentIntent routes memory commands', () => {
   });
 });
 
+test('routeAgentIntent routes natural-language QA asset requests', () => {
+  assert.deepEqual(routeAgentIntent('帮我生成一批电商平台客服训练数据'), {
+    agent: 'qa-agent',
+    action: 'customer-service-data',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('帮我做一轮 OpenClaw 和 Hermes 的能力评测'), {
+    agent: 'qa-agent',
+    action: 'agent-eval',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('整理一下 UI 自动化测试矩阵'), {
+    agent: 'qa-agent',
+    action: 'ui-matrix',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('邮箱平台可以怎么玩'), {
+    agent: 'qa-agent',
+    action: 'email-playbook',
+    requiresAuth: true,
+  });
+});
+
 test('routeAgentIntent routes image generation requests', () => {
   assert.deepEqual(routeAgentIntent('/image 赛博风电商客服机器人海报'), {
     agent: 'image-agent',

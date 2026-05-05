@@ -10,6 +10,7 @@ const {
   buildDocAgentReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,
+  buildQaAgentReply,
   sanitizeReplyField,
 } = require('../scripts/agents/agent-handlers');
 
@@ -69,6 +70,17 @@ test('buildMemoryAgentReply rejects secret-like notes', () => {
     buildMemoryAgentReply({ action: 'remember', note: 'GITHUB_TOKEN=ghp_example' }, ''),
     /不能保存疑似密钥/,
   );
+});
+
+test('buildQaAgentReply answers customer service training requests naturally', () => {
+  const reply = buildQaAgentReply({
+    action: 'customer-service-data',
+  });
+
+  assert.match(reply, /电商客服训练数据/);
+  assert.match(reply, /144/);
+  assert.match(reply, /customer-service-cases\.json/);
+  assert.doesNotMatch(reply, /\/status/);
 });
 
 test('buildOpsAgentReply formats whitelisted check results', async () => {

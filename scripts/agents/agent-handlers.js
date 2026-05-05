@@ -1,5 +1,11 @@
 const { join } = require('node:path');
 const {
+  buildAgentEvalTasks,
+  buildCustomerServiceCases,
+  buildEmailPlaybook,
+  buildUiAutomationMatrix,
+} = require('../qa-assets');
+const {
   buildMemoryContext,
   buildMemorySearchContext,
   isSafeMemoryText,
@@ -134,6 +140,72 @@ async function defaultRunOpsCheck() {
     watchdog: 'unknown',
     commit: 'unknown',
   };
+}
+
+function buildQaAgentReply(route = {}) {
+  const customerCases = buildCustomerServiceCases();
+  const agentTasks = buildAgentEvalTasks();
+  const uiMatrix = buildUiAutomationMatrix();
+  const emailPlaybook = buildEmailPlaybook();
+
+  if (route.action === 'customer-service-data') {
+    return [
+      `已准备好一批电商客服训练数据：${customerCases.length} 条。`,
+      '你可以直接让我继续做：',
+      '- 抽 20 条给 AI 客服回答并评分',
+      '- 把退款/物流/优惠券场景各扩展 100 条',
+      '- 找出客服语料里还缺哪些场景',
+      '',
+      '数据位置：data/qa-assets/customer-service-cases.json',
+      '建议归档邮箱：agent3.archive@claw.163.com',
+    ].join('\n');
+  }
+
+  if (route.action === 'agent-eval') {
+    return [
+      `已准备好 OpenClaw/Hermes Agent 评测题：${agentTasks.length} 条。`,
+      '可以这样玩：',
+      '- 跑一轮 OpenClaw 和 Hermes 对比',
+      '- 只测 UI 自动化、服务器运维、邮箱调度三类',
+      '- 生成评分报告并发到 hagent.eval@claw.163.com',
+      '',
+      '数据位置：data/qa-assets/agent-eval-tasks.json',
+    ].join('\n');
+  }
+
+  if (route.action === 'ui-matrix') {
+    return [
+      `已整理 UI 自动化测试矩阵：${uiMatrix.length} 条。`,
+      '优先建议从 P0 开始：登录、邮箱验证码、搜索、加购、下单、AI 客服入口。',
+      '你可以继续说：把 P0 转成 Playwright 用例 / 只看 AI 客服相关用例 / 生成 GitHub Actions 跑法。',
+      '',
+      '数据位置：data/qa-assets/ui-automation-matrix.json',
+    ].join('\n');
+  }
+
+  if (route.action === 'email-playbook') {
+    return [
+      `邮箱平台玩法已经整理好：${emailPlaybook.length} 个动作入口。`,
+      '最自然的用法：',
+      '- 用 verify 邮箱测注册验证码',
+      '- 把失败样本归档到 archive',
+      '- 把 Agent 评测结果发到 eval',
+      '- 每天发一封测试日报到 daily',
+      '',
+      '数据位置：data/qa-assets/email-playbook.json',
+      '说明文档：docs/QA数据资产与邮箱平台玩法.md',
+    ].join('\n');
+  }
+
+  return [
+    '当前 QA 数据资产可以这样用：',
+    `- 电商客服训练数据：${customerCases.length} 条`,
+    `- Agent 评测题：${agentTasks.length} 条`,
+    `- UI 自动化矩阵：${uiMatrix.length} 条`,
+    `- 邮箱平台玩法：${emailPlaybook.length} 个动作`,
+    '',
+    '你可以直接说：帮我生成一批电商平台客服训练数据 / 做一轮 Agent 评测 / 整理 UI 自动化测试矩阵 / 邮箱平台可以怎么玩。',
+  ].join('\n');
 }
 
 function targetLabel(target) {
@@ -304,6 +376,7 @@ module.exports = {
   buildDocAgentReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,
+  buildQaAgentReply,
   isSafeOpsText,
   sanitizeReplyField,
   trimForReply,
