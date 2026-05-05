@@ -14,6 +14,9 @@ const {
 const {
   listCapabilities,
 } = require('./capability-registry');
+const {
+  runGBrainSearch,
+} = require('./gbrain-client');
 
 const OPS_SECRET_PATTERNS = [
   /\bauthorization\s*:\s*\S+/i,
@@ -173,6 +176,25 @@ function buildMemoryAgentReply(route, memoryContext = buildMemoryContext(), opti
   if (route.action === 'search') {
     const searchMemoryContext = options.searchMemoryContext || buildMemorySearchContext;
     return searchMemoryContext(route.query);
+  }
+
+  if (route.action === 'brain-search') {
+    const brainSearch = options.brainSearch || ((query) => runGBrainSearch(query, {
+      env: options.env,
+      cwd: options.gbrainCwd,
+      gbrainBin: options.gbrainBin,
+    }));
+    return Promise.resolve()
+      .then(() => brainSearch(route.query))
+      .catch((error) => {
+      const searchMemoryContext = options.searchMemoryContext || buildMemorySearchContext;
+      return [
+        'GBrain 暂时不可用，先回退到本地记忆搜索。',
+        `原因：${sanitizeReplyField(error.message || error, 300)}`,
+        '',
+        searchMemoryContext(route.query),
+      ].join('\n');
+      });
   }
 
   return [

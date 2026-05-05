@@ -166,6 +166,18 @@ test('routeAgentIntent routes memory commands', () => {
     note: '今天修复了 session lock',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('查知识库 LongCat 模型分工'), {
+    agent: 'memory-agent',
+    action: 'brain-search',
+    query: 'LongCat 模型分工',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('问脑库 UI 自动化报告怎么发邮箱'), {
+    agent: 'memory-agent',
+    action: 'brain-search',
+    query: 'UI 自动化报告怎么发邮箱',
+    requiresAuth: true,
+  });
 });
 
 test('routeAgentIntent routes natural-language QA asset requests', () => {

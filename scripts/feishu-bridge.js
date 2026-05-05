@@ -2552,8 +2552,9 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
   if (route.agent === 'memory-agent') {
     return {
       handled: true,
-      replyText: buildMemoryAgentReply(route, undefined, {
+      replyText: await buildMemoryAgentReply(route, undefined, {
         assistantName: getAssistantName(env),
+        env,
       }),
     };
   }

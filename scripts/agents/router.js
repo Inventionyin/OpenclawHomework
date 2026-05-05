@@ -220,6 +220,16 @@ function routeBrainMemoryIntent(text) {
   const original = stripMention(String(text ?? '').trim());
   const normalized = original.toLowerCase();
 
+  const brainSearchMatch = original.match(/^(?:查|搜索|问|查询|检索).{0,6}(?:知识库|脑库|gbrain|brain)[:：\s]*(.+)$/i);
+  if (brainSearchMatch) {
+    return {
+      agent: 'memory-agent',
+      action: 'brain-search',
+      query: brainSearchMatch[1].trim(),
+      requiresAuth: true,
+    };
+  }
+
   const knowledgeNoteMatch = original.match(/(?:沉淀|保存|记住|记录).{0,12}(?:知识库|记忆|经验|笔记)?[:：]\s*(.+)$/i);
   if (knowledgeNoteMatch) {
     return {

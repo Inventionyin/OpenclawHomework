@@ -79,6 +79,31 @@ test('buildMemoryAgentReply supports keyword search', () => {
   assert.match(reply, /session lock/);
 });
 
+test('buildMemoryAgentReply supports GBrain search action', async () => {
+  const reply = await buildMemoryAgentReply({ action: 'brain-search', query: 'LongCat 模型分工' }, '', {
+    brainSearch: async (query) => [
+      '# GBrain 检索结果',
+      '',
+      `- docs/openclawhermesgbrain ${query}：OpenClaw 使用讯飞，Hermes 使用 LongCat。`,
+    ].join('\n'),
+  });
+
+  assert.match(reply, /GBrain 检索结果/);
+  assert.match(reply, /LongCat/);
+});
+
+test('buildMemoryAgentReply falls back when GBrain search is unavailable', async () => {
+  const reply = await buildMemoryAgentReply({ action: 'brain-search', query: 'session lock' }, '', {
+    brainSearch: async () => {
+      throw new Error('gbrain missing');
+    },
+    searchMemoryContext: () => '# 记忆检索结果\n\n- runbook-notes.md session lock 已修复',
+  });
+
+  assert.match(reply, /GBrain 暂时不可用/);
+  assert.match(reply, /记忆检索结果/);
+});
+
 test('buildMemoryAgentReply stores safe note', () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'agent-handler-test-'));
   try {
