@@ -21,6 +21,9 @@ const {
 const {
   getUsageLedgerPath,
 } = require('../usage-ledger');
+const {
+  resolveMailboxAction,
+} = require('../mailbox-action-router');
 
 const OPS_SECRET_PATTERNS = [
   /\bauthorization\s*:\s*\S+/i,
@@ -230,10 +233,93 @@ function buildTokenSummaryReply(entries = []) {
   return lines.join('\n');
 }
 
+function mailboxLine(actionName, env = process.env) {
+  const action = resolveMailboxAction(actionName, env);
+  if (!action.enabled || !action.mailbox) {
+    return `- ${actionName}：未启用`;
+  }
+  return `- ${actionName} -> ${action.mailbox}：${action.description}`;
+}
+
+function buildClerkMailboxWorkbenchReply(env = process.env) {
+  return [
+    '文员邮箱工作台：',
+    mailboxLine('task', env),
+    mailboxLine('report', env),
+    mailboxLine('verify', env),
+    mailboxLine('support', env),
+    mailboxLine('eval', env),
+    mailboxLine('files', env),
+    mailboxLine('archive', env),
+    mailboxLine('daily', env),
+    '',
+    '自然语言玩法：',
+    '- 文员，用 verify 邮箱设计一轮注册验证码测试',
+    '- 文员，把失败样本归档到 archive',
+    '- 文员，把今天日报发到邮箱',
+    '- 文员，整理一批客服训练数据并归档',
+    '',
+    '我会优先做整理、归档、邮件摘要，不会碰服务器重启和清理。',
+  ].join('\n');
+}
+
+function buildClerkTrainingDataReply() {
+  const customerCases = buildCustomerServiceCases();
+  const agentTasks = buildAgentEvalTasks();
+  const emailPlaybook = buildEmailPlaybook();
+  return [
+    `文员训练数据工作流：已准备电商客服训练数据 ${customerCases.length} 条、Agent 评测题 ${agentTasks.length} 条、邮箱动作 ${emailPlaybook.length} 个。`,
+    '',
+    '我建议今天这样用：',
+    '- 先抽退款、物流、优惠券、账号验证码、AI 客服转人工这 5 类做小样本评测',
+    '- 用 Hermes/LongCat 生成客服回复，再按“安抚用户、下一步、无敏感信息、无编造订单状态”打分',
+    '- 好样本归档到 agent3.archive@claw.163.com',
+    '- 评测结果发到 hagent.eval@claw.163.com',
+    '',
+    '数据位置：data/qa-assets/customer-service-cases.json',
+  ].join('\n');
+}
+
+function buildClerkWorkbenchReply(options = {}) {
+  const env = options.env || process.env;
+  const entries = (options.readUsageLedger || defaultReadUsageLedger)(env);
+  const tokenIntro = entries.length
+    ? `账本：最近已有 ${entries.length} 条 token/耗时记录，可以直接统计。`
+    : '账本：暂时没有记录，普通聊几句后就能统计 token/耗时。';
+  const customerCases = buildCustomerServiceCases();
+  const uiMatrix = buildUiAutomationMatrix();
+
+  return [
+    '文员工作台：今天我能把这些串起来。',
+    `- ${tokenIntro}`,
+    `- QA：电商客服训练数据 ${customerCases.length} 条，UI 自动化矩阵 ${uiMatrix.length} 条。`,
+    `- 日报：默认发到 ${resolveMailboxAction('daily', env).mailbox || 'daily 邮箱'}。`,
+    `- 归档：失败样本和训练语料走 ${resolveMailboxAction('archive', env).mailbox || 'archive 邮箱'}。`,
+    '',
+    '你可以自然语言继续说：',
+    '- 文员，统计今天 Hermes 和 OpenClaw 谁更费 token',
+    '- 文员，邮箱平台怎么结合起来玩',
+    '- 文员，帮我生成一批电商平台客服训练数据',
+    '- 文员，发送今天日报到邮箱',
+  ].join('\n');
+}
+
 function buildClerkAgentReply(route = {}, options = {}) {
   if (route.action === 'token-summary') {
     const entries = (options.readUsageLedger || defaultReadUsageLedger)(options.env || process.env);
     return buildTokenSummaryReply(entries);
+  }
+
+  if (route.action === 'workbench') {
+    return buildClerkWorkbenchReply(options);
+  }
+
+  if (route.action === 'mailbox-workbench') {
+    return buildClerkMailboxWorkbenchReply(options.env || process.env);
+  }
+
+  if (route.action === 'training-data') {
+    return buildClerkTrainingDataReply();
   }
 
   if (route.action === 'todo-summary') {
@@ -256,6 +342,16 @@ function buildClerkAgentReply(route = {}, options = {}) {
       '- 邮箱：可以把日报发到配置好的报告邮箱。',
       '',
       '下一步可以接定时任务：每天 0 点跑测试，完成后自动生成日报并发邮箱。',
+    ].join('\n');
+  }
+
+  if (route.action === 'daily-email') {
+    const daily = resolveMailboxAction('daily', options.env || process.env);
+    return [
+      '文员日报邮件：',
+      `- 收件邮箱：${daily.mailbox || 'daily 邮箱未配置'}`,
+      '- 内容会包含 UI 自动化、token/耗时、服务器状态、邮箱归档建议。',
+      '- 当前只是生成发送意图；飞书桥梁会在明确说“发送日报到邮箱”时调用邮件发送。',
     ].join('\n');
   }
 
@@ -571,6 +667,9 @@ module.exports = {
   buildBrainGuideReply,
   buildChatAgentPrompt,
   buildClerkAgentReply,
+  buildClerkMailboxWorkbenchReply,
+  buildClerkTrainingDataReply,
+  buildClerkWorkbenchReply,
   buildDocAgentReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,

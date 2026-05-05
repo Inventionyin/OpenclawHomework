@@ -2602,6 +2602,21 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
   }
 
   if (route.agent === 'clerk-agent') {
+    if (route.action === 'daily-email') {
+      const messages = await sendDailySummaryNotification([], env, options);
+      const mailbox = messages[0]?.mailbox || 'daily 邮箱';
+      const status = messages.length
+        ? `已发送日报到 ${mailbox}。`
+        : '日报邮件没有发出：请检查 EMAIL_NOTIFY_ENABLED、SMTP 配置和 daily 邮箱动作是否启用。';
+      return {
+        handled: true,
+        replyText: [
+          status,
+          '',
+          buildClerkAgentReply(route, { env }),
+        ].join('\n'),
+      };
+    }
     return {
       handled: true,
       replyText: buildClerkAgentReply(route, { env }),
@@ -2933,6 +2948,7 @@ module.exports = {
   buildEmailRunResultSubject,
   buildUiMailboxMessages,
   buildFeishuResultCard,
+  buildRoutedAgentReply,
   buildRunArtifactsUrl,
   buildFeishuCardMessage,
   buildFeishuTextMessage,

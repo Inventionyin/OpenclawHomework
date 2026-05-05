@@ -36,6 +36,7 @@ const {
   extractFeishuImageKeys,
   rememberFeishuImage,
   uploadFeishuImage,
+  buildRoutedAgentReply,
 } = require('../scripts/feishu-bridge');
 
 async function waitForCondition(checker, options = {}) {
@@ -837,6 +838,42 @@ test('sendDailySummaryNotification routes message to daily mailbox action', asyn
   assert.equal(sent[0].action, 'daily');
   assert.equal(sent[0].to[0], 'agent4.daily@claw.163.com');
   assert.match(sent[0].subject, /Daily Summary/);
+});
+
+test('buildRoutedAgentReply can send clerk daily summary email when explicitly requested', async () => {
+  const sent = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-clerk-daily',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '文员，发送今天日报到邮箱' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      EMAIL_NOTIFY_ENABLED: 'true',
+    },
+    {
+      emailSender: async (message) => {
+        sent.push(message);
+        return { sent: true };
+      },
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].action, 'daily');
+  assert.match(reply.replyText, /已发送日报/);
+  assert.match(reply.replyText, /agent4\.daily@claw\.163\.com/);
 });
 
 test('sendFeishuTextMessage fetches tenant token and sends text message', async () => {

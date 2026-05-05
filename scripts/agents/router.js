@@ -212,8 +212,22 @@ function routeClerkIntent(text) {
     return null;
   }
 
+  if (/(邮箱平台|邮箱|clawemail).{0,24}(怎么玩|玩法|调度|归档|验证码|结合|分工|工作台)/i.test(normalized)
+    || /(怎么玩|玩法|调度|归档|验证码|结合|分工|工作台).{0,24}(邮箱平台|邮箱|clawemail)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'mailbox-workbench', requiresAuth: true };
+  }
+
+  if (/(客服|客户|售后|support).{0,20}(训练|语料|数据|案例|用例|评测|评分)/i.test(normalized)
+    || /(训练|生成|整理).{0,20}(电商|商城|购物).{0,20}(客服|售后)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'training-data', requiresAuth: true };
+  }
+
   if (/(token|耗时|用量|账本|谁更费|谁更省|统计|对比)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'token-summary', requiresAuth: true };
+  }
+
+  if (/(发送|发|寄).{0,12}(日报|周报|报告).{0,12}(邮箱|邮件)|((日报|周报|报告).{0,12}(发送|发|寄).{0,12}(邮箱|邮件))/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'daily-email', requiresAuth: true };
   }
 
   if (/(待办|todo|清单|还没|未完成|下一步|整理一下)/i.test(normalized)) {
@@ -226,6 +240,10 @@ function routeClerkIntent(text) {
 
   if (/(知识库|沉淀|归档|记录|整理)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'knowledge-summary', requiresAuth: true };
+  }
+
+  if (/(干嘛|做什么|能做|会做|工作台|今天|现在|帮我)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'workbench', requiresAuth: true };
   }
 
   return { agent: 'clerk-agent', action: 'guide', requiresAuth: true };
@@ -375,14 +393,14 @@ function routeAgentIntent(text) {
     };
   }
 
-  const qaAssetRoute = routeQaAssetIntent(normalized);
-  if (qaAssetRoute) {
-    return qaAssetRoute;
-  }
-
   const clerkRoute = routeClerkIntent(original);
   if (clerkRoute) {
     return clerkRoute;
+  }
+
+  const qaAssetRoute = routeQaAssetIntent(normalized);
+  if (qaAssetRoute) {
+    return qaAssetRoute;
   }
 
   const naturalLanguageOpsRoute = routeNaturalLanguageOps(normalized);

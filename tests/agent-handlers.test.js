@@ -82,6 +82,35 @@ test('buildClerkAgentReply gives safe office playbook for todos and reports', ()
   assert.match(reportReply, /邮箱/);
 });
 
+test('buildClerkAgentReply shows practical workbench with mailbox and qa assets', () => {
+  const reply = buildClerkAgentReply({ action: 'workbench' }, {
+    readUsageLedger: () => [
+      { assistant: 'Hermes', model: 'LongCat', totalTokens: 100, modelElapsedMs: 500 },
+    ],
+  });
+
+  assert.match(reply, /文员工作台/);
+  assert.match(reply, /agent4\.daily@claw\.163\.com/);
+  assert.match(reply, /电商客服训练数据/);
+  assert.match(reply, /token/);
+});
+
+test('buildClerkAgentReply explains real mailbox workbench bindings', () => {
+  const reply = buildClerkAgentReply({ action: 'mailbox-workbench' });
+  assert.match(reply, /邮箱工作台/);
+  assert.match(reply, /watchee\.task@claw\.163\.com/);
+  assert.match(reply, /evasan\.verify@claw\.163\.com/);
+  assert.match(reply, /agent3\.archive@claw\.163\.com/);
+});
+
+test('buildClerkAgentReply turns training data into a clerk workflow', () => {
+  const reply = buildClerkAgentReply({ action: 'training-data' });
+  assert.match(reply, /电商客服训练数据/);
+  assert.match(reply, /144/);
+  assert.match(reply, /hagent\.eval@claw\.163\.com/);
+  assert.match(reply, /agent3\.archive@claw\.163\.com/);
+});
+
 test('buildDocAgentReply answers project progress from memory', () => {
   const memoryContext = [
     '# Memory Context',

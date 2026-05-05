@@ -219,6 +219,26 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'daily-report',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，今天可以帮我干嘛'), {
+    agent: 'clerk-agent',
+    action: 'workbench',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，邮箱平台现在怎么结合起来玩'), {
+    agent: 'clerk-agent',
+    action: 'mailbox-workbench',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，帮我生成一批电商平台客服训练数据'), {
+    agent: 'clerk-agent',
+    action: 'training-data',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，发送今天日报到邮箱'), {
+    agent: 'clerk-agent',
+    action: 'daily-email',
+    requiresAuth: true,
+  });
 });
 
 test('routeAgentIntent routes natural-language control brain and memory discovery', () => {
