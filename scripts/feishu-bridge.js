@@ -2606,6 +2606,20 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
 
   if (route.agent === 'clerk-agent') {
     if (route.action === 'token-lab') {
+      if (options.receiptSender) {
+        await sendTimedFeishuMessage(
+          options.receiptSender,
+          buildFeishuTextMessage(payload, '收到，开始跑高 token 训练场。这个任务会批量调用模型，完成后我会发报告和产物路径。', env, {
+            status: '运行中',
+            elapsedMs: elapsedMs(options.timingContext?.startedAt),
+          }),
+          env,
+          options.timingContext,
+          'token-lab-receipt',
+        ).catch((error) => {
+          console.error(`Feishu token lab receipt failed: ${error.message}`);
+        });
+      }
       const tokenLabRunner = options.tokenLabRunner || ((runnerOptions) => runTokenLab(runnerOptions));
       const result = await tokenLabRunner({
         env,

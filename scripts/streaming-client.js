@@ -171,6 +171,9 @@ function buildStreamingRequestBody(endpoint, prompt, config) {
 
 async function postStreamingEndpoint(endpoint, prompt, config, fetchImpl) {
   const path = endpoint === 'responses' ? '/responses' : '/chat/completions';
+  const timeoutMs = Number(config.requestTimeoutMs || config.timeoutMs || 120000);
+  const controller = typeof AbortController !== 'undefined' && timeoutMs > 0 ? new AbortController() : null;
+  const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
   const response = await fetchImpl(`${config.baseUrl}${path}`, {
     method: 'POST',
     headers: {
@@ -178,7 +181,12 @@ async function postStreamingEndpoint(endpoint, prompt, config, fetchImpl) {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
     },
+    signal: controller?.signal,
     body: JSON.stringify(buildStreamingRequestBody(endpoint, prompt, config)),
+  }).finally(() => {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
   });
 
   if (!response.ok) {
@@ -272,6 +280,8 @@ async function streamModelText(prompt, options = {}) {
       'simpleModel',
       'thinkingModel',
       'endpointMode',
+      'requestTimeoutMs',
+      'timeoutMs',
     ].includes(key))),
   };
   config.baseUrl = normalizeBaseUrl(config.baseUrl);

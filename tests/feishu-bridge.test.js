@@ -932,6 +932,43 @@ test('buildRoutedAgentReply can run clerk token lab when explicitly requested', 
   assert.match(reply.replyText, /report\.md/);
 });
 
+test('buildRoutedAgentReply sends a token lab receipt before long execution', async () => {
+  const sent = [];
+  await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-clerk-token-lab-receipt',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '文员，启动高 token 训练场' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {
+      receiptSender: async (message) => {
+        sent.push(JSON.parse(message.content).text);
+        return { message_id: 'reply-a' };
+      },
+      tokenLabRunner: async () => ({
+        report: { totalJobs: 1, totalTokens: 10, text: 'ok' },
+        files: {},
+        emailMessages: [],
+      }),
+    },
+  );
+
+  assert.match(sent[0], /收到/);
+  assert.match(sent[0], /高 token 训练场/);
+});
+
 test('sendFeishuTextMessage fetches tenant token and sends text message', async () => {
   const calls = [];
   await sendFeishuTextMessage(

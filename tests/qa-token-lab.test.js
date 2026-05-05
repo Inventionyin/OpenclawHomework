@@ -84,6 +84,35 @@ test('runTokenLab writes artifacts, usage ledger and mailbox digest', async () =
   }
 });
 
+test('runTokenLab keeps producing a report when one model call fails', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'qa-token-lab-failure-'));
+  try {
+    const result = await runTokenLab({
+      batchSize: 2,
+      outputDir: tempDir,
+      env: {},
+      modelRunner: async (prompt, job) => {
+        if (job.id.endsWith('001')) {
+          throw new Error('LongCat timeout');
+        }
+        return {
+          text: JSON.stringify({ id: job.id, score: 91, risk: 'low', labels: [job.kind] }),
+          model: 'LongCat-Flash-Lite',
+          tier: job.modelTier,
+          usage: { total_tokens: 20 },
+        };
+      },
+    });
+
+    assert.equal(result.items.length, 2);
+    assert.equal(result.report.failedJobs, 1);
+    assert.match(result.items[0].parsed.error, /LongCat timeout/);
+    assert.match(result.report.text, /失败任务：1/);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('buildTokenLabReport summarizes estimated tokens when provider usage is missing', () => {
   const report = buildTokenLabReport([
     {

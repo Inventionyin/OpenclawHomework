@@ -147,12 +147,16 @@ function buildTokenLabReport(items = []) {
   let estimatedTotalTokens = 0;
   let scored = 0;
   let scoreTotal = 0;
+  let failedJobs = 0;
 
   for (const item of rows) {
     const kind = item.job?.kind || 'unknown';
     const model = item.modelResult?.model || 'unknown';
     byKind.set(kind, (byKind.get(kind) || 0) + 1);
     byModel.set(model, (byModel.get(model) || 0) + 1);
+    if (item.error || item.parsed?.error) {
+      failedJobs += 1;
+    }
     const ledger = buildUsageLedgerEntry({
       modelResult: item.modelResult,
       promptChars: item.promptChars,
@@ -173,6 +177,7 @@ function buildTokenLabReport(items = []) {
   const text = [
     'QA Token Lab 训练场报告',
     `总任务：${rows.length}`,
+    `失败任务：${failedJobs}`,
     `任务分布：${kindText}`,
     `模型分布：${modelText}`,
     totalTokens
@@ -187,6 +192,7 @@ function buildTokenLabReport(items = []) {
 
   return {
     totalJobs: rows.length,
+    failedJobs,
     byKind: Object.fromEntries(byKind.entries()),
     byModel: Object.fromEntries(byModel.entries()),
     totalTokens,
@@ -241,10 +247,28 @@ async function runTokenLab(options = {}) {
   for (const job of plan.jobs) {
     const prompt = buildTokenLabPrompt(job);
     const startedAt = Date.now();
-    const modelResult = await modelRunner(prompt, job, { env, modelOptions: options.modelOptions });
+    let modelResult;
+    let error = null;
+    try {
+      modelResult = await modelRunner(prompt, job, { env, modelOptions: options.modelOptions });
+    } catch (caughtError) {
+      error = caughtError;
+      modelResult = {
+        text: '',
+        model: 'unavailable',
+        tier: job.modelTier,
+        endpoint: 'error',
+      };
+    }
     const elapsedMs = Date.now() - startedAt;
     const text = String(modelResult?.text || '');
-    const parsed = safeJsonParse(text) || {
+    const parsed = error ? {
+      id: job.id,
+      error: String(error.message || error),
+      score: 0,
+      risk: 'high',
+      labels: [],
+    } : safeJsonParse(text) || {
       id: job.id,
       raw: text,
       score: 0,
@@ -258,6 +282,7 @@ async function runTokenLab(options = {}) {
       elapsedMs,
       modelResult,
       parsed,
+      error: error ? String(error.message || error) : undefined,
     };
     items.push(item);
     appendUsageLedgerEntry(env, {
