@@ -78,3 +78,29 @@ test('appendUsageLedgerEntry writes one JSON line when enabled', () => {
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('buildUsageLedgerEntry still records latency when provider omits token usage', () => {
+  const entry = buildUsageLedgerEntry({
+    assistant: 'Hermes',
+    route: { agent: 'chat-agent', action: 'chat' },
+    modelResult: {
+      model: 'LongCat-Flash-Chat',
+      tier: 'chat',
+      endpoint: 'chat_completions',
+      usage: null,
+    },
+    elapsedMs: 9000,
+    modelElapsedMs: 5000,
+    promptChars: 42,
+    replyChars: 88,
+    timestamp: '2026-05-05T01:00:00.000Z',
+  });
+
+  assert.equal(entry.assistant, 'Hermes');
+  assert.equal(entry.model, 'LongCat-Flash-Chat');
+  assert.equal(entry.modelElapsedMs, 5000);
+  assert.equal(entry.promptChars, 42);
+  assert.equal(entry.replyChars, 88);
+  assert.equal(entry.usageMissing, true);
+  assert.equal(entry.totalTokens, undefined);
+});

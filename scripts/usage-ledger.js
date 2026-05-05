@@ -18,6 +18,7 @@ function pickUsageNumber(usage = {}, ...keys) {
 
 function buildUsageLedgerEntry(input = {}) {
   const usage = input.modelResult?.usage || input.usage || {};
+  const hasUsage = usage && typeof usage === 'object' && Object.keys(usage).length > 0;
   const route = input.route || {};
   const entry = {
     timestamp: input.timestamp || new Date().toISOString(),
@@ -35,6 +36,7 @@ function buildUsageLedgerEntry(input = {}) {
     promptTokens: pickUsageNumber(usage, 'prompt_tokens', 'input_tokens'),
     completionTokens: pickUsageNumber(usage, 'completion_tokens', 'output_tokens'),
     totalTokens: pickUsageNumber(usage, 'total_tokens'),
+    usageMissing: hasUsage ? undefined : true,
   };
 
   return Object.fromEntries(

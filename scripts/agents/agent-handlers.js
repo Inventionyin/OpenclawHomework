@@ -195,10 +195,18 @@ function summarizeUsageLedger(entries = []) {
       model,
       calls: 0,
       totalTokens: 0,
+      tokenCalls: 0,
+      usageMissingCalls: 0,
       modelElapsedMs: 0,
     };
     current.calls += 1;
-    current.totalTokens += Number(entry.totalTokens || 0);
+    if (entry.totalTokens !== undefined && entry.totalTokens !== null) {
+      current.totalTokens += Number(entry.totalTokens || 0);
+      current.tokenCalls += 1;
+    }
+    if (entry.usageMissing || entry.totalTokens === undefined || entry.totalTokens === null) {
+      current.usageMissingCalls += 1;
+    }
     current.modelElapsedMs += Number(entry.modelElapsedMs || 0);
     summary.set(key, current);
   }
@@ -221,9 +229,15 @@ function buildTokenSummaryReply(entries = []) {
   ];
 
   rows.forEach((row, index) => {
-    const avgTokens = row.calls ? Math.round(row.totalTokens / row.calls) : 0;
+    const avgTokens = row.tokenCalls ? Math.round(row.totalTokens / row.tokenCalls) : 0;
     const avgMs = row.calls ? Math.round(row.modelElapsedMs / row.calls) : 0;
-    lines.push(`${index + 1}. ${row.assistant} / ${row.model}：${row.calls} 次，${row.totalTokens} tokens，平均 ${avgTokens} tokens/次，模型平均耗时 ${avgMs}ms`);
+    const tokenText = row.tokenCalls
+      ? `${row.totalTokens} tokens，平均 ${avgTokens} tokens/次`
+      : '未返回 token';
+    const missingText = row.usageMissingCalls && row.tokenCalls
+      ? `，${row.usageMissingCalls} 次未返回 token`
+      : '';
+    lines.push(`${index + 1}. ${row.assistant} / ${row.model}：${row.calls} 次，${tokenText}${missingText}，模型平均耗时 ${avgMs}ms`);
   });
 
   const top = rows[0];

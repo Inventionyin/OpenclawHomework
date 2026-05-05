@@ -61,6 +61,12 @@ test('buildClerkAgentReply summarizes token usage from ledger lines', () => {
         totalTokens: 20,
         modelElapsedMs: 2000,
       },
+      {
+        assistant: 'Hermes',
+        model: 'LongCat-Flash-Lite',
+        usageMissing: true,
+        modelElapsedMs: 3000,
+      },
     ],
   });
 
@@ -69,6 +75,7 @@ test('buildClerkAgentReply summarizes token usage from ledger lines', () => {
   assert.match(reply, /30/);
   assert.match(reply, /OpenClaw/);
   assert.match(reply, /20/);
+  assert.match(reply, /未返回 token/);
 });
 
 test('buildClerkAgentReply gives safe office playbook for todos and reports', () => {
