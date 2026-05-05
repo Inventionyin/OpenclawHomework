@@ -136,16 +136,23 @@ test('streamModelText uses simple model tier for lightweight prompts', async () 
       calls.push({ url, options });
       return sseResponse([
         'data: {"choices":[{"delta":{"content":"正常"}}]}\n\n',
+        'data: {"choices":[],"usage":{"prompt_tokens":12,"completion_tokens":2,"total_tokens":14}}\n\n',
         'data: [DONE]\n\n',
       ], { 'content-type': 'text/event-stream' });
     },
   });
 
   assert.equal(JSON.parse(calls[0].options.body).model, 'LongCat-Flash-Lite');
+  assert.equal(JSON.parse(calls[0].options.body).stream_options.include_usage, true);
   assert.equal(calls[0].options.headers.Authorization, 'Bearer primary');
   assert.equal(result.text, '正常');
   assert.equal(result.model, 'LongCat-Flash-Lite');
   assert.equal(result.tier, 'simple');
+  assert.deepEqual(result.usage, {
+    prompt_tokens: 12,
+    completion_tokens: 2,
+    total_tokens: 14,
+  });
 });
 
 test('streamModelText retries with backup key when the first key is rate limited', async () => {

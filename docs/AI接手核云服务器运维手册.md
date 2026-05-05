@@ -435,6 +435,8 @@ STREAMING_MODEL_SIMPLE_ID=LongCat-Flash-Lite
 STREAMING_MODEL_THINKING_ID=LongCat-Flash-Thinking-2601
 STREAMING_MODEL_ENDPOINT_MODE=chat_completions
 FEISHU_STREAM_UPDATE_INTERVAL_MS=800
+FEISHU_USAGE_LEDGER_ENABLED=true
+FEISHU_USAGE_LEDGER_PATH=/var/log/openclaw-homework/usage-ledger.jsonl
 
 EMAIL_NOTIFY_ENABLED=true
 SMTP_HOST=smtp.qq.com
@@ -458,6 +460,7 @@ EMAIL_TO=收件邮箱，多个用逗号分隔
 流式回复说明：
 
 - 只用于普通聊天，不用于 UI 自动化、服务器修复、`/status` 等确定性命令。
+- token/耗时账本在 `/var/log/openclaw-homework/usage-ledger.jsonl`。每行是一次普通聊天的 JSON，包含 assistant、agent、model、tier、endpoint、耗时和 token，不包含密钥。
 - Hermes 当前主文本链路已经切到 LongCat，推荐固定使用 `STREAMING_MODEL_ENDPOINT_MODE=chat_completions`。
 - OpenClaw 仍使用讯飞 CodingPlan；如果以后给 OpenClaw 单独开流式，再保留讯飞自己的 streaming 配置。
 - 飞书更新依赖 `PATCH /im/v1/messages/{message_id}`，如果权限不足，会自动退回一次性回复。

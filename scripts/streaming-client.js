@@ -83,6 +83,19 @@ function parseChatCompletionSseEvent(event) {
   return String(event?.choices?.[0]?.delta?.content || '');
 }
 
+function parseStreamingUsageEvent(event) {
+  if (!event || typeof event !== 'object') {
+    return null;
+  }
+  if (event.usage && typeof event.usage === 'object') {
+    return event.usage;
+  }
+  if (event.type === 'response.completed' && event.response?.usage && typeof event.response.usage === 'object') {
+    return event.response.usage;
+  }
+  return null;
+}
+
 function isEventStreamResponse(response) {
   return /text\/event-stream/i.test(String(response?.headers?.get?.('content-type') || ''));
 }
@@ -150,6 +163,9 @@ function buildStreamingRequestBody(endpoint, prompt, config) {
       },
     ],
     stream: true,
+    stream_options: {
+      include_usage: true,
+    },
   };
 }
 
@@ -182,6 +198,7 @@ async function streamEndpoint(endpoint, prompt, config, options) {
   const response = await postStreamingEndpoint(endpoint, prompt, config, fetchImpl);
   const parseEvent = endpoint === 'responses' ? parseResponsesSseEvent : parseChatCompletionSseEvent;
   let text = '';
+  let usage = null;
 
   for await (const data of readSseEvents(response)) {
     if (data === '[DONE]') {
@@ -195,6 +212,7 @@ async function streamEndpoint(endpoint, prompt, config, options) {
       continue;
     }
 
+    usage = parseStreamingUsageEvent(parsed) || usage;
     const delta = parseEvent(parsed);
     if (!delta) {
       continue;
@@ -211,6 +229,7 @@ async function streamEndpoint(endpoint, prompt, config, options) {
     model: config.model,
     tier: config.tier || 'chat',
     apiKeyIndex: config.apiKeyIndex || 0,
+    usage,
   };
 }
 
@@ -281,6 +300,7 @@ module.exports = {
   buildStreamingChatConfig,
   parseChatCompletionSseEvent,
   parseResponsesSseEvent,
+  parseStreamingUsageEvent,
   resolveStreamingModelProfile,
   streamModelText,
 };

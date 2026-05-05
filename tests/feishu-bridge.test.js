@@ -1648,6 +1648,8 @@ test('createServer logs Feishu timing stages for async chat replies', async () =
 });
 
 test('createServer streams chat by updating the same Feishu message', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'feishu-usage-ledger-'));
+  const ledgerFile = join(tempDir, 'usage.jsonl');
   const replies = [];
   const updates = [];
   let chatCalled = false;
@@ -1660,6 +1662,8 @@ test('createServer streams chat by updating the same Feishu message', async () =
       FEISHU_APP_SECRET: 'secret_xxx',
       OPENCLAW_CHAT_ENABLED: 'true',
       FEISHU_CHAT_STREAMING_ENABLED: 'true',
+      FEISHU_USAGE_LEDGER_ENABLED: 'true',
+      FEISHU_USAGE_LEDGER_PATH: ledgerFile,
       STREAMING_MODEL_BASE_URL: 'https://example.test/v1',
       STREAMING_MODEL_API_KEY: 'secret',
       STREAMING_MODEL_ID: 'model-a',
@@ -1679,7 +1683,13 @@ test('createServer streams chat by updating the same Feishu message', async () =
       streamChat: async (prompt, options) => {
         await options.onDelta('你', '你');
         await options.onDelta('好', '你好');
-        return { text: '你好', endpoint: 'chat_completions' };
+        return {
+          text: '你好',
+          endpoint: 'chat_completions',
+          model: 'model-a',
+          tier: 'chat',
+          usage: { prompt_tokens: 11, completion_tokens: 2, total_tokens: 13 },
+        };
       },
     },
   );
@@ -1716,8 +1726,14 @@ test('createServer streams chat by updating the same Feishu message', async () =
     assert.deepEqual(updates.map((item) => item.messageId), ['om_stream', 'om_stream']);
     assert.equal(updates.at(-1).message.msgType, 'interactive');
     assert.match(JSON.stringify(JSON.parse(updates.at(-1).message.content)), /你好/);
+    const ledger = JSON.parse(readFileSync(ledgerFile, 'utf8').trim());
+    assert.equal(ledger.assistant, 'OpenClaw');
+    assert.equal(ledger.agent, 'chat-agent');
+    assert.equal(ledger.model, 'model-a');
+    assert.equal(ledger.totalTokens, 13);
   } finally {
     await new Promise((resolve) => server.close(resolve));
+    rmSync(tempDir, { recursive: true, force: true });
   }
 });
 

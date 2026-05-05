@@ -42,6 +42,9 @@ const {
   streamModelText,
 } = require('./streaming-client');
 const {
+  appendUsageLedgerEntry,
+} = require('./usage-ledger');
+const {
   editImage,
   generateImage,
 } = require('./image-client');
@@ -328,6 +331,25 @@ function logTimedModelFinish(env, timingContext, stage, modelStartedAt, fields =
     ...fields,
     model_elapsed_ms: elapsedMs(modelStartedAt),
   });
+}
+
+function logUsageLedger(env, input = {}) {
+  try {
+    const written = appendUsageLedgerEntry(env, {
+      assistant: getAssistantName(env),
+      ...input,
+    });
+    if (written) {
+      logFeishuTiming(env, input.timingContext, 'usage:ledger', {
+        agent: input.route?.agent || input.agent,
+        action: input.route?.action || input.action,
+        model: input.modelResult?.model || input.model,
+        total_tokens: input.modelResult?.usage?.total_tokens || input.usage?.total_tokens,
+      });
+    }
+  } catch (error) {
+    console.error(`Usage ledger write failed: ${error.message}`);
+  }
 }
 
 function parseOpenClawChatOutput(output) {
@@ -2491,9 +2513,21 @@ async function streamRoutedChatReply(payload, text, env, options = {}) {
       },
     });
     await update(result.text, true);
+    logUsageLedger(env, {
+      timingContext,
+      route: { agent: 'chat-agent', action: 'chat' },
+      modelResult: result,
+      elapsedMs: elapsedMs(timingContext?.startedAt),
+      modelElapsedMs: elapsedMs(modelStartedAt),
+      promptChars: prompt.length,
+      replyChars: String(result.text || '').length,
+    });
     logTimedModelFinish(env, timingContext, 'model:finish', modelStartedAt, {
       agent: 'chat-agent',
       source: result.endpoint || 'streaming',
+      model: result.model,
+      tier: result.tier,
+      total_tokens: result.usage?.total_tokens,
     });
     return {
       streamed: true,
