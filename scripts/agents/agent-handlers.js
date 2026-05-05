@@ -126,7 +126,7 @@ function buildCapabilityGuideReply(assistantName = 'OpenClaw') {
     '',
     '邮箱和报告：',
     '- UI 自动化完成后发报告到飞书和邮箱',
-    '- 查看 ClawEmail/SMTP 是否正常时先问状态，不要发密钥',
+    '- 查看 ClawEmail/SMTP 是否正常时先问状态，不要发密钥；如果是 report/daily，顺手区分默认 SMTP 还是 evanshine 第二 SMTP 异常',
     '',
     '图片生成：',
     '- 生成一张图片：赛博风电商客服机器人海报',
@@ -352,6 +352,7 @@ function buildClerkMailboxTasksReply(env = process.env) {
     `- 待日报：把今日测试摘要发到 ${resolveMailboxAction('daily', env).mailbox || 'daily 邮箱'}`,
     '',
     '默认不自动发送。你明确说“发送日报到邮箱”或“把这次报告归档到 report”时，我再调用邮件发送。',
+    '其中 report / daily 可以优先走 evanshine 第二 SMTP；如果第二 SMTP 临时异常，会自动回退默认 SMTP。',
   ].join('\n');
 }
 
@@ -405,8 +406,9 @@ function buildClerkWorkbenchReply(options = {}) {
     '文员工作台：今天我能把这些串起来。',
     `- ${tokenIntro}`,
     `- QA：电商客服训练数据 ${customerCases.length} 条，UI 自动化矩阵 ${uiMatrix.length} 条。`,
-    `- 日报：默认发到 ${resolveMailboxAction('daily', env).mailbox || 'daily 邮箱'}。`,
+    `- 日报：收件默认发到 ${resolveMailboxAction('daily', env).mailbox || 'daily 邮箱'}。`,
     `- 归档：失败样本和训练语料走 ${resolveMailboxAction('archive', env).mailbox || 'archive 邮箱'}。`,
+    '- report / daily 的发信通道可以优先走 evanshine 第二 SMTP，失败时自动回退默认 SMTP。',
     '',
     '你可以自然语言继续说：',
     '- 文员，统计今天 Hermes 和 OpenClaw 谁更费 token',

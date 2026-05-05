@@ -639,6 +639,179 @@ test('sendEmailRunResultNotification sends email when SMTP env is enabled', asyn
   assert.match(sent[0].text, /UI 自动化测试失败/);
 });
 
+test('sendEmailRunResultNotification can use evanshine report SMTP profile', async () => {
+  const transports = [];
+
+  const result = await sendEmailRunResultNotification(
+    {
+      actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123',
+      targetRef: 'main',
+      runMode: 'contracts',
+    },
+    {
+      conclusion: 'success',
+      html_url: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123',
+    },
+    {
+      EMAIL_NOTIFY_ENABLED: 'true',
+      SMTP_HOST: 'smtp.default.example.com',
+      SMTP_PORT: '465',
+      SMTP_SECURE: 'true',
+      SMTP_USER: 'default@example.com',
+      SMTP_PASS: 'default-password',
+      EMAIL_FROM: 'default@example.com',
+      EMAIL_TO: 'a@example.com',
+      REPORT_SMTP_HOST: 'smtp.evanshine.me',
+      REPORT_SMTP_PORT: '587',
+      REPORT_SMTP_SECURE: 'false',
+      REPORT_SMTP_USER: 'report@evanshine.me',
+      REPORT_SMTP_PASS: 'report-password',
+      REPORT_EMAIL_FROM: 'report@evanshine.me',
+      MAIL_ACTION_PROVIDER_OVERRIDES: 'report=evanshine',
+    },
+    {
+      createTransport: (config) => ({
+        sendMail: async (mail) => {
+          transports.push({
+            host: config.host,
+            port: config.port,
+            secure: config.secure,
+            user: config.auth.user,
+            from: mail.from,
+            to: mail.to,
+          });
+          return { messageId: 'message-2' };
+        },
+      }),
+    },
+  );
+
+  assert.equal(result.sent, true);
+  assert.equal(transports.length, 1);
+  assert.equal(transports[0].host, 'smtp.evanshine.me');
+  assert.equal(transports[0].port, 587);
+  assert.equal(transports[0].secure, false);
+  assert.equal(transports[0].user, 'report@evanshine.me');
+  assert.equal(transports[0].from, 'report@evanshine.me');
+  assert.deepEqual(transports[0].to, ['a@example.com']);
+});
+
+test('notifyUiMailboxActions uses evanshine SMTP profile for report action when configured', async () => {
+  const transports = [];
+
+  await notifyUiMailboxActions(
+    {
+      actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123',
+      targetRef: 'main',
+      runMode: 'smoke',
+    },
+    {
+      conclusion: 'success',
+      html_url: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123',
+    },
+    {
+      EMAIL_NOTIFY_ENABLED: 'true',
+      SMTP_HOST: 'smtp.default.example.com',
+      SMTP_PORT: '465',
+      SMTP_SECURE: 'true',
+      SMTP_USER: 'default@example.com',
+      SMTP_PASS: 'default-password',
+      EMAIL_FROM: 'default@example.com',
+      REPORT_SMTP_HOST: 'smtp.evanshine.me',
+      REPORT_SMTP_PORT: '587',
+      REPORT_SMTP_SECURE: 'false',
+      REPORT_SMTP_USER: 'report@evanshine.me',
+      REPORT_SMTP_PASS: 'report-password',
+      REPORT_EMAIL_FROM: 'report@evanshine.me',
+      MAIL_ACTION_PROVIDER_OVERRIDES: 'report=evanshine,daily=evanshine',
+    },
+    {
+      createTransport: (config) => ({
+        sendMail: async (mail) => {
+          transports.push({
+            host: config.host,
+            port: config.port,
+            secure: config.secure,
+            user: config.auth.user,
+            from: mail.from,
+            to: mail.to,
+            subject: mail.subject,
+          });
+          return { messageId: `${config.host}-${mail.subject}` };
+        },
+      }),
+    },
+  );
+
+  assert.equal(transports.length, 2);
+  assert.equal(transports[0].host, 'smtp.evanshine.me');
+  assert.equal(transports[0].port, 587);
+  assert.equal(transports[0].secure, false);
+  assert.equal(transports[0].user, 'report@evanshine.me');
+  assert.equal(transports[0].from, 'report@evanshine.me');
+  assert.deepEqual(transports[0].to, ['watchee.report@claw.163.com']);
+  assert.equal(transports[1].host, 'smtp.default.example.com');
+  assert.equal(transports[1].from, 'default@example.com');
+  assert.deepEqual(transports[1].to, ['agent3.files@claw.163.com']);
+});
+
+test('notifyUiMailboxActions falls back to default SMTP when evanshine report profile fails', async () => {
+  const transports = [];
+
+  await notifyUiMailboxActions(
+    {
+      actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/456',
+      targetRef: 'main',
+      runMode: 'contracts',
+    },
+    {
+      conclusion: 'success',
+      html_url: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/456',
+    },
+    {
+      EMAIL_NOTIFY_ENABLED: 'true',
+      SMTP_HOST: 'smtp.default.example.com',
+      SMTP_PORT: '465',
+      SMTP_SECURE: 'true',
+      SMTP_USER: 'default@example.com',
+      SMTP_PASS: 'default-password',
+      EMAIL_FROM: 'default@example.com',
+      REPORT_SMTP_HOST: 'smtp.evanshine.me',
+      REPORT_SMTP_PORT: '587',
+      REPORT_SMTP_SECURE: 'false',
+      REPORT_SMTP_USER: 'report@evanshine.me',
+      REPORT_SMTP_PASS: 'report-password',
+      REPORT_EMAIL_FROM: 'report@evanshine.me',
+      MAIL_ACTION_PROVIDER_OVERRIDES: 'report=evanshine',
+    },
+    {
+      createTransport: (config) => ({
+        sendMail: async (mail) => {
+          transports.push({
+            host: config.host,
+            user: config.auth.user,
+            from: mail.from,
+            to: mail.to,
+            subject: mail.subject,
+          });
+          if (config.host === 'smtp.evanshine.me') {
+            throw new Error('evanshine down');
+          }
+          return { messageId: `${config.host}-${mail.subject}` };
+        },
+      }),
+    },
+  );
+
+  assert.equal(transports.length, 3);
+  assert.equal(transports[0].host, 'smtp.evanshine.me');
+  assert.equal(transports[1].host, 'smtp.default.example.com');
+  assert.equal(transports[1].from, 'default@example.com');
+  assert.deepEqual(transports[1].to, ['watchee.report@claw.163.com']);
+  assert.equal(transports[2].host, 'smtp.default.example.com');
+  assert.deepEqual(transports[2].to, ['agent3.files@claw.163.com']);
+});
+
 test('notifyUiMailboxActions sends report only for successful UI result', async () => {
   const sent = [];
 
@@ -838,6 +1011,49 @@ test('sendDailySummaryNotification routes message to daily mailbox action', asyn
   assert.equal(sent[0].action, 'daily');
   assert.equal(sent[0].to[0], 'agent4.daily@claw.163.com');
   assert.match(sent[0].subject, /Daily Summary/);
+});
+
+test('sendDailySummaryNotification can use evanshine SMTP profile for daily action', async () => {
+  const transports = [];
+
+  await sendDailySummaryNotification(
+    [{ conclusion: 'success', runUrl: 'https://example.com/run' }],
+    {
+      EMAIL_NOTIFY_ENABLED: 'true',
+      SMTP_HOST: 'smtp.default.example.com',
+      SMTP_PORT: '465',
+      SMTP_SECURE: 'true',
+      SMTP_USER: 'default@example.com',
+      SMTP_PASS: 'default-password',
+      EMAIL_FROM: 'default@example.com',
+      REPORT_SMTP_HOST: 'smtp.evanshine.me',
+      REPORT_SMTP_PORT: '587',
+      REPORT_SMTP_SECURE: 'false',
+      REPORT_SMTP_USER: 'report@evanshine.me',
+      REPORT_SMTP_PASS: 'report-password',
+      REPORT_EMAIL_FROM: 'report@evanshine.me',
+      MAIL_ACTION_PROVIDER_OVERRIDES: 'daily=evanshine',
+    },
+    {
+      createTransport: (config) => ({
+        sendMail: async (mail) => {
+          transports.push({
+            host: config.host,
+            user: config.auth.user,
+            from: mail.from,
+            to: mail.to,
+          });
+          return { messageId: 'daily-1' };
+        },
+      }),
+    },
+  );
+
+  assert.equal(transports.length, 1);
+  assert.equal(transports[0].host, 'smtp.evanshine.me');
+  assert.equal(transports[0].user, 'report@evanshine.me');
+  assert.equal(transports[0].from, 'report@evanshine.me');
+  assert.deepEqual(transports[0].to, ['agent4.daily@claw.163.com']);
 });
 
 test('buildRoutedAgentReply can send clerk daily summary email when explicitly requested', async () => {

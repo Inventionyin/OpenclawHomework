@@ -217,6 +217,15 @@ test@evanshine.me
 report@evanshine.me
 ```
 
+当前在本项目里的职责建议：
+
+```text
+ClawEmail / 默认 SMTP -> 任务入口、验证码、业务动作邮箱、保底兼容发信
+evanshine.me SMTP     -> report / daily 这类正式报告邮件的品牌域名发件身份
+```
+
+如果桥梁服务环境里配置了 `REPORT_SMTP_*` 和 `MAIL_ACTION_PROVIDER_OVERRIDES=report=evanshine,daily=evanshine`，那么 `report` / `daily` 会先尝试走 `mail.evanshine.me`，失败时自动回退默认 SMTP；飞书结果通知主链路不受影响。
+
 服务器检查命令：
 
 ```bash
@@ -446,6 +455,14 @@ SMTP_USER=发件邮箱
 SMTP_PASS=邮箱 SMTP 授权码
 EMAIL_FROM=发件邮箱
 EMAIL_TO=收件邮箱，多个用逗号分隔
+
+REPORT_SMTP_HOST=mail.evanshine.me
+REPORT_SMTP_PORT=587
+REPORT_SMTP_SECURE=false
+REPORT_SMTP_USER=report@evanshine.me
+REPORT_SMTP_PASS=自建邮箱密码
+REPORT_EMAIL_FROM=report@evanshine.me
+MAIL_ACTION_PROVIDER_OVERRIDES=report=evanshine,daily=evanshine
 ```
 
 互修通道说明：
@@ -454,7 +471,7 @@ EMAIL_TO=收件邮箱，多个用逗号分隔
 - 允许动作只有 `status`、`health`、`logs`、`restart`、`repair`。
 - `repair` 会在对端执行：`git pull --ff-only`、`npm test`、重启对端桥梁服务、检查 `/health`。
 - 不要把这个通道改成普通无限制 root SSH，除非用户明确要求并理解风险。
-- 邮件通知在 GitHub Actions 完成后由桥梁服务发送。邮件失败只写日志，不应阻断飞书报告。
+- 邮件通知在 GitHub Actions 完成后由桥梁服务发送。若配置了 `evanshine.me` 第二 SMTP，则 `report` / `daily` 会先尝试第二 SMTP，再回退默认 SMTP；只有两边都失败时才记最终邮件失败日志，不应阻断飞书报告。
 - SMTP 密码或授权码只放服务器环境文件，不要写入仓库。
 
 流式回复说明：

@@ -1577,6 +1577,138 @@ function parseEmailRecipients(value) {
     .filter(Boolean);
 }
 
+function parseMailActionProviderOverrides(value) {
+  const overrides = new Map();
+  for (const part of String(value || '').split(/[,\n]+/)) {
+    const text = part.trim();
+    if (!text) {
+      continue;
+    }
+
+    const [actionName, providerName] = text.split('=').map((item) => item.trim());
+    if (!actionName || !providerName) {
+      continue;
+    }
+
+    overrides.set(actionName.toLowerCase(), providerName.toLowerCase());
+  }
+
+  return overrides;
+}
+
+function normalizeMailProviderName(value) {
+  const provider = String(value || '').trim().toLowerCase();
+  if (!provider || ['default', 'legacy', 'primary', 'smtp', 'clawemail'].includes(provider)) {
+    return 'default';
+  }
+
+  if (['report', 'evanshine', 'secondary', 'alternate'].includes(provider)) {
+    return 'evanshine';
+  }
+
+  return provider;
+}
+
+function resolveMailProviderForAction(actionName, env = process.env) {
+  const normalizedAction = String(actionName || '').trim().toLowerCase();
+  const overrides = parseMailActionProviderOverrides(env.MAIL_ACTION_PROVIDER_OVERRIDES);
+  if (normalizedAction && overrides.has(normalizedAction)) {
+    return normalizeMailProviderName(overrides.get(normalizedAction));
+  }
+
+  if (normalizedAction === 'report' && env.MAIL_ROUTE_REPORT_PROVIDER) {
+    return normalizeMailProviderName(env.MAIL_ROUTE_REPORT_PROVIDER);
+  }
+
+  if (normalizedAction === 'daily' && env.MAIL_ROUTE_DAILY_PROVIDER) {
+    return normalizeMailProviderName(env.MAIL_ROUTE_DAILY_PROVIDER);
+  }
+
+  return 'default';
+}
+
+function buildSmtpProfile(providerName, env = process.env) {
+  const provider = normalizeMailProviderName(providerName);
+  if (provider === 'evanshine') {
+    return {
+      name: 'evanshine',
+      host: env.REPORT_SMTP_HOST,
+      port: Number(env.REPORT_SMTP_PORT || 587),
+      secure: String(env.REPORT_SMTP_SECURE ?? 'false').toLowerCase() !== 'false',
+      user: env.REPORT_SMTP_USER,
+      pass: env.REPORT_SMTP_PASS,
+      from: env.REPORT_EMAIL_FROM || env.REPORT_SMTP_USER,
+    };
+  }
+
+  return {
+    name: 'default',
+    host: env.SMTP_HOST,
+    port: Number(env.SMTP_PORT || 465),
+    secure: String(env.SMTP_SECURE ?? 'true').toLowerCase() !== 'false',
+    user: env.SMTP_USER,
+    pass: env.SMTP_PASS,
+    from: env.EMAIL_FROM || env.SMTP_USER,
+  };
+}
+
+function hasSmtpProfileConfig(profile) {
+  return Boolean(profile?.host && profile?.user && profile?.pass);
+}
+
+async function sendSmtpMail(message, profile, options = {}) {
+  const createTransport = options.createTransport || require('nodemailer').createTransport;
+  const transport = createTransport({
+    host: profile.host,
+    port: profile.port,
+    secure: profile.secure,
+    auth: {
+      user: profile.user,
+      pass: profile.pass,
+    },
+  });
+
+  const result = await transport.sendMail({
+    from: profile.from || profile.user,
+    to: message.to,
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+  });
+
+  return { sent: true, result, action: message.action, provider: profile.name };
+}
+
+async function sendMailWithRouting(message, env = process.env, options = {}) {
+  const providerName = resolveMailProviderForAction(message?.action, env);
+  const selectedProfile = buildSmtpProfile(providerName, env);
+  if (!hasSmtpProfileConfig(selectedProfile)) {
+    return { sent: false, reason: 'missing_smtp_config', action: message?.action || 'unknown', provider: selectedProfile.name };
+  }
+
+  try {
+    return await sendSmtpMail(message, selectedProfile, options);
+  } catch (error) {
+    if (selectedProfile.name === 'default') {
+      throw error;
+    }
+
+    const fallbackProfile = buildSmtpProfile(
+      env.MAIL_FALLBACK_PROVIDER || 'default',
+      env,
+    );
+    if (!hasSmtpProfileConfig(fallbackProfile) || fallbackProfile.name === selectedProfile.name) {
+      throw error;
+    }
+
+    const fallbackResult = await sendSmtpMail(message, fallbackProfile, options);
+    return {
+      ...fallbackResult,
+      fallbackFrom: selectedProfile.name,
+    };
+  }
+}
+
 function buildMailboxActionEmailSubject(resolvedAction, fallbackSubject) {
   if (!resolvedAction?.subjectPrefix) {
     return fallbackSubject;
@@ -1771,30 +1903,10 @@ async function sendMailboxActionEmail(message, env = process.env, options = {}) 
     return { sent: false, reason: 'missing_recipients', action: message?.action || 'unknown' };
   }
 
-  if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
-    return { sent: false, reason: 'missing_smtp_config', action: message?.action || 'unknown' };
-  }
-
-  const createTransport = options.createTransport || require('nodemailer').createTransport;
-  const transport = createTransport({
-    host: env.SMTP_HOST,
-    port: Number(env.SMTP_PORT || 465),
-    secure: String(env.SMTP_SECURE ?? 'true').toLowerCase() !== 'false',
-    auth: {
-      user: env.SMTP_USER,
-      pass: env.SMTP_PASS,
-    },
-  });
-
-  const result = await transport.sendMail({
-    from: env.EMAIL_FROM || env.SMTP_USER,
+  return sendMailWithRouting({
+    ...message,
     to: recipients,
-    subject: message.subject,
-    text: message.text,
-    html: message.html,
-  });
-
-  return { sent: true, result, action: message.action };
+  }, env, options);
 }
 
 async function notifyUiMailboxActions(job, run, env = process.env, options = {}) {
@@ -1822,30 +1934,14 @@ async function sendEmailRunResultNotification(job, run, env = process.env, optio
     return { sent: false, reason: 'missing_recipients' };
   }
 
-  if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
-    return { sent: false, reason: 'missing_smtp_config' };
-  }
-
-  const createTransport = options.createTransport || require('nodemailer').createTransport;
-  const transport = createTransport({
-    host: env.SMTP_HOST,
-    port: Number(env.SMTP_PORT || 465),
-    secure: String(env.SMTP_SECURE ?? 'true').toLowerCase() !== 'false',
-    auth: {
-      user: env.SMTP_USER,
-      pass: env.SMTP_PASS,
-    },
-  });
   const message = buildEmailRunResultMessage(job, run);
-  const result = await transport.sendMail({
-    from: env.EMAIL_FROM || env.SMTP_USER,
+  return sendMailWithRouting({
+    action: 'report',
     to: recipients,
     subject: buildEmailRunResultSubject(job, run),
     text: message.text,
     html: message.html,
-  });
-
-  return { sent: true, result };
+  }, env, options);
 }
 
 async function sendDailySummaryNotification(runs, env = process.env, options = {}) {
@@ -2651,7 +2747,7 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
       const mailbox = messages[0]?.mailbox || 'daily 邮箱';
       const status = messages.length
         ? `已发送日报到 ${mailbox}。`
-        : '日报邮件没有发出：请检查 EMAIL_NOTIFY_ENABLED、SMTP 配置和 daily 邮箱动作是否启用。';
+        : '日报邮件没有发出：请检查 EMAIL_NOTIFY_ENABLED、默认 SMTP、evanshine 第二 SMTP，以及 daily 邮箱动作是否启用。';
       return {
         handled: true,
         replyText: [
