@@ -115,6 +115,25 @@ HERMES_FEISHU_APP_SECRET=__FILL_HERMES_APP_SECRET__
 systemctl restart hermes-feishu-bridge
 ```
 
+2026-05-05 起推荐模型分工：
+
+```text
+OpenClaw：继续使用讯飞 CodingPlan
+Hermes：切到 LongCat-Flash-Chat
+```
+
+Hermes 服务器建议补齐这些模型变量：
+
+```text
+HERMES_PROVIDER=custom
+HERMES_MODEL=LongCat-Flash-Chat
+FEISHU_CHAT_STREAMING_ENABLED=true
+STREAMING_MODEL_BASE_URL=https://api.longcat.chat/openai/v1
+STREAMING_MODEL_API_KEY=...
+STREAMING_MODEL_ID=LongCat-Flash-Chat
+STREAMING_MODEL_ENDPOINT_MODE=chat_completions
+```
+
 ## 5. DNS 与证书
 
 你要把 Hermes 的域名解析到新服务器：
@@ -172,6 +191,7 @@ curl -sS https://hermes.evanshine.me/health
 ```bash
 systemctl status hermes-feishu-bridge --no-pager -l
 journalctl -u hermes-feishu-bridge -n 100 --no-pager
+hermes --provider custom --model LongCat-Flash-Chat -z "只回复两个字：成功"
 ```
 
 飞书 challenge：

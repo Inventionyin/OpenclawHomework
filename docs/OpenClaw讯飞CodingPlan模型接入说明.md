@@ -228,7 +228,7 @@ hermes --version
 hermes status
 ```
 
-Hermes 已配置到同一个讯飞 CodingPlan OpenAI-compatible 接口：
+Hermes 现在已经切到 LongCat，这里只保留历史记录：
 
 ```text
 provider: custom
@@ -242,7 +242,7 @@ model: astron-code-latest
 HERMES_FALLBACK_ENABLED=true
 HERMES_BIN=hermes
 HERMES_PROVIDER=custom
-HERMES_MODEL=astron-code-latest
+HERMES_MODEL=LongCat-Flash-Chat
 ```
 
 作用：
@@ -250,3 +250,10 @@ HERMES_MODEL=astron-code-latest
 - OpenClaw 自然语言解析失败时，自动改用 Hermes 解析测试指令。
 - OpenClaw 普通聊天失败时，自动改用 Hermes 回复。
 - GitHub Actions 触发、飞书权限控制和结果卡片仍由 Node 桥梁服务负责，避免两个 agent 同时直接改服务器造成混乱。
+
+补充：
+
+```text
+2026-05-05 起，Hermes 主链路已切到 LongCat-Flash-Chat。
+OpenClaw 继续使用讯飞 CodingPlan。
+```

@@ -409,7 +409,7 @@ OPENCLAW_MODEL=xfyun/astron-code-latest
 HERMES_FALLBACK_ENABLED=true
 HERMES_BIN=hermes
 HERMES_PROVIDER=custom
-HERMES_MODEL=astron-code-latest
+HERMES_MODEL=LongCat-Flash-Chat
 
 PEER_NAME=对端名称
 PEER_SSH_HOST=对端服务器 IP
@@ -427,10 +427,10 @@ FEISHU_DEDUP_TTL_MS=300000
 FEISHU_RUN_NOTIFICATION_DEDUP_TTL_MS=300000
 
 FEISHU_CHAT_STREAMING_ENABLED=true
-STREAMING_MODEL_BASE_URL=...
+STREAMING_MODEL_BASE_URL=https://api.longcat.chat/openai/v1
 STREAMING_MODEL_API_KEY=...
-STREAMING_MODEL_ID=...
-STREAMING_MODEL_ENDPOINT_MODE=auto
+STREAMING_MODEL_ID=LongCat-Flash-Chat
+STREAMING_MODEL_ENDPOINT_MODE=chat_completions
 FEISHU_STREAM_UPDATE_INTERVAL_MS=800
 
 EMAIL_NOTIFY_ENABLED=true
@@ -455,9 +455,16 @@ EMAIL_TO=收件邮箱，多个用逗号分隔
 流式回复说明：
 
 - 只用于普通聊天，不用于 UI 自动化、服务器修复、`/status` 等确定性命令。
-- `STREAMING_MODEL_ENDPOINT_MODE=auto` 会先试 `/responses`，不兼容时降级到 `/chat/completions`。
-- 讯飞 CodingPlan 当前实测 `/chat/completions` 支持 `text/event-stream`，`/responses` 返回 HTML，不要强制设成 `responses`。
+- Hermes 当前主文本链路已经切到 LongCat，推荐固定使用 `STREAMING_MODEL_ENDPOINT_MODE=chat_completions`。
+- OpenClaw 仍使用讯飞 CodingPlan；如果以后给 OpenClaw 单独开流式，再保留讯飞自己的 streaming 配置。
 - 飞书更新依赖 `PATCH /im/v1/messages/{message_id}`，如果权限不足，会自动退回一次性回复。
+
+当前推荐模型分工：
+
+```text
+OpenClaw 主链路：讯飞 CodingPlan
+Hermes 主链路：LongCat-Flash-Chat
+```
 
 修改后重启对应服务器上的服务：
 
