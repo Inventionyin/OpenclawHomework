@@ -65,28 +65,9 @@ copy_qa_assets() {
   fi
 }
 
-ensure_git_repo() {
-  local repo="$1"
-  cd "$repo"
-  rm -rf .git
-  git init -q
-  git config user.email gbrain@localhost
-  git config user.name GBrainImport
-  git remote add origin "$repo" 2>/dev/null || true
-  git add .
-  git commit -q -m 'sync openclaw homework knowledge' || true
-  git branch --set-upstream-to=origin/master master >/dev/null 2>&1 || true
-}
-
-ensure_source() {
-  local id="$1"
-  local path="$2"
-  gbrain sources add "$id" --path "$path" >/dev/null 2>&1 || true
-}
-
-sync_source() {
-  local id="$1"
-  gbrain sync --source "$id" --no-embed
+import_dir() {
+  local path="$1"
+  gbrain import "$path" --no-embed
 }
 
 main() {
@@ -95,19 +76,11 @@ main() {
   copy_memory
   copy_qa_assets
 
-  ensure_git_repo "$IMPORT_ROOT/openclaw-homework-docs"
-  ensure_git_repo "$IMPORT_ROOT/openclaw-homework-memory"
-  ensure_git_repo "$IMPORT_ROOT/openclaw-homework-qa"
+  import_dir "$IMPORT_ROOT/openclaw-homework-docs"
+  import_dir "$IMPORT_ROOT/openclaw-homework-memory"
+  import_dir "$IMPORT_ROOT/openclaw-homework-qa"
 
-  ensure_source openclaw-homework "$IMPORT_ROOT/openclaw-homework-docs"
-  ensure_source openclaw-memory "$IMPORT_ROOT/openclaw-homework-memory"
-  ensure_source openclaw-qa-assets "$IMPORT_ROOT/openclaw-homework-qa"
-
-  sync_source openclaw-homework
-  sync_source openclaw-memory
-  sync_source openclaw-qa-assets
-
-  gbrain sources list
+  gbrain list -n 30
 }
 
 main "$@"

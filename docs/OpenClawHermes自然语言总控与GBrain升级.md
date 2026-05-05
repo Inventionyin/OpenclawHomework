@@ -57,9 +57,9 @@ Hermes 服务器已经旁路安装 GBrain，不直接接管生产聊天链路：
 
 已导入三类资料：
 
-- `openclaw-homework`：`docs/**/*.md`
-- `openclaw-memory`：`data/memory`
-- `openclaw-qa-assets`：`data/qa-assets`
+- `docs/**/*.md`
+- `data/memory`
+- `data/qa-assets`
 
 刷新脑库：
 
