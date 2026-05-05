@@ -75,6 +75,7 @@ ensure_git_repo() {
   git remote add origin "$repo" 2>/dev/null || true
   git add .
   git commit -q -m 'sync openclaw homework knowledge' || true
+  git branch --set-upstream-to=origin/master master >/dev/null 2>&1 || true
 }
 
 ensure_source() {
