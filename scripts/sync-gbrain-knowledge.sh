@@ -68,9 +68,11 @@ copy_qa_assets() {
 ensure_git_repo() {
   local repo="$1"
   cd "$repo"
+  rm -rf .git
   git init -q
   git config user.email gbrain@localhost
   git config user.name GBrainImport
+  git remote add origin "$repo" 2>/dev/null || true
   git add .
   git commit -q -m 'sync openclaw homework knowledge' || true
 }
