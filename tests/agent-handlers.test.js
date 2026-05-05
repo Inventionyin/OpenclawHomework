@@ -132,6 +132,34 @@ test('buildClerkAgentReply explains real mailbox workbench bindings', () => {
   assert.match(reply, /watchee\.task@claw\.163\.com/);
   assert.match(reply, /evasan\.verify@claw\.163\.com/);
   assert.match(reply, /agent3\.archive@claw\.163\.com/);
+  assert.match(reply, /子邮箱/);
+  assert.match(reply, /注册验证码测试/);
+});
+
+test('buildClerkAgentReply explains safe submailbox registration playbook', () => {
+  const reply = buildClerkAgentReply({ action: 'mailbox-registration-playbook' });
+  assert.match(reply, /子邮箱注册测试/);
+  assert.match(reply, /测试账号池/);
+  assert.match(reply, /evasan\.verify@claw\.163\.com/);
+  assert.match(reply, /不要批量注册/);
+  assert.match(reply, /真实平台/);
+});
+
+test('buildClerkAgentReply creates verification test plan from mailbox bindings', () => {
+  const reply = buildClerkAgentReply({ action: 'verification-test-plan' });
+  assert.match(reply, /注册验证码测试计划/);
+  assert.match(reply, /evasan\.verify@claw\.163\.com/);
+  assert.match(reply, /验证码有效期/);
+  assert.match(reply, /错误验证码/);
+  assert.match(reply, /Playwright|Cypress/);
+});
+
+test('buildClerkAgentReply lists today mailbox tasks without sending mail', () => {
+  const reply = buildClerkAgentReply({ action: 'mailbox-tasks' });
+  assert.match(reply, /今天邮箱任务队列/);
+  assert.match(reply, /待执行/);
+  assert.match(reply, /不自动发送/);
+  assert.match(reply, /agent4\.daily@claw\.163\.com/);
 });
 
 test('buildClerkAgentReply turns training data into a clerk workflow', () => {

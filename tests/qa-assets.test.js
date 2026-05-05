@@ -5,6 +5,7 @@ const {
   buildAgentEvalTasks,
   buildCustomerServiceCases,
   buildEmailPlaybook,
+  buildSubmailboxRegistrationPool,
   buildUiAutomationMatrix,
 } = require('../scripts/qa-assets');
 
@@ -46,4 +47,13 @@ test('buildEmailPlaybook binds mailbox addresses to real QA actions', () => {
   assert(playbook.some((item) => item.mailbox === 'watchee.task@claw.163.com' && /触发/.test(item.action)));
   assert(playbook.some((item) => item.mailbox === 'evasan.verify@claw.163.com' && /验证码/.test(item.action)));
   assert(playbook.some((item) => item.mailbox === 'hagent.eval@claw.163.com' && /评测/.test(item.action)));
+});
+
+test('buildSubmailboxRegistrationPool separates registration-safe and internal mailboxes', () => {
+  const pool = buildSubmailboxRegistrationPool();
+
+  assert.equal(pool.length >= 6, true);
+  assert(pool.some((item) => item.mailbox === 'evasan.verify@claw.163.com' && item.policy === 'allowed'));
+  assert(pool.some((item) => item.group === 'archive' && item.policy === 'internal-only'));
+  assert(pool.every((item) => item.platformRule && item.statusFields.includes('verification_result')));
 });

@@ -65,6 +65,15 @@ const EMAIL_PLAYBOOK = [
   ['agent4.daily@claw.163.com', '每天凌晨接收服务器状态、测试趋势和失败摘要', 'daily'],
 ];
 
+const SUBMAILBOX_REGISTRATION_POOL = [
+  ['evasan.verify@claw.163.com', 'registration-verify', '自有电商平台注册、登录、找回密码验证码', 'allowed'],
+  ['evasan.account@claw.163.com', 'account-regression', '账号体系回归测试账号和结果归档', 'allowed'],
+  ['evasan.shop@claw.163.com', 'shop-flow', '购物车、下单、支付沙箱账号', 'allowed'],
+  ['agent4.support@claw.163.com', 'support-simulator', '客服邮件模拟买家来信，不用于真实平台注册', 'internal-only'],
+  ['hagent.eval@claw.163.com', 'agent-eval', 'Agent 评测和模型对比，不用于真实平台注册', 'internal-only'],
+  ['agent3.archive@claw.163.com', 'archive', '失败样本、训练语料、复盘归档，不用于真实平台注册', 'internal-only'],
+];
+
 function expandSeeds(seeds, targetCount, mapper) {
   const result = [];
   for (let index = 0; index < targetCount; index += 1) {
@@ -122,6 +131,20 @@ function buildEmailPlaybook() {
   }));
 }
 
+function buildSubmailboxRegistrationPool() {
+  return SUBMAILBOX_REGISTRATION_POOL.map(([mailbox, group, purpose, policy], index) => ({
+    id: `submail-${String(index + 1).padStart(2, '0')}`,
+    mailbox,
+    group,
+    purpose,
+    policy,
+    platformRule: policy === 'allowed'
+      ? '只用于自有平台、测试环境、课程作业或明确允许测试账号的平台。'
+      : '只做内部归档、模拟或评测，不拿去注册真实外部平台。',
+    statusFields: ['platform', 'email', 'account_status', 'verification_result', 'last_used_at', 'artifact_link'],
+  }));
+}
+
 function writeJson(file, data) {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`);
@@ -134,12 +157,14 @@ function generateQaAssets(outputDir = join(process.cwd(), 'data', 'qa-assets')) 
     customerServiceCases: buildCustomerServiceCases(),
     uiAutomationMatrix: buildUiAutomationMatrix(),
     emailPlaybook: buildEmailPlaybook(),
+    submailboxRegistrationPool: buildSubmailboxRegistrationPool(),
   };
 
   writeJson(join(outputDir, 'agent-eval-tasks.json'), assets.agentEvalTasks);
   writeJson(join(outputDir, 'customer-service-cases.json'), assets.customerServiceCases);
   writeJson(join(outputDir, 'ui-automation-matrix.json'), assets.uiAutomationMatrix);
   writeJson(join(outputDir, 'email-playbook.json'), assets.emailPlaybook);
+  writeJson(join(outputDir, 'submailbox-registration-pool.json'), assets.submailboxRegistrationPool);
   return assets;
 }
 
@@ -152,6 +177,7 @@ if (require.main === module) {
     customerServiceCases: assets.customerServiceCases.length,
     uiAutomationMatrix: assets.uiAutomationMatrix.length,
     emailPlaybook: assets.emailPlaybook.length,
+    submailboxRegistrationPool: assets.submailboxRegistrationPool.length,
   }, null, 2));
 }
 
@@ -159,6 +185,7 @@ module.exports = {
   buildAgentEvalTasks,
   buildCustomerServiceCases,
   buildEmailPlaybook,
+  buildSubmailboxRegistrationPool,
   buildUiAutomationMatrix,
   generateQaAssets,
 };

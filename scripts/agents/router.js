@@ -212,6 +212,21 @@ function routeClerkIntent(text) {
     return null;
   }
 
+  if (/(子邮箱|别名邮箱|测试邮箱|邮箱账号|账号池).{0,30}(注册|平台注册|账号|平台|验证码|测试)/i.test(normalized)
+    || /(注册|平台注册|账号|平台).{0,30}(子邮箱|别名邮箱|测试邮箱|账号池)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'mailbox-registration-playbook', requiresAuth: true };
+  }
+
+  if (/(verify|验证码|邮箱验证|注册验证|找回密码).{0,30}(测试|计划|流程|用例|设计|跑一轮|测一下)/i.test(normalized)
+    || /(测试|计划|流程|用例|设计|跑一轮|测一下).{0,30}(verify|验证码|邮箱验证|注册验证|找回密码)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'verification-test-plan', requiresAuth: true };
+  }
+
+  if (/(今天|当前|现在).{0,12}(邮箱|邮件).{0,12}(任务|队列|待办|有什么|有哪些)/i.test(normalized)
+    || /(邮箱|邮件).{0,12}(任务|队列|待办).{0,12}(今天|当前|现在|有哪些|有什么)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'mailbox-tasks', requiresAuth: true };
+  }
+
   if (/(邮箱平台|邮箱|clawemail).{0,24}(怎么玩|玩法|调度|归档|验证码|结合|分工|工作台)/i.test(normalized)
     || /(怎么玩|玩法|调度|归档|验证码|结合|分工|工作台).{0,24}(邮箱平台|邮箱|clawemail)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'mailbox-workbench', requiresAuth: true };

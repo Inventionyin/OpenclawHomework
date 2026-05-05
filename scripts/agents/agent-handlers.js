@@ -281,11 +281,73 @@ function buildClerkMailboxWorkbenchReply(env = process.env) {
     '',
     '自然语言玩法：',
     '- 文员，用 verify 邮箱设计一轮注册验证码测试',
+    '- 文员，子邮箱可以拿去注册测试平台吗',
+    '- 文员，今天邮箱里有哪些任务',
     '- 文员，把失败样本归档到 archive',
     '- 文员，把今天日报发到邮箱',
     '- 文员，整理一批客服训练数据并归档',
     '',
-    '我会优先做整理、归档、邮件摘要，不会碰服务器重启和清理。',
+    '子邮箱可以做注册验证码测试和测试账号池，但我会优先做整理、归档、邮件摘要，不会碰服务器重启和清理。',
+  ].join('\n');
+}
+
+function buildClerkMailboxRegistrationReply(env = process.env) {
+  const verify = resolveMailboxAction('verify', env);
+  const account = resolveMailboxAction('account', env);
+  const archive = resolveMailboxAction('archive', env);
+
+  return [
+    '子邮箱注册测试玩法：可以用，但要当成测试账号池来管。',
+    '',
+    '适合注册的平台：',
+    '- 你自己的电商平台、测试环境、开源演示站、允许测试账号的平台',
+    '- 课程作业、UI 自动化练习、AI 客服训练环境',
+    '',
+    '不建议的做法：',
+    '- 不要批量注册真实平台账号',
+    '- 不要绕过验证码、风控、邀请码或平台限制',
+    '- 不要把子邮箱当垃圾注册池用',
+    '',
+    '建议分工：',
+    `- 验证码收件：${verify.mailbox || 'verify 邮箱未配置'}`,
+    `- 账号专项结果：${account.mailbox || 'account 邮箱未配置'}`,
+    `- 失败样本归档：${archive.mailbox || 'archive 邮箱未配置'}`,
+    '',
+    '我可以帮你生成“平台名、用途、邮箱、账号状态、验证码结果、失败截图链接”的测试账号池表格。',
+  ].join('\n');
+}
+
+function buildClerkVerificationTestPlanReply(env = process.env) {
+  const verify = resolveMailboxAction('verify', env);
+  const report = resolveMailboxAction('report', env);
+  const files = resolveMailboxAction('files', env);
+
+  return [
+    '注册验证码测试计划：',
+    `- 收件邮箱：${verify.mailbox || 'verify 邮箱未配置'}`,
+    `- 报告邮箱：${report.mailbox || 'report 邮箱未配置'}`,
+    `- 附件归档：${files.mailbox || 'files 邮箱未配置'}`,
+    '',
+    '核心用例：',
+    '- 合法邮箱注册：能收到验证码并完成注册',
+    '- 验证码有效期：过期后不能继续使用',
+    '- 错误验证码：连续错误后提示清楚并限流',
+    '- 重复发送：按钮冷却、频率限制、邮件内容不混乱',
+    '- 已注册邮箱：提示账号已存在，不泄露敏感信息',
+    '',
+    '自动化建议：Playwright 或 Cypress 负责页面操作，邮箱平台负责收验证码和归档结果。',
+  ].join('\n');
+}
+
+function buildClerkMailboxTasksReply(env = process.env) {
+  return [
+    '今天邮箱任务队列：',
+    `- 待执行：用 ${resolveMailboxAction('verify', env).mailbox || 'verify 邮箱'} 做注册验证码测试`,
+    `- 待归档：把失败截图、trace、Allure 链接发到 ${resolveMailboxAction('files', env).mailbox || 'files 邮箱'}`,
+    `- 待评测：把 OpenClaw/Hermes 对比结果发到 ${resolveMailboxAction('eval', env).mailbox || 'eval 邮箱'}`,
+    `- 待日报：把今日测试摘要发到 ${resolveMailboxAction('daily', env).mailbox || 'daily 邮箱'}`,
+    '',
+    '默认不自动发送。你明确说“发送日报到邮箱”或“把这次报告归档到 report”时，我再调用邮件发送。',
   ].join('\n');
 }
 
@@ -342,6 +404,18 @@ function buildClerkAgentReply(route = {}, options = {}) {
 
   if (route.action === 'mailbox-workbench') {
     return buildClerkMailboxWorkbenchReply(options.env || process.env);
+  }
+
+  if (route.action === 'mailbox-registration-playbook') {
+    return buildClerkMailboxRegistrationReply(options.env || process.env);
+  }
+
+  if (route.action === 'verification-test-plan') {
+    return buildClerkVerificationTestPlanReply(options.env || process.env);
+  }
+
+  if (route.action === 'mailbox-tasks') {
+    return buildClerkMailboxTasksReply(options.env || process.env);
   }
 
   if (route.action === 'training-data') {
@@ -706,7 +780,10 @@ module.exports = {
   buildChatAgentPrompt,
   buildClerkAgentReply,
   buildClerkMailboxWorkbenchReply,
+  buildClerkMailboxRegistrationReply,
+  buildClerkMailboxTasksReply,
   buildClerkTrainingDataReply,
+  buildClerkVerificationTestPlanReply,
   buildClerkWorkbenchReply,
   buildDocAgentReply,
   buildMemoryAgentReply,

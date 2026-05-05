@@ -1,0 +1,98 @@
+[
+  {
+    "id": "submail-01",
+    "mailbox": "evasan.verify@claw.163.com",
+    "group": "registration-verify",
+    "purpose": "自有电商平台注册、登录、找回密码验证码",
+    "policy": "allowed",
+    "platformRule": "只用于自有平台、测试环境、课程作业或明确允许测试账号的平台。",
+    "statusFields": [
+      "platform",
+      "email",
+      "account_status",
+      "verification_result",
+      "last_used_at",
+      "artifact_link"
+    ]
+  },
+  {
+    "id": "submail-02",
+    "mailbox": "evasan.account@claw.163.com",
+    "group": "account-regression",
+    "purpose": "账号体系回归测试账号和结果归档",
+    "policy": "allowed",
+    "platformRule": "只用于自有平台、测试环境、课程作业或明确允许测试账号的平台。",
+    "statusFields": [
+      "platform",
+      "email",
+      "account_status",
+      "verification_result",
+      "last_used_at",
+      "artifact_link"
+    ]
+  },
+  {
+    "id": "submail-03",
+    "mailbox": "evasan.shop@claw.163.com",
+    "group": "shop-flow",
+    "purpose": "购物车、下单、支付沙箱账号",
+    "policy": "allowed",
+    "platformRule": "只用于自有平台、测试环境、课程作业或明确允许测试账号的平台。",
+    "statusFields": [
+      "platform",
+      "email",
+      "account_status",
+      "verification_result",
+      "last_used_at",
+      "artifact_link"
+    ]
+  },
+  {
+    "id": "submail-04",
+    "mailbox": "agent4.support@claw.163.com",
+    "group": "support-simulator",
+    "purpose": "客服邮件模拟买家来信，不用于真实平台注册",
+    "policy": "internal-only",
+    "platformRule": "只做内部归档、模拟或评测，不拿去注册真实外部平台。",
+    "statusFields": [
+      "platform",
+      "email",
+      "account_status",
+      "verification_result",
+      "last_used_at",
+      "artifact_link"
+    ]
+  },
+  {
+    "id": "submail-05",
+    "mailbox": "hagent.eval@claw.163.com",
+    "group": "agent-eval",
+    "purpose": "Agent 评测和模型对比，不用于真实平台注册",
+    "policy": "internal-only",
+    "platformRule": "只做内部归档、模拟或评测，不拿去注册真实外部平台。",
+    "statusFields": [
+      "platform",
+      "email",
+      "account_status",
+      "verification_result",
+      "last_used_at",
+      "artifact_link"
+    ]
+  },
+  {
+    "id": "submail-06",
+    "mailbox": "agent3.archive@claw.163.com",
+    "group": "archive",
+    "purpose": "失败样本、训练语料、复盘归档，不用于真实平台注册",
+    "policy": "internal-only",
+    "platformRule": "只做内部归档、模拟或评测，不拿去注册真实外部平台。",
+    "statusFields": [
+      "platform",
+      "email",
+      "account_status",
+      "verification_result",
+      "last_used_at",
+      "artifact_link"
+    ]
+  }
+]

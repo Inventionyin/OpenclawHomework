@@ -229,6 +229,21 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'mailbox-workbench',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，子邮箱可以拿去注册测试平台吗'), {
+    agent: 'clerk-agent',
+    action: 'mailbox-registration-playbook',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，用 verify 邮箱设计一轮注册验证码测试'), {
+    agent: 'clerk-agent',
+    action: 'verification-test-plan',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，今天邮箱里有哪些任务'), {
+    agent: 'clerk-agent',
+    action: 'mailbox-tasks',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，帮我生成一批电商平台客服训练数据'), {
     agent: 'clerk-agent',
     action: 'training-data',
