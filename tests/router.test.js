@@ -239,6 +239,11 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'verification-test-plan',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，用 verify 邮箱给 projectku-web 跑一轮注册验证码测试'), {
+    agent: 'clerk-agent',
+    action: 'platform-registration-runner',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，今天邮箱里有哪些任务'), {
     agent: 'clerk-agent',
     action: 'mailbox-tasks',

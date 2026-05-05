@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "platforms": {
+    "projectku-web": {
+      "platformId": "projectku-web",
+      "displayName": "projectku-web",
+      "policy": "self-owned",
+      "enabled": true,
+      "baseUrl": "http://localhost:3000",
+      "registerPath": "/register",
+      "capabilities": [
+        "email-registration",
+        "email-verification",
+        "negative-cases"
+      ],
+      "adapter": {
+        "emailField": "input[type=\"email\"]",
+        "passwordField": "input[type=\"password\"]",
+        "submitButton": "button[type=\"submit\"]"
+      }
+    }
+  }
+}

@@ -154,6 +154,17 @@ test('buildClerkAgentReply creates verification test plan from mailbox bindings'
   assert.match(reply, /Playwright|Cypress/);
 });
 
+test('buildClerkAgentReply returns platform registration dry-run plan', () => {
+  const reply = buildClerkAgentReply({
+    action: 'platform-registration-runner',
+    rawText: '文员，用 verify 邮箱给 projectku-web 跑一轮注册验证码测试',
+  });
+  assert.match(reply, /projectku-web/);
+  assert.match(reply, /dry-run/);
+  assert.match(reply, /evasan\.verify@claw\.163\.com/);
+  assert.match(reply, /打开 projectku-web 注册页/);
+});
+
 test('buildClerkAgentReply lists today mailbox tasks without sending mail', () => {
   const reply = buildClerkAgentReply({ action: 'mailbox-tasks' });
   assert.match(reply, /今天邮箱任务队列/);

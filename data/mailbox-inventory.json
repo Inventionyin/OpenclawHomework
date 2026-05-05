@@ -1,0 +1,310 @@
+{
+  "version": 1,
+  "total": 30,
+  "owners": {
+    "OpenClaw": 15,
+    "Hermes": 15
+  },
+  "mailboxes": [
+    {
+      "email": "watchee@claw.163.com",
+      "type": "primary",
+      "owner": "OpenClaw",
+      "primary": "watchee@claw.163.com",
+      "role": "primary",
+      "displayName": "watchee",
+      "canRegister": true,
+      "purpose": "OpenClaw 主管理邮箱，报告/UI/GitHub/运维分组的根邮箱"
+    },
+    {
+      "email": "watchee.report@claw.163.com",
+      "type": "sub",
+      "owner": "OpenClaw",
+      "primary": "watchee@claw.163.com",
+      "role": "report",
+      "displayName": "OpenClaw Reports",
+      "canRegister": false,
+      "purpose": "报告输出与结果汇总"
+    },
+    {
+      "email": "watchee.ui@claw.163.com",
+      "type": "sub",
+      "owner": "OpenClaw",
+      "primary": "watchee@claw.163.com",
+      "role": "ui",
+      "displayName": "OpenClaw UI Tests",
+      "canRegister": false,
+      "purpose": "UI 自动化测试相关收发"
+    },
+    {
+      "email": "watchee.github@claw.163.com",
+      "type": "sub",
+      "owner": "OpenClaw",
+      "primary": "watchee@claw.163.com",
+      "role": "github",
+      "displayName": "OpenClaw GitHub",
+      "canRegister": false,
+      "purpose": "GitHub 工作流与仓库通知"
+    },
+    {
+      "email": "watchee.ops@claw.163.com",
+      "type": "sub",
+      "owner": "OpenClaw",
+      "primary": "watchee@claw.163.com",
+      "role": "ops",
+      "displayName": "OpenClaw Ops",
+      "canRegister": false,
+      "purpose": "运维告警与系统维护沟通"
+    },
+    {
+      "email": "evasan@claw.163.com",
+      "type": "primary",
+      "owner": "OpenClaw",
+      "primary": "evasan@claw.163.com",
+      "role": "primary",
+      "displayName": "evasan",
+      "canRegister": true,
+      "purpose": "业务测试与账号验证主邮箱"
+    },
+    {
+      "email": "evasan.qa@claw.163.com",
+      "type": "sub",
+      "owner": "OpenClaw",
+      "primary": "evasan@claw.163.com",
+      "role": "qa",
+      "displayName": "Evasan QA",
+      "canRegister": false,
+      "purpose": "测试任务与缺陷流转"
+    },
+    {
+      "email": "evasan.account@claw.163.com",
+      "type": "sub",
+      "owner": "OpenClaw",
+      "primary": "evasan@claw.163.com",
+      "role": "account",
+      "displayName": "Evasan Account",
+      "canRegister": true,
+      "purpose": "注册/登录/验证码相关测试"
+    },
+    {
+      "email": "evasan.shop@claw.163.com",
+      "type": "sub",
+      "owner": "OpenClaw",
+      "primary": "evasan@claw.163.com",
+      "role": "shop",
+      "displayName": "Evasan Shop",
+      "canRegister": false,
+      "purpose": "电商业务往来与订单验证"
+    },
+    {
+      "email": "evasan.replay@claw.163.com",
+      "type": "sub",
+      "owner": "OpenClaw",
+      "primary": "evasan@claw.163.com",
+      "role": "replay",
+      "displayName": "Evasan Replay",
+      "canRegister": false,
+      "purpose": "失败复现与回放材料归档"
+    },
+    {
+      "email": "agent3@claw.163.com",
+      "type": "primary",
+      "owner": "OpenClaw",
+      "primary": "agent3@claw.163.com",
+      "role": "primary",
+      "displayName": "agent3",
+      "canRegister": true,
+      "purpose": "实验与附件流主邮箱"
+    },
+    {
+      "email": "agent3.images@claw.163.com",
+      "type": "sub",
+      "owner": "OpenClaw",
+      "primary": "agent3@claw.163.com",
+      "role": "images",
+      "displayName": "Agent3 Images",
+      "canRegister": false,
+      "purpose": "生图、修图与视觉素材"
+    },
+    {
+      "email": "agent3.files@claw.163.com",
+      "type": "sub",
+      "owner": "OpenClaw",
+      "primary": "agent3@claw.163.com",
+      "role": "files",
+      "displayName": "Agent3 Files",
+      "canRegister": false,
+      "purpose": "附件、截图与报告文件"
+    },
+    {
+      "email": "agent3.sandbox@claw.163.com",
+      "type": "sub",
+      "owner": "OpenClaw",
+      "primary": "agent3@claw.163.com",
+      "role": "sandbox",
+      "displayName": "Agent3 Sandbox",
+      "canRegister": false,
+      "purpose": "实验功能与临时工作流"
+    },
+    {
+      "email": "agent3.notify@claw.163.com",
+      "type": "sub",
+      "owner": "OpenClaw",
+      "primary": "agent3@claw.163.com",
+      "role": "notify",
+      "displayName": "Agent3 Notify",
+      "canRegister": false,
+      "purpose": "通知、转发与提醒"
+    },
+    {
+      "email": "shine1@claw.163.com",
+      "type": "primary",
+      "owner": "Hermes",
+      "primary": "shine1@claw.163.com",
+      "role": "primary",
+      "displayName": "shine1",
+      "canRegister": true,
+      "purpose": "Hermes 主管理邮箱，报告/UI/GitHub/运维分组的根邮箱"
+    },
+    {
+      "email": "shine1.report@claw.163.com",
+      "type": "sub",
+      "owner": "Hermes",
+      "primary": "shine1@claw.163.com",
+      "role": "report",
+      "displayName": "Hermes Reports",
+      "canRegister": false,
+      "purpose": "报告输出与结果汇总"
+    },
+    {
+      "email": "shine1.ui@claw.163.com",
+      "type": "sub",
+      "owner": "Hermes",
+      "primary": "shine1@claw.163.com",
+      "role": "ui",
+      "displayName": "Hermes UI Tests",
+      "canRegister": false,
+      "purpose": "UI 自动化测试相关收发"
+    },
+    {
+      "email": "shine1.github@claw.163.com",
+      "type": "sub",
+      "owner": "Hermes",
+      "primary": "shine1@claw.163.com",
+      "role": "github",
+      "displayName": "Hermes GitHub",
+      "canRegister": false,
+      "purpose": "GitHub 工作流与仓库通知"
+    },
+    {
+      "email": "shine1.ops@claw.163.com",
+      "type": "sub",
+      "owner": "Hermes",
+      "primary": "shine1@claw.163.com",
+      "role": "ops",
+      "displayName": "Hermes Ops",
+      "canRegister": false,
+      "purpose": "运维告警与系统维护沟通"
+    },
+    {
+      "email": "hagent@claw.163.com",
+      "type": "primary",
+      "owner": "Hermes",
+      "primary": "hagent@claw.163.com",
+      "role": "primary",
+      "displayName": "hagent",
+      "canRegister": true,
+      "purpose": "监控/日志/安全/备份主邮箱"
+    },
+    {
+      "email": "hagent.monitor@claw.163.com",
+      "type": "sub",
+      "owner": "Hermes",
+      "primary": "hagent@claw.163.com",
+      "role": "monitor",
+      "displayName": "HAgent Monitor",
+      "canRegister": false,
+      "purpose": "监控告警与状态巡检"
+    },
+    {
+      "email": "hagent.logs@claw.163.com",
+      "type": "sub",
+      "owner": "Hermes",
+      "primary": "hagent@claw.163.com",
+      "role": "logs",
+      "displayName": "HAgent Logs",
+      "canRegister": false,
+      "purpose": "日志采集与问题排查"
+    },
+    {
+      "email": "hagent.security@claw.163.com",
+      "type": "sub",
+      "owner": "Hermes",
+      "primary": "hagent@claw.163.com",
+      "role": "security",
+      "displayName": "HAgent Security",
+      "canRegister": false,
+      "purpose": "安全审计与风险处理"
+    },
+    {
+      "email": "hagent.backup@claw.163.com",
+      "type": "sub",
+      "owner": "Hermes",
+      "primary": "hagent@claw.163.com",
+      "role": "backup",
+      "displayName": "HAgent Backup",
+      "canRegister": false,
+      "purpose": "备份任务与恢复协作"
+    },
+    {
+      "email": "agent4@claw.163.com",
+      "type": "primary",
+      "owner": "Hermes",
+      "primary": "agent4@claw.163.com",
+      "role": "primary",
+      "displayName": "agent4",
+      "canRegister": true,
+      "purpose": "长期运营与协作主邮箱"
+    },
+    {
+      "email": "agent4.daily@claw.163.com",
+      "type": "sub",
+      "owner": "Hermes",
+      "primary": "agent4@claw.163.com",
+      "role": "daily",
+      "displayName": "Agent4 Daily",
+      "canRegister": false,
+      "purpose": "日报与定时汇总"
+    },
+    {
+      "email": "agent4.archive@claw.163.com",
+      "type": "sub",
+      "owner": "Hermes",
+      "primary": "agent4@claw.163.com",
+      "role": "archive",
+      "displayName": "Agent4 Archive",
+      "canRegister": false,
+      "purpose": "归档与历史记录保存"
+    },
+    {
+      "email": "agent4.support@claw.163.com",
+      "type": "sub",
+      "owner": "Hermes",
+      "primary": "agent4@claw.163.com",
+      "role": "support",
+      "displayName": "Agent4 Support",
+      "canRegister": false,
+      "purpose": "客服模拟与对外协作"
+    },
+    {
+      "email": "agent4.notify@claw.163.com",
+      "type": "sub",
+      "owner": "Hermes",
+      "primary": "agent4@claw.163.com",
+      "role": "notify",
+      "displayName": "Agent4 Notify",
+      "canRegister": false,
+      "purpose": "通知、提醒与转发"
+    }
+  ]
+}

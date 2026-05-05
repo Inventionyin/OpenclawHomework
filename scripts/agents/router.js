@@ -212,6 +212,11 @@ function routeClerkIntent(text) {
     return null;
   }
 
+  if (/(projectku-web|projectku).{0,30}(注册|验证码|验证).{0,20}(测试|跑一轮|测一下|执行)/i.test(normalized)
+    || /(注册|验证码|验证).{0,20}(测试|跑一轮|测一下|执行).{0,30}(projectku-web|projectku)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'platform-registration-runner', requiresAuth: true };
+  }
+
   if (/(子邮箱|别名邮箱|测试邮箱|邮箱账号|账号池).{0,30}(注册|平台注册|账号|平台|验证码|测试)/i.test(normalized)
     || /(注册|平台注册|账号|平台).{0,30}(子邮箱|别名邮箱|测试邮箱|账号池)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'mailbox-registration-playbook', requiresAuth: true };

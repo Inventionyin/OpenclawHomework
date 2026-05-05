@@ -24,6 +24,10 @@ const {
 const {
   resolveMailboxAction,
 } = require('../mailbox-action-router');
+const {
+  buildRegistrationPlan,
+  parseRegistrationTaskRequest,
+} = require('../browser-registration-runner');
 
 const OPS_SECRET_PATTERNS = [
   /\bauthorization\s*:\s*\S+/i,
@@ -351,6 +355,26 @@ function buildClerkMailboxTasksReply(env = process.env) {
   ].join('\n');
 }
 
+function buildClerkPlatformRegistrationReply(route = {}) {
+  const parsed = parseRegistrationTaskRequest(route.rawText || '');
+  const plan = buildRegistrationPlan(parsed);
+  if (!plan.allowed) {
+    return [
+      '平台注册执行器当前不会直接执行这个请求。',
+      `原因：${plan.reason}`,
+      '只允许自有平台、测试环境或沙箱平台，并且默认先给 dry-run 计划。',
+    ].join('\n');
+  }
+
+  return [
+    `平台注册执行器：${plan.platformId}`,
+    `- 模式：${plan.mode}`,
+    `- 测试邮箱：${plan.selectedMailbox?.email || '未选中'}`,
+    '- 计划步骤：',
+    ...plan.steps.map((step, index) => `${index + 1}. ${step}`),
+  ].join('\n');
+}
+
 function buildClerkTrainingDataReply() {
   const customerCases = buildCustomerServiceCases();
   const agentTasks = buildAgentEvalTasks();
@@ -412,6 +436,10 @@ function buildClerkAgentReply(route = {}, options = {}) {
 
   if (route.action === 'verification-test-plan') {
     return buildClerkVerificationTestPlanReply(options.env || process.env);
+  }
+
+  if (route.action === 'platform-registration-runner') {
+    return buildClerkPlatformRegistrationReply(route);
   }
 
   if (route.action === 'mailbox-tasks') {
@@ -782,6 +810,7 @@ module.exports = {
   buildClerkMailboxWorkbenchReply,
   buildClerkMailboxRegistrationReply,
   buildClerkMailboxTasksReply,
+  buildClerkPlatformRegistrationReply,
   buildClerkTrainingDataReply,
   buildClerkVerificationTestPlanReply,
   buildClerkWorkbenchReply,
