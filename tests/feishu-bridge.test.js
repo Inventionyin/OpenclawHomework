@@ -1222,6 +1222,7 @@ test('buildRoutedAgentReply can run clerk multi-agent lab when explicitly reques
           files: {
             report: '/tmp/multi-agent-lab/report.md',
             items: '/tmp/multi-agent-lab/items.json',
+            summary: '/tmp/multi-agent-lab/summary.json',
           },
         };
       },
@@ -1242,6 +1243,7 @@ test('buildRoutedAgentReply can run clerk multi-agent lab when explicitly reques
   assert.match(reply.replyText, /1/);
   assert.match(reply.replyText, /Hermes/);
   assert.match(reply.replyText, /report\.md/);
+  assert.match(reply.replyText, /summary\.json/);
 });
 
 test('sendFeishuTextMessage fetches tenant token and sends text message', async () => {

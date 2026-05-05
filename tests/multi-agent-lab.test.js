@@ -48,6 +48,8 @@ test('buildMultiAgentLabSummary compares winner and token totals', () => {
   assert.equal(summary.totalItems, 2);
   assert.equal(summary.totalTokens, 500);
   assert.equal(summary.winner, '平手');
+  assert.equal(summary.byAssistant.OpenClaw.totalTokens, 300);
+  assert.equal(summary.byAssistant.Hermes.totalTokens, 200);
   assert.match(summary.text, /OpenClaw/);
   assert.match(summary.text, /Hermes/);
 });
@@ -88,15 +90,23 @@ test('runMultiAgentLab writes artifacts and routes archive eval and report email
 
     assert.equal(result.items.length, 2);
     assert.equal(result.summary.totalItems, 2);
-  assert.equal(result.summary.totalTokens, 400);
-  assert.equal(result.summary.failedJobs, 0);
-  assert.equal(result.items[0].generateTier, 'chat');
-  assert.equal(result.items[0].reviewTier, 'thinking');
-  assert.equal(existsSync(result.files.plan), true);
-  assert.equal(existsSync(result.files.items), true);
-  assert.equal(existsSync(result.files.report), true);
+    assert.equal(result.summary.totalTokens, 400);
+    assert.equal(result.summary.failedJobs, 0);
+    assert.equal(result.summary.byAssistant.OpenClaw.totalTokens, 240);
+    assert.equal(result.summary.byAssistant.Hermes.totalTokens, 160);
+    assert.equal(result.items[0].generateTier, 'chat');
+    assert.equal(result.items[0].reviewTier, 'thinking');
+    assert.equal(existsSync(result.files.plan), true);
+    assert.equal(existsSync(result.files.items), true);
+    assert.equal(existsSync(result.files.summary), true);
+    assert.equal(existsSync(result.files.report), true);
     assert.deepEqual(sent, ['archive', 'eval', 'report']);
     assert.match(readFileSync(result.files.report, 'utf8'), /Multi-Agent Lab/);
+    assert.match(readFileSync(result.files.report, 'utf8'), /OpenClaw token：240/);
+    assert.match(readFileSync(result.files.report, 'utf8'), /Hermes token：160/);
+    assert.match(readFileSync(result.files.summary, 'utf8'), /"byAssistant"/);
+    assert.match(result.emailMessages[0].text, /summary\.json/);
+    assert.match(result.emailMessages[0].text, /OpenClaw token：240/);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -121,6 +131,8 @@ test('runMultiAgentLab keeps producing artifacts when model calls fail', async (
     assert.equal(result.summary.totalTokens, 0);
     assert.equal(result.summary.failedJobs, 2);
     assert(result.summary.estimatedTotalTokens > 0);
+    assert(result.summary.byAssistant.OpenClaw.estimatedTotalTokens > 0);
+    assert(result.summary.byAssistant.Hermes.estimatedTotalTokens > 0);
     assert.match(result.items[0].generateError, /Missing streaming model config/);
     assert.match(result.items[0].reviewError, /Hermes review timeout/);
     assert.match(readFileSync(result.files.report, 'utf8'), /失败样本：2/);

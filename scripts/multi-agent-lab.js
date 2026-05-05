@@ -117,6 +117,18 @@ function buildMultiAgentLabSummary(items = []) {
   let totalTokens = 0;
   let estimatedTotalTokens = 0;
   let failedJobs = 0;
+  const byAssistant = {
+    OpenClaw: {
+      totalTokens: 0,
+      estimatedTotalTokens: 0,
+      failedJobs: 0,
+    },
+    Hermes: {
+      totalTokens: 0,
+      estimatedTotalTokens: 0,
+      failedJobs: 0,
+    },
+  };
   const wins = new Map([
     ['OpenClaw', 0],
     ['Hermes', 0],
@@ -134,8 +146,18 @@ function buildMultiAgentLabSummary(items = []) {
       promptChars: item.reviewPromptChars,
       replyChars: item.reviewReplyChars,
     });
+    byAssistant.OpenClaw.totalTokens += Number(generateLedger.totalTokens || 0);
+    byAssistant.OpenClaw.estimatedTotalTokens += Number(generateLedger.estimatedTotalTokens || 0);
+    byAssistant.Hermes.totalTokens += Number(reviewLedger.totalTokens || 0);
+    byAssistant.Hermes.estimatedTotalTokens += Number(reviewLedger.estimatedTotalTokens || 0);
     totalTokens += Number(generateLedger.totalTokens || 0) + Number(reviewLedger.totalTokens || 0);
     estimatedTotalTokens += Number(generateLedger.estimatedTotalTokens || 0) + Number(reviewLedger.estimatedTotalTokens || 0);
+    if (item.generateError) {
+      byAssistant.OpenClaw.failedJobs += 1;
+    }
+    if (item.reviewError) {
+      byAssistant.Hermes.failedJobs += 1;
+    }
     if (item.generateError || item.reviewError) {
       failedJobs += 1;
     }
@@ -161,6 +183,12 @@ function buildMultiAgentLabSummary(items = []) {
     estimatedTotalTokens && totalTokens
       ? `补充字符估算：约 ${estimatedTotalTokens}`
       : null,
+    byAssistant.OpenClaw.totalTokens
+      ? `OpenClaw token：${byAssistant.OpenClaw.totalTokens}`
+      : `OpenClaw token：0，字符估算约 ${byAssistant.OpenClaw.estimatedTotalTokens}`,
+    byAssistant.Hermes.totalTokens
+      ? `Hermes token：${byAssistant.Hermes.totalTokens}`
+      : `Hermes token：0，字符估算约 ${byAssistant.Hermes.estimatedTotalTokens}`,
     `OpenClaw 胜场：${openClawWins}`,
     `Hermes 胜场：${hermesWins}`,
     `平手：${wins.get('平手') || 0}`,
@@ -172,6 +200,7 @@ function buildMultiAgentLabSummary(items = []) {
     failedJobs,
     totalTokens,
     estimatedTotalTokens,
+    byAssistant,
     openClawWins,
     hermesWins,
     draws: wins.get('平手') || 0,
@@ -195,12 +224,14 @@ function buildEmailMessages(summary, files, plan, env = process.env) {
           summary.text,
           '',
           `产物：${files.items}`,
+          `摘要：${files.summary}`,
           `报告：${files.report}`,
         ].join('\n'),
         html: [
           '<h2>Multi-Agent Lab 训练场报告</h2>',
           `<pre>${summary.text.replace(/[&<>]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[char]))}</pre>`,
           `<p>产物：${files.items}</p>`,
+          `<p>摘要：${files.summary}</p>`,
           `<p>报告：${files.report}</p>`,
         ].join('\n'),
       };
@@ -328,10 +359,12 @@ async function runMultiAgentLab(options = {}) {
   const files = {
     plan: join(outputDir, 'plan.json'),
     items: join(outputDir, 'items.json'),
+    summary: join(outputDir, 'summary.json'),
     report: join(outputDir, 'report.md'),
   };
   writeJson(files.plan, plan);
   writeJson(files.items, items);
+  writeJson(files.summary, summary);
   writeFileSync(files.report, `# Multi-Agent Lab\n\n${summary.text}\n`, 'utf8');
 
   const emailMessages = buildEmailMessages(summary, files, plan, env);
