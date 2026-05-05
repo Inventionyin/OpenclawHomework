@@ -214,6 +214,33 @@ async function streamEndpoint(endpoint, prompt, config, options) {
   };
 }
 
+function getProfileKeyCount(profile) {
+  return Array.isArray(profile.apiKeys) && profile.apiKeys.length ? profile.apiKeys.length : 1;
+}
+
+async function streamWithKeyFallback(endpoint, prompt, profile, options) {
+  const keyCount = getProfileKeyCount(profile);
+  let lastError;
+
+  for (let index = profile.apiKeyIndex || 0; index < keyCount; index += 1) {
+    const currentProfile = resolveStreamingModelProfile(prompt, profile, {
+      ...options,
+      apiKeyIndex: index,
+      modelTier: profile.tier,
+    });
+    try {
+      return await streamEndpoint(endpoint, prompt, currentProfile, options);
+    } catch (error) {
+      lastError = error;
+      if (index >= keyCount - 1) {
+        break;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 async function streamModelText(prompt, options = {}) {
   const envConfig = buildStreamingChatConfig(options.env || process.env);
   const config = {
@@ -236,17 +263,17 @@ async function streamModelText(prompt, options = {}) {
   }
 
   if (profile.endpointMode === 'responses') {
-    return streamEndpoint('responses', prompt, profile, options);
+    return streamWithKeyFallback('responses', prompt, profile, options);
   }
 
   if (profile.endpointMode === 'chat_completions' || profile.endpointMode === 'chat-completions') {
-    return streamEndpoint('chat_completions', prompt, profile, options);
+    return streamWithKeyFallback('chat_completions', prompt, profile, options);
   }
 
   try {
-    return await streamEndpoint('responses', prompt, profile, options);
+    return await streamWithKeyFallback('responses', prompt, profile, options);
   } catch {
-    return streamEndpoint('chat_completions', prompt, profile, options);
+    return streamWithKeyFallback('chat_completions', prompt, profile, options);
   }
 }
 

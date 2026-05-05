@@ -148,6 +148,38 @@ test('streamModelText uses simple model tier for lightweight prompts', async () 
   assert.equal(result.tier, 'simple');
 });
 
+test('streamModelText retries with backup key when the first key is rate limited', async () => {
+  const calls = [];
+  const result = await streamModelText('正常聊天', {
+    baseUrl: 'https://example.test/v1',
+    apiKeys: ['primary', 'backup'],
+    model: 'LongCat-Flash-Chat',
+    endpointMode: 'chat_completions',
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      if (options.headers.Authorization === 'Bearer primary') {
+        return {
+          ok: false,
+          status: 429,
+          statusText: 'Too Many Requests',
+          headers: { get: () => 'application/json' },
+          text: async () => '{"error":"rate limited"}',
+        };
+      }
+      return sseResponse([
+        'data: {"choices":[{"delta":{"content":"备用成功"}}]}\n\n',
+        'data: [DONE]\n\n',
+      ], { 'content-type': 'text/event-stream' });
+    },
+  });
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer primary');
+  assert.equal(calls[1].options.headers.Authorization, 'Bearer backup');
+  assert.equal(result.text, '备用成功');
+  assert.equal(result.apiKeyIndex, 1);
+});
+
 test('streamModelText streams responses endpoint deltas when supported', async () => {
   const deltas = [];
   const result = await streamModelText('你好', {
