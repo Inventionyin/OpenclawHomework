@@ -9,6 +9,7 @@ const {
   buildFeishuTextMessage,
   buildEmailRunResultMessage,
   buildEmailRunResultSubject,
+  buildRoutedChatReply,
   createServer,
   extractFeishuText,
   getFeishuDedupKeys,
@@ -1303,6 +1304,58 @@ test('buildRoutedAgentReply explains daily report preview is not yet an email se
   assert.match(reply.replyText, /我理解你想查看日报预览/);
   assert.match(reply.replyText, /先没执行发送/);
   assert.match(reply.replyText, /发送今天日报到邮箱/);
+});
+
+test('buildRoutedAgentReply clarifies daily email defaults before sending when no recipient is specified', async () => {
+  const sent = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-clerk-daily-clarify',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '文员，发送今天日报到邮箱' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      EMAIL_NOTIFY_ENABLED: 'true',
+      DAILY_SUMMARY_EXTERNAL_TO: '1693457391@qq.com',
+    },
+    {
+      emailSender: async (message) => {
+        sent.push(message);
+        return { sent: true };
+      },
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.equal(sent.length, 1);
+  assert.match(reply.replyText, /默认外发/);
+  assert.match(reply.replyText, /1693457391@qq\.com/);
+  assert.match(reply.replyText, /指定收件人/);
+});
+
+test('buildRoutedChatReply can prepend lightweight diagnosis for free chat', async () => {
+  const reply = await buildRoutedChatReply(
+    '为什么 OpenClaw 老是回两条消息',
+    {
+      OPENCLAW_CHAT_ENABLED: 'true',
+    },
+    {
+      chat: async () => '先排查飞书回执和异步重复发送。',
+    },
+  );
+
+  assert.match(reply, /我理解你是在问问题原因/);
+  assert.match(reply, /先排查飞书回执/);
 });
 
 test('buildRoutedAgentReply explains why medium-confidence ops request was not executed', async () => {

@@ -2591,6 +2591,23 @@ async function buildRoutedChatReply(text, env, options = {}) {
     return null;
   }
 
+  const detectChatDiagnosisPrefix = (input) => {
+    const normalized = String(input || '').trim().toLowerCase();
+    if (!normalized || /^(你好|hi|hello|嗨|哈喽)$/.test(normalized)) {
+      return '';
+    }
+    if (/(怎么玩|怎么用|如何用|可以怎么|能拿来干嘛|适合做什么)/.test(normalized)) {
+      return '看起来你是在问玩法，我先按好上手的方式跟你说。';
+    }
+    if (/(为什么|怎么会|为啥|原因|老是|总是|怎么又)/.test(normalized)) {
+      return '我理解你是在问问题原因，我先从最可能的几处排查起。';
+    }
+    if (/(现在|目前|当前|进展|怎么样了|还差|是否|有没有)/.test(normalized)) {
+      return '你这是在问当前状态，我先按我现在能确认的部分说。';
+    }
+    return '你这是在聊想法，我先顺着你的思路一起拆。';
+  };
+
   const prompt = buildChatAgentPrompt(text);
   const chat = options.chat || runOpenClawChat;
   const timingContext = options.timingContext;
@@ -2605,7 +2622,8 @@ async function buildRoutedChatReply(text, env, options = {}) {
       agent: 'chat-agent',
       source: getAssistantName(env),
     });
-    return reply;
+    const prefix = detectChatDiagnosisPrefix(text);
+    return prefix ? `${prefix}\n${reply}` : reply;
   } catch (error) {
     logTimedModelFinish(env, timingContext, 'model:error', modelStartedAt, {
       agent: 'chat-agent',
@@ -2626,7 +2644,8 @@ async function buildRoutedChatReply(text, env, options = {}) {
       agent: 'chat-agent',
       source: 'fallback',
     });
-    return reply;
+    const prefix = detectChatDiagnosisPrefix(text);
+    return prefix ? `${prefix}\n${reply}` : reply;
   }
 }
 
@@ -3289,6 +3308,7 @@ if (require.main === module) {
 module.exports = {
   buildEmailRunResultMessage,
   buildEmailRunResultSubject,
+  buildRoutedChatReply,
   buildUiMailboxMessages,
   buildFeishuResultCard,
   buildRoutedAgentReply,

@@ -528,6 +528,7 @@ function buildClerkAgentReply(route = {}, options = {}) {
       '文员日报邮件：',
       `- 默认外发：${route.recipientEmail || defaultRecipients || '未配置外发邮箱'}`,
       `- 内部归档：${daily.mailbox || 'daily 邮箱未配置'}`,
+      '- 指定收件人：文员，把今日日报发到 xxx@qq.com',
       '- 内容会包含 UI 自动化、token/耗时、服务器状态、邮箱归档建议。',
       '- 当前只是生成发送意图；飞书桥梁会在明确说“发送日报到邮箱”时调用邮件发送。',
     ].join('\n');
