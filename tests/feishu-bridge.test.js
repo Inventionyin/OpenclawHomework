@@ -2727,6 +2727,57 @@ test('createServer routes natural-language QA data requests without chat fallbac
   }
 });
 
+test('createServer routes clerk token summaries without chat fallback', async () => {
+  let chatCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      FEISHU_ALLOWED_OPEN_IDS: 'user-a',
+      FEISHU_USAGE_LEDGER_ENABLED: 'true',
+      FEISHU_USAGE_LEDGER_PATH: join(mkdtempSync(join(tmpdir(), 'clerk-ledger-')), 'usage.jsonl'),
+    },
+    {
+      receiptSender: async (message) => {
+        const content = JSON.stringify(JSON.parse(message.content));
+        assert.match(content, /文员统计/);
+        assert.match(content, /token/);
+      },
+      chat: async () => {
+        chatCalled = true;
+        return 'chat fallback should not run';
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: {
+          sender: { sender_id: { open_id: 'user-a' } },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '文员，统计今天 Hermes 和 OpenClaw 谁更费 token' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(chatCalled, false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('createServer does not dispatch negated run-ui-test command', async () => {
   let dispatchCalled = false;
   let parserCalled = false;

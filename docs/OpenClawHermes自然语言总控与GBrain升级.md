@@ -113,6 +113,13 @@ bash scripts/sync-gbrain-knowledge.sh
 - 文员，把这次排查经验沉淀到知识库
 - 文员，统计今天 Hermes 和 OpenClaw 谁更费 token
 
+当前已接入的第一批动作：
+
+- `token-summary`：读取 `/var/log/openclaw-homework/usage-ledger.jsonl`，按机器人和模型汇总 token 与模型耗时。
+- `todo-summary`：给出待办整理模板和下一步清单，不执行危险动作。
+- `daily-report`：给出日报结构，后续可接定时任务和邮箱发送。
+- `knowledge-summary`：给出知识沉淀边界，强调不保存密钥。
+
 第二阶段再接入自动调度：
 
 - 每天 0 点跑测试后，文员 agent 自动汇总结果并发邮件。

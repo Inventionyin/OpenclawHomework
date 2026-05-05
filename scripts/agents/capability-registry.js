@@ -63,6 +63,19 @@ const CAPABILITIES = [
     requiresAuth: true,
   },
   {
+    id: 'clerk.office',
+    agent: 'clerk-agent',
+    name: '文员整理和日报',
+    description: '统计 token/耗时账本，整理待办、日报、UI 自动化摘要、邮箱归档和知识库沉淀建议。',
+    examples: [
+      '文员，统计今天 Hermes 和 OpenClaw 谁更费 token',
+      '文员，整理一下还没完成的待办',
+      '文员，把今天 UI 自动化结果发到邮箱',
+    ],
+    riskLevel: 'low',
+    requiresAuth: true,
+  },
+  {
     id: 'image.generate',
     agent: 'image-agent',
     name: '图片生成和修图',

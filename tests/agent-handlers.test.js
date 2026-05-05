@@ -6,6 +6,7 @@ const test = require('node:test');
 
 const {
   buildChatAgentPrompt,
+  buildClerkAgentReply,
   buildCapabilityGuideReply,
   buildBrainGuideReply,
   buildDocAgentReply,
@@ -41,6 +42,44 @@ test('buildPlannerClarifyReply turns vague requests into natural choices', () =>
   assert.match(reply, /自然语言/);
   assert.match(reply, /服务器/);
   assert.match(reply, /UI 自动化/);
+});
+
+test('buildClerkAgentReply summarizes token usage from ledger lines', () => {
+  const reply = buildClerkAgentReply({
+    action: 'token-summary',
+  }, {
+    readUsageLedger: () => [
+      {
+        assistant: 'Hermes',
+        model: 'LongCat-Flash-Chat',
+        totalTokens: 30,
+        modelElapsedMs: 1000,
+      },
+      {
+        assistant: 'OpenClaw',
+        model: 'astron-code-latest',
+        totalTokens: 20,
+        modelElapsedMs: 2000,
+      },
+    ],
+  });
+
+  assert.match(reply, /文员统计/);
+  assert.match(reply, /Hermes/);
+  assert.match(reply, /30/);
+  assert.match(reply, /OpenClaw/);
+  assert.match(reply, /20/);
+});
+
+test('buildClerkAgentReply gives safe office playbook for todos and reports', () => {
+  const todoReply = buildClerkAgentReply({ action: 'todo-summary' });
+  assert.match(todoReply, /待办/);
+  assert.match(todoReply, /不会重启/);
+
+  const reportReply = buildClerkAgentReply({ action: 'daily-report' });
+  assert.match(reportReply, /日报/);
+  assert.match(reportReply, /UI 自动化/);
+  assert.match(reportReply, /邮箱/);
 });
 
 test('buildDocAgentReply answers project progress from memory', () => {

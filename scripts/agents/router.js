@@ -206,6 +206,31 @@ function routeQaAssetIntent(text) {
   return null;
 }
 
+function routeClerkIntent(text) {
+  const normalized = stripMention(String(text ?? '').trim()).toLowerCase();
+  if (!/(文员|秘书|助理|clerk|office)/i.test(normalized)) {
+    return null;
+  }
+
+  if (/(token|耗时|用量|账本|谁更费|谁更省|统计|对比)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'token-summary', requiresAuth: true };
+  }
+
+  if (/(待办|todo|清单|还没|未完成|下一步|整理一下)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'todo-summary', requiresAuth: true };
+  }
+
+  if (/(日报|周报|报告|ui\s*自动化|测试结果|发到邮箱|邮件|总结)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'daily-report', requiresAuth: true };
+  }
+
+  if (/(知识库|沉淀|归档|记录|整理)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'knowledge-summary', requiresAuth: true };
+  }
+
+  return { agent: 'clerk-agent', action: 'guide', requiresAuth: true };
+}
+
 function routeCapabilityIntent(text) {
   const normalized = String(text ?? '').trim().toLowerCase();
   if (/(你|我)?(现在)?(能|可以|会).{0,12}(做|干|玩).{0,20}(什么|哪些|啥|事情|功能)/i.test(normalized)
@@ -355,6 +380,11 @@ function routeAgentIntent(text) {
     return qaAssetRoute;
   }
 
+  const clerkRoute = routeClerkIntent(original);
+  if (clerkRoute) {
+    return clerkRoute;
+  }
+
   const naturalLanguageOpsRoute = routeNaturalLanguageOps(normalized);
   if (naturalLanguageOpsRoute) {
     return naturalLanguageOpsRoute;
@@ -398,6 +428,7 @@ module.exports = {
   routeBrainMemoryIntent,
   routeBroadPlannerIntent,
   routeCapabilityIntent,
+  routeClerkIntent,
   routeQaAssetIntent,
   routeNaturalLanguageOps,
   stripMention,

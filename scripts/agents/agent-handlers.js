@@ -1,3 +1,4 @@
+const { existsSync, readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const {
   buildAgentEvalTasks,
@@ -17,6 +18,9 @@ const {
 const {
   runGBrainSearch,
 } = require('./gbrain-client');
+const {
+  getUsageLedgerPath,
+} = require('../usage-ledger');
 
 const OPS_SECRET_PATTERNS = [
   /\bauthorization\s*:\s*\S+/i,
@@ -153,6 +157,125 @@ function buildPlannerClarifyReply(text = '') {
     '- 生成 QA 数据：电商客服训练数据、Agent 评测题、邮箱测试玩法',
     '',
     `我刚收到的是：${trimForReply(text, 120)}`,
+  ].join('\n');
+}
+
+function defaultReadUsageLedger(env = process.env, limit = 200) {
+  const file = getUsageLedgerPath(env);
+  if (!file || !existsSync(file)) {
+    return [];
+  }
+
+  return readFileSync(file, 'utf8')
+    .trim()
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .slice(-limit)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+function summarizeUsageLedger(entries = []) {
+  const summary = new Map();
+  for (const entry of entries) {
+    const assistant = String(entry.assistant || 'unknown');
+    const model = String(entry.model || 'unknown');
+    const key = `${assistant} / ${model}`;
+    const current = summary.get(key) || {
+      assistant,
+      model,
+      calls: 0,
+      totalTokens: 0,
+      modelElapsedMs: 0,
+    };
+    current.calls += 1;
+    current.totalTokens += Number(entry.totalTokens || 0);
+    current.modelElapsedMs += Number(entry.modelElapsedMs || 0);
+    summary.set(key, current);
+  }
+
+  return Array.from(summary.values())
+    .sort((a, b) => b.totalTokens - a.totalTokens || b.calls - a.calls);
+}
+
+function buildTokenSummaryReply(entries = []) {
+  if (!entries.length) {
+    return [
+      '文员统计：现在还没有可用的 token/耗时账本记录。',
+      '你先和 Hermes/OpenClaw 普通聊几句，之后我就能对比谁更费 token、谁更慢。',
+    ].join('\n');
+  }
+
+  const rows = summarizeUsageLedger(entries);
+  const lines = [
+    `文员统计：最近 ${entries.length} 次普通聊天用量如下。`,
+  ];
+
+  rows.forEach((row, index) => {
+    const avgTokens = row.calls ? Math.round(row.totalTokens / row.calls) : 0;
+    const avgMs = row.calls ? Math.round(row.modelElapsedMs / row.calls) : 0;
+    lines.push(`${index + 1}. ${row.assistant} / ${row.model}：${row.calls} 次，${row.totalTokens} tokens，平均 ${avgTokens} tokens/次，模型平均耗时 ${avgMs}ms`);
+  });
+
+  const top = rows[0];
+  if (top) {
+    lines.push(`目前样本里 token 用量最高的是：${top.assistant} / ${top.model}。`);
+  }
+  return lines.join('\n');
+}
+
+function buildClerkAgentReply(route = {}, options = {}) {
+  if (route.action === 'token-summary') {
+    const entries = (options.readUsageLedger || defaultReadUsageLedger)(options.env || process.env);
+    return buildTokenSummaryReply(entries);
+  }
+
+  if (route.action === 'todo-summary') {
+    return [
+      '文员待办整理：',
+      '- 先把今天新增问题归成三类：机器人聊天、UI 自动化、服务器/邮箱。',
+      '- 再把每类拆成“已完成 / 待验证 / 下一步”。',
+      '- 我可以读取记忆和文档整理清单，但不会重启、清理硬盘或互修服务器。',
+      '',
+      '你可以继续说：文员，整理今天项目待办。',
+    ].join('\n');
+  }
+
+  if (route.action === 'daily-report') {
+    return [
+      '文员日报模板：',
+      '- UI 自动化：汇总 GitHub Actions、Allure 链接、失败用例。',
+      '- 模型用量：读取 token/耗时账本，对比 Hermes 和 OpenClaw。',
+      '- 服务器：只引用状态摘要，不执行修复。',
+      '- 邮箱：可以把日报发到配置好的报告邮箱。',
+      '',
+      '下一步可以接定时任务：每天 0 点跑测试，完成后自动生成日报并发邮箱。',
+    ].join('\n');
+  }
+
+  if (route.action === 'knowledge-summary') {
+    return [
+      '文员知识沉淀：',
+      '- 适合沉淀排查经验、测试结论、模型对比、邮箱玩法。',
+      '- 不保存密钥、密码、token、邮箱授权码。',
+      '- 可以写入本地 memory，再同步到 GBrain。',
+    ].join('\n');
+  }
+
+  return [
+    '我是文员 agent，适合做这些低风险整理工作：',
+    '- 统计 Hermes/OpenClaw token 和耗时',
+    '- 整理待办、日报、周报',
+    '- 摘要 UI 自动化和 Allure 结果',
+    '- 归档邮箱报告和知识库经验',
+    '',
+    '我默认不执行重启、清理硬盘、互修服务器。',
   ].join('\n');
 }
 
@@ -447,6 +570,7 @@ module.exports = {
   buildCapabilityGuideReply,
   buildBrainGuideReply,
   buildChatAgentPrompt,
+  buildClerkAgentReply,
   buildDocAgentReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,

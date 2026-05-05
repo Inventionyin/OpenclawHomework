@@ -203,6 +203,24 @@ test('routeAgentIntent routes natural-language QA asset requests', () => {
   });
 });
 
+test('routeAgentIntent routes clerk agent office work requests', () => {
+  assert.deepEqual(routeAgentIntent('文员，统计今天 Hermes 和 OpenClaw 谁更费 token'), {
+    agent: 'clerk-agent',
+    action: 'token-summary',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，整理一下还没完成的待办'), {
+    agent: 'clerk-agent',
+    action: 'todo-summary',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，把今天 UI 自动化结果发到邮箱'), {
+    agent: 'clerk-agent',
+    action: 'daily-report',
+    requiresAuth: true,
+  });
+});
+
 test('routeAgentIntent routes natural-language control brain and memory discovery', () => {
   assert.deepEqual(routeAgentIntent('我现在能让你做哪些事情'), {
     agent: 'capability-agent',

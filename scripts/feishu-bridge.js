@@ -19,6 +19,7 @@ const {
 const {
   buildCapabilityGuideReply,
   buildChatAgentPrompt,
+  buildClerkAgentReply,
   buildDocAgentReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,
@@ -2597,6 +2598,13 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
     return {
       handled: true,
       replyText: buildQaAgentReply(route),
+    };
+  }
+
+  if (route.agent === 'clerk-agent') {
+    return {
+      handled: true,
+      replyText: buildClerkAgentReply(route, { env }),
     };
   }
 
