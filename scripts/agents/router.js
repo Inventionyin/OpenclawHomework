@@ -207,7 +207,10 @@ function routeQaAssetIntent(text) {
 }
 
 function routeClerkIntent(text) {
-  const normalized = stripMention(String(text ?? '').trim()).toLowerCase();
+  const original = stripMention(String(text ?? '').trim());
+  const normalized = original.toLowerCase();
+  const recipientMatch = original.match(/\b([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\b/i);
+  const recipientEmail = recipientMatch ? recipientMatch[1] : '';
   if (!/(文员|秘书|助理|clerk|office)/i.test(normalized)) {
     return null;
   }
@@ -257,8 +260,13 @@ function routeClerkIntent(text) {
     return { agent: 'clerk-agent', action: 'token-summary', requiresAuth: true };
   }
 
-  if (/(发送|发|寄).{0,12}(日报|周报|报告).{0,12}(邮箱|邮件)|((日报|周报|报告).{0,12}(发送|发|寄).{0,12}(邮箱|邮件))/i.test(normalized)) {
-    return { agent: 'clerk-agent', action: 'daily-email', requiresAuth: true };
+  if (/(发送|发|寄).{0,12}(日报|周报|报告).{0,12}(邮箱|邮件)|((日报|周报|报告).{0,12}(发送|发|寄).{0,12}(邮箱|邮件))|((发到|发给|寄到|寄给).{0,24}[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i.test(normalized)) {
+    return {
+      agent: 'clerk-agent',
+      action: 'daily-email',
+      ...(recipientEmail ? { recipientEmail } : {}),
+      requiresAuth: true,
+    };
   }
 
   if (/(待办|todo|清单|还没|未完成|下一步|整理一下)/i.test(normalized)) {

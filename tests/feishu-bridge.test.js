@@ -1013,6 +1013,50 @@ test('sendDailySummaryNotification routes message to daily mailbox action', asyn
   assert.match(sent[0].subject, /Daily Summary/);
 });
 
+test('sendDailySummaryNotification can send to a user email and keep daily mailbox archived', async () => {
+  const sent = [];
+
+  await sendDailySummaryNotification(
+    [{ conclusion: 'success', runUrl: 'https://example.com/run' }],
+    {
+      EMAIL_NOTIFY_ENABLED: 'true',
+      DAILY_SUMMARY_EXTERNAL_TO: '1693457391@qq.com',
+    },
+    {
+      emailSender: async (message) => {
+        sent.push(message);
+        return { sent: true };
+      },
+    },
+  );
+
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].action, 'daily');
+  assert.deepEqual(sent[0].to, ['1693457391@qq.com', 'agent4.daily@claw.163.com']);
+});
+
+test('sendDailySummaryNotification prefers explicit recipient over default external recipient', async () => {
+  const sent = [];
+
+  await sendDailySummaryNotification(
+    [{ conclusion: 'success', runUrl: 'https://example.com/run' }],
+    {
+      EMAIL_NOTIFY_ENABLED: 'true',
+      DAILY_SUMMARY_EXTERNAL_TO: '1693457391@qq.com',
+    },
+    {
+      recipientEmail: '2261823517@qq.com',
+      emailSender: async (message) => {
+        sent.push(message);
+        return { sent: true };
+      },
+    },
+  );
+
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0].to, ['2261823517@qq.com', 'agent4.daily@claw.163.com']);
+});
+
 test('sendDailySummaryNotification can use evanshine SMTP profile for daily action', async () => {
   const transports = [];
 
@@ -1160,6 +1204,41 @@ test('buildRoutedAgentReply can send clerk daily summary email when explicitly r
   assert.equal(sent[0].action, 'daily');
   assert.match(reply.replyText, /已发送日报/);
   assert.match(reply.replyText, /agent4\.daily@claw\.163\.com/);
+});
+
+test('buildRoutedAgentReply can send clerk daily summary email to explicit user recipient', async () => {
+  const sent = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-clerk-daily-explicit',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '文员，把今日日报发到 1693457391@qq.com' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      EMAIL_NOTIFY_ENABLED: 'true',
+    },
+    {
+      emailSender: async (message) => {
+        sent.push(message);
+        return { sent: true };
+      },
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0].to, ['1693457391@qq.com', 'agent4.daily@claw.163.com']);
+  assert.match(reply.replyText, /1693457391@qq\.com/);
 });
 
 test('buildRoutedAgentReply can run clerk token lab when explicitly requested', async () => {

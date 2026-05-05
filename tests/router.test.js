@@ -269,6 +269,12 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'daily-email',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，把今日日报发到 1693457391@qq.com'), {
+    agent: 'clerk-agent',
+    action: 'daily-email',
+    recipientEmail: '1693457391@qq.com',
+    requiresAuth: true,
+  });
 });
 
 test('routeAgentIntent routes natural-language control brain and memory discovery', () => {

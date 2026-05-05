@@ -1628,6 +1628,27 @@ function parseEmailRecipients(value) {
     .filter(Boolean);
 }
 
+function mergeEmailRecipients(...groups) {
+  const merged = [];
+  const seen = new Set();
+  for (const group of groups) {
+    const items = Array.isArray(group) ? group : parseEmailRecipients(group);
+    for (const item of items) {
+      const email = String(item || '').trim();
+      if (!email) {
+        continue;
+      }
+      const key = email.toLowerCase();
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      merged.push(email);
+    }
+  }
+  return merged;
+}
+
 function parseMailActionProviderOverrides(value) {
   const overrides = new Map();
   for (const part of String(value || '').split(/[,\n]+/)) {
@@ -2001,7 +2022,7 @@ async function sendDailySummaryNotification(runs, env = process.env, options = {
   }
 
   const resolvedAction = resolveMailboxAction('daily', env);
-  if (!resolvedAction.enabled || !resolvedAction.mailbox) {
+  if (!resolvedAction.enabled) {
     return [];
   }
 
@@ -2019,16 +2040,30 @@ async function sendDailySummaryNotification(runs, env = process.env, options = {
     usageEntries,
     multiAgentSummary,
   });
+  const emailSender = options.emailSender || ((mail, senderEnv) => sendMailboxActionEmail(mail, senderEnv, options));
+  const explicitRecipients = mergeEmailRecipients(options.recipientEmail || options.to);
+  const fallbackRecipients = explicitRecipients.length
+    ? []
+    : mergeEmailRecipients(env.DAILY_SUMMARY_EXTERNAL_TO, env.EMAIL_TO);
+  const externalRecipients = mergeEmailRecipients(explicitRecipients, fallbackRecipients)
+    .filter((email) => email.toLowerCase() !== String(resolvedAction.mailbox || '').toLowerCase());
+  const archiveRecipients = resolvedAction.mailbox ? [resolvedAction.mailbox] : [];
+  const allRecipients = mergeEmailRecipients(externalRecipients, archiveRecipients);
+  if (!allRecipients.length) {
+    return [];
+  }
+
   const message = {
     action: 'daily',
     mailbox: resolvedAction.mailbox,
-    to: [resolvedAction.mailbox],
+    to: allRecipients,
+    externalTo: externalRecipients,
+    archiveTo: archiveRecipients,
     subject: buildMailboxActionEmailSubject(resolvedAction, summary.subject),
     text: summary.text,
     html: summary.html,
   };
 
-  const emailSender = options.emailSender || ((mail, senderEnv) => sendMailboxActionEmail(mail, senderEnv, options));
   await Promise.resolve(emailSender(message, env));
   return [message];
 }
@@ -2866,10 +2901,18 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
     }
 
     if (route.action === 'daily-email') {
-      const messages = await sendDailySummaryNotification([], env, options);
-      const mailbox = messages[0]?.mailbox || 'daily 邮箱';
+      const messages = await sendDailySummaryNotification([], env, {
+        ...options,
+        recipientEmail: route.recipientEmail,
+      });
+      const primaryRecipients = messages[0]?.externalTo?.length
+        ? messages[0].externalTo.join(', ')
+        : (messages[0]?.archiveTo?.length ? messages[0].archiveTo.join(', ') : 'daily 邮箱');
+      const archiveRecipients = messages[0]?.archiveTo?.length
+        ? `（已归档到 ${messages[0].archiveTo.join(', ')}）`
+        : '';
       const status = messages.length
-        ? `已发送日报到 ${mailbox}。`
+        ? `已发送日报到 ${primaryRecipients}${archiveRecipients}。`
         : '日报邮件没有发出：请检查 EMAIL_NOTIFY_ENABLED、默认 SMTP、evanshine 第二 SMTP，以及 daily 邮箱动作是否启用。';
       return {
         handled: true,

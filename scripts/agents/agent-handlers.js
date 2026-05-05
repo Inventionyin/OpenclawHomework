@@ -518,9 +518,16 @@ function buildClerkAgentReply(route = {}, options = {}) {
 
   if (route.action === 'daily-email') {
     const daily = resolveMailboxAction('daily', options.env || process.env);
+    const defaultRecipients = [
+      options.env?.DAILY_SUMMARY_EXTERNAL_TO,
+      options.env?.EMAIL_TO,
+    ]
+      .filter(Boolean)
+      .join(', ');
     return [
       '文员日报邮件：',
-      `- 收件邮箱：${daily.mailbox || 'daily 邮箱未配置'}`,
+      `- 默认外发：${route.recipientEmail || defaultRecipients || '未配置外发邮箱'}`,
+      `- 内部归档：${daily.mailbox || 'daily 邮箱未配置'}`,
       '- 内容会包含 UI 自动化、token/耗时、服务器状态、邮箱归档建议。',
       '- 当前只是生成发送意图；飞书桥梁会在明确说“发送日报到邮箱”时调用邮件发送。',
     ].join('\n');
