@@ -347,6 +347,65 @@ Hermes   服务器 38.76.188.94 -> 801ef6e 或更新
 
 如果要启用阿里云辅助，需要用户提供阿里云服务器 SSH 信息，或在阿里云上创建只允许跑监控/备份脚本的低权限用户。
 
+## 2.5 2026-05-06 主动日报系统
+
+项目新增 `scripts/proactive-daily-digest.js`，用于把“大神龙虾”的主动产出做成稳定系统。它每天固定时间汇总：
+
+```text
+1. 邮件发送账本：今天发了多少封、失败多少、投递给谁
+2. 模型 usage 账本：调用次数、token 或字符估算 token
+3. 服务器快照：硬盘、内存、负载
+4. 新闻日报：默认内置 AI Agent / 软件测试 / 工程效率三类，也可用环境变量自定义
+5. 明日建议：UI 自动化、训练数据、邮件账本检查
+```
+
+安装脚本：
+
+```bash
+cd /opt/OpenclawHomework
+bash scripts/install-proactive-daily-digest.sh \
+  --unit-name openclaw-proactive-daily-digest \
+  --env-file /etc/openclaw-feishu-bridge.env \
+  --on-calendar "*-*-* 08:30:00" \
+  --to 1693457391@qq.com
+
+bash scripts/install-proactive-daily-digest.sh \
+  --unit-name hermes-proactive-daily-digest \
+  --env-file /etc/hermes-feishu-bridge.env \
+  --on-calendar "*-*-* 08:35:00" \
+  --to 1693457391@qq.com
+```
+
+手动联调：
+
+```bash
+node scripts/proactive-daily-digest.js --dry-run --force --to 1693457391@qq.com
+node scripts/proactive-daily-digest.js --force --to 1693457391@qq.com
+systemctl list-timers '*proactive-daily-digest*' --no-pager
+journalctl -u openclaw-proactive-daily-digest -n 80 --no-pager
+journalctl -u hermes-proactive-daily-digest -n 80 --no-pager
+```
+
+推荐环境变量：
+
+```text
+PROACTIVE_DIGEST_TO=1693457391@qq.com
+PROACTIVE_DIGEST_ASSISTANT_NAME=OpenClaw 或 Hermes
+PROACTIVE_DIGEST_NEWS_ITEMS=AI Agent 今日关注|软件测试今日关注|GitHub 热门项目跟踪
+PROACTIVE_DIGEST_TZ_OFFSET_MINUTES=480
+PROACTIVE_DIGEST_STATE_FILE=/var/lib/openclaw-homework/proactive-daily-digest-state.json
+MAIL_LEDGER_ENABLED=true
+MAIL_LEDGER_PATH=/var/log/openclaw-homework/mail-ledger.jsonl
+FEISHU_USAGE_LEDGER_ENABLED=true
+FEISHU_USAGE_LEDGER_PATH=/var/log/openclaw-homework/usage-ledger.jsonl
+```
+
+注意：
+
+- `proactive-daily-digest` 默认每天只发一次，同一天重复触发会返回 `already_sent`；调试时加 `--force`。
+- 它复用桥服务邮件通道，OpenClaw 当前使用 QQ SMTP 兜底，Hermes 当前使用 `shine1@claw.163.com`。
+- 新闻日报当前是“可配置固定新闻/趋势摘要”，不是实时联网抓取新闻；如果后续要做实时抓取，优先接 RSS/API，不要靠模型编造最新新闻。
+
 ## Agent Router 和记忆
 
 当前桥梁服务采用轻量 Agent Router：

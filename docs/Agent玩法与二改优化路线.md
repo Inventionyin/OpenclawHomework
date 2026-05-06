@@ -191,6 +191,38 @@ docs/微信WebBridge接入说明.md
 - 查邮箱是否有异常报告
 - 发飞书和邮箱日报
 
+当前已落地为“主动日报系统”：
+
+```text
+scripts/proactive-daily-digest.js
+scripts/install-proactive-daily-digest.sh
+```
+
+推荐玩法：
+
+```text
+每天 08:30 OpenClaw 发主控日报
+每天 08:35 Hermes 发邮箱/文员日报
+```
+
+日报包含：
+
+- 邮件收发信统计
+- Agent 工作摘要
+- token / 耗时账本
+- 服务器硬盘、内存、负载
+- 新闻日报
+- 明日建议
+
+手动体验：
+
+```bash
+node scripts/proactive-daily-digest.js --dry-run --force --to 1693457391@qq.com
+node scripts/proactive-daily-digest.js --force --to 1693457391@qq.com
+```
+
+新闻日报当前是可配置趋势摘要，可通过 `PROACTIVE_DIGEST_NEWS_ITEMS` 自定义。如果要升级成真正联网新闻，可以后续接 RSS/API，再让模型做摘要，不建议直接让模型编造“今日最新新闻”。
+
 ### E. 工程型接手
 
 借鉴 OpenHands：任何工程任务都要留下证据。
