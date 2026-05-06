@@ -486,8 +486,19 @@ test('buildClerkAgentReply summarizes daily pipeline status from injected helper
     summarizeDailyPipeline: (request) => {
       assert.equal(request.type, 'daily-pipeline');
       return {
+        day: '2026-05-06',
         counts: { total: 4, today: 2, running: 1, failed: 1, recoverable: 1 },
         latest: { id: 'dp-latest', status: 'running' },
+        totalStages: 4,
+        completedStages: 3,
+        failedStages: 1,
+        failedStageIds: ['scheduled-ui'],
+        stageStatuses: [
+          { id: 'news-digest', status: 'completed' },
+          { id: 'scheduled-ui', status: 'failed', reason: 'runner_failed' },
+        ],
+        failureDiagnosis: 'scheduled-ui 失败：runner_failed。',
+        nextAction: '先修复 scheduled-ui，再说：文员，启动今天的自动流水线。',
       };
     },
   });
@@ -497,6 +508,26 @@ test('buildClerkAgentReply summarizes daily pipeline status from injected helper
   assert.match(reply, /今天任务：2/);
   assert.match(reply, /失败：1/);
   assert.match(reply, /dp-latest/);
+  assert.match(reply, /阶段进度/);
+  assert.match(reply, /scheduled-ui/);
+  assert.match(reply, /失败诊断/);
+  assert.match(reply, /下一步/);
+});
+
+test('buildClerkAgentReply keeps summarizeTasks fallback for daily pipeline status', () => {
+  const reply = buildClerkAgentReply({ action: 'daily-pipeline-status' }, {
+    summarizeTasks: (request) => {
+      assert.equal(request.type, 'daily-pipeline');
+      return {
+        counts: { total: 1, today: 1, running: 0, failed: 0, recoverable: 0 },
+        latest: { id: 'legacy-dp', status: 'completed' },
+      };
+    },
+  });
+
+  assert.match(reply, /每日流水线状态/);
+  assert.match(reply, /总任务：1/);
+  assert.match(reply, /legacy-dp/);
 });
 
 test('buildClerkAgentReply supports continue yesterday suggestion', () => {

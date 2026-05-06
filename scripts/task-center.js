@@ -1,3 +1,5 @@
+const { existsSync, readFileSync } = require('node:fs');
+const { join } = require('node:path');
 const {
   createTask,
   listRecoverableTasks,
@@ -12,6 +14,7 @@ const TYPE_LABELS = {
   'daily-digest': '主动日报',
   'news-digest': '新闻摘要',
   'token-lab': 'token 训练场',
+  'daily-pipeline': '每日流水线',
 };
 
 function normalizeTaskType(type) {
@@ -251,6 +254,152 @@ function normalizeTaskShape(task = {}) {
   };
 }
 
+function readJsonObjectSafe(filePath) {
+  if (!filePath || !existsSync(filePath)) {
+    return { value: null, error: '' };
+  }
+  try {
+    const parsed = JSON.parse(readFileSync(filePath, 'utf8'));
+    return {
+      value: parsed && typeof parsed === 'object' ? parsed : null,
+      error: parsed && typeof parsed === 'object' ? '' : 'state_file_not_object',
+    };
+  } catch (error) {
+    return { value: null, error: `state_file_unreadable: ${error.message}` };
+  }
+}
+
+function getDailyPipelineStateFile(env = process.env, options = {}) {
+  return options.stateFile
+    || env.DAILY_AGENT_PIPELINE_STATE_FILE
+    || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'memory', 'daily-agent-pipeline-state.json');
+}
+
+function normalizeStageStatuses(stages = []) {
+  if (!Array.isArray(stages)) return [];
+  return stages
+    .map((stage) => ({
+      id: String(stage?.id || '').trim(),
+      status: String(stage?.status || '').trim() || 'unknown',
+      reason: String(stage?.reason || '').trim(),
+    }))
+    .filter((stage) => stage.id);
+}
+
+function parseStageIds(value) {
+  const raw = Array.isArray(value) ? value : String(value || '').split(',');
+  return Array.from(new Set(raw
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)));
+}
+
+function numberFromSources(...values) {
+  for (const value of values) {
+    const number = Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return 0;
+}
+
+function findDailyPipelineTask(env = process.env, options = {}) {
+  const day = String(options.day || '').trim();
+  const candidates = listTasks(env)
+    .filter((task) => normalizeTaskType(task.type) === 'daily-pipeline');
+  if (!day) {
+    return candidates[0] || null;
+  }
+  return candidates.find((task) => String(task.summary?.day || '').trim() === day)
+    || candidates.find((task) => task.id === `daily-pipeline-${day}`)
+    || null;
+}
+
+function buildPipelineFailureDiagnosis(summary) {
+  const failedStageIds = Array.isArray(summary.failedStageIds) ? summary.failedStageIds : [];
+  if (!failedStageIds.length && !summary.error) {
+    return '';
+  }
+  const reasonById = new Map((summary.stageStatuses || [])
+    .filter((stage) => failedStageIds.includes(stage.id))
+    .map((stage) => [stage.id, stage.reason || '失败待复盘']));
+  const stageText = failedStageIds
+    .slice(0, 3)
+    .map((id) => `${id}${reasonById.get(id) ? `：${reasonById.get(id)}` : ''}`)
+    .join('，');
+  const errorText = summary.error ? `；任务错误：${String(summary.error).slice(0, 300)}` : '';
+  return `失败诊断：${stageText || '流水线任务失败'}${errorText}`;
+}
+
+function buildPipelineNextAction(summary) {
+  const failedStageIds = Array.isArray(summary.failedStageIds) ? summary.failedStageIds : [];
+  if (!summary.source?.task && !summary.source?.state) {
+    return '尚无每日流水线运行记录，先说：文员，试跑今天的自动流水线。';
+  }
+  if (summary.failedStages > 0 || failedStageIds.length) {
+    const target = failedStageIds.length ? failedStageIds.slice(0, 2).join('、') : '失败阶段';
+    return `先修复 ${target}，再说：文员，启动今天的自动流水线。`;
+  }
+  if (summary.totalStages && summary.completedStages < summary.totalStages) {
+    return '流水线阶段未跑满，先查看对应 systemd/journal 日志，再补跑今天的自动流水线。';
+  }
+  return '今天流水线已跑通，明天继续定时执行；想复盘可以说：文员，生成今日总结和明日计划。';
+}
+
+function summarizeDailyPipeline(options = {}) {
+  const env = options.env || process.env;
+  const taskSummary = summarizeTasks({
+    ...options,
+    env,
+    type: 'daily-pipeline',
+  });
+  const task = findDailyPipelineTask(env, options) || taskSummary.latest || null;
+  const stateFile = getDailyPipelineStateFile(env, options);
+  const stateRead = readJsonObjectSafe(stateFile);
+  const state = stateRead.value || null;
+  const notes = [];
+  if (stateRead.error) {
+    notes.push(stateRead.error);
+  }
+
+  const stateStages = normalizeStageStatuses(state?.stageStatuses);
+  const taskFailedStageIds = parseStageIds(task?.summary?.failedStageIds);
+  const stateFailedStageIds = stateStages.length
+    ? stateStages.filter((stage) => stage.status === 'failed').map((stage) => stage.id)
+    : [];
+  const failedStageIds = stateFailedStageIds.length
+    ? parseStageIds(stateFailedStageIds)
+    : taskFailedStageIds;
+
+  const stateDay = String(state?.lastRunDay || '').trim();
+  const taskDay = String(task?.summary?.day || '').trim();
+  const day = stateDay || taskDay || String(options.day || '').trim();
+  if (stateDay && taskDay && stateDay !== taskDay) {
+    notes.push(`state_task_day_conflict: ${stateDay} != ${taskDay}`);
+  }
+
+  const summary = {
+    ...taskSummary,
+    day,
+    lastRunAt: String(state?.lastRunAt || task?.updatedAt || task?.createdAt || '').trim(),
+    taskId: task?.id || null,
+    status: task?.status || '',
+    totalStages: numberFromSources(state?.totalStages, task?.summary?.totalStages),
+    completedStages: numberFromSources(state?.completedStages, task?.summary?.completedStages),
+    failedStages: numberFromSources(state?.failedStages, task?.summary?.failedStages, failedStageIds.length),
+    failedStageIds,
+    stageStatuses: stateStages,
+    source: {
+      task: Boolean(task),
+      state: Boolean(state),
+    },
+    stateFile,
+    error: String(task?.error || ''),
+    notes,
+  };
+  summary.failureDiagnosis = buildPipelineFailureDiagnosis(summary);
+  summary.nextAction = buildPipelineNextAction(summary);
+  return summary;
+}
+
 function summarizeTaskCenterDigest(options = {}) {
   const proactiveTypes = resolveProactiveTypes(options.proactiveTypes);
   const summary = summarizeTasks({ ...options, type: proactiveTypes });
@@ -311,6 +460,7 @@ module.exports = {
   listTodayTasks,
   recordTaskEvent,
   summarizeDailyPlan,
+  summarizeDailyPipeline,
   summarizeTaskCenterDigest,
   summarizeTasks,
   toLocalDayKey,

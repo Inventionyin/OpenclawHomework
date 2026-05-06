@@ -13,6 +13,7 @@ const {
 } = require('../daily-summary-snapshot');
 const {
   summarizeDailyPlan,
+  summarizeDailyPipeline,
   summarizeTaskCenterDigest,
   summarizeTasks,
 } = require('../task-center');
@@ -180,6 +181,11 @@ function buildClerkCommandCenterState(options = {}) {
       now,
     }), {}, 'task_center_digest_unavailable', warnings)
     : {};
+  const pipeline = safeReadObject(() => (options.summarizeDailyPipeline || summarizeDailyPipeline)({
+    env,
+    now,
+    type: 'daily-pipeline',
+  }), {}, 'daily_pipeline_unavailable', warnings);
   const usageEntries = safeReadList(
     () => (options.readUsageLedger || defaultReadUsageLedger)(env, 200),
     [],
@@ -213,6 +219,7 @@ function buildClerkCommandCenterState(options = {}) {
       byType: Array.isArray(tasks.byType) ? tasks.byType : [],
       counts: tasks.counts || {},
     },
+    pipeline,
     usage: summarizeUsage(usageEntries),
     mail: summarizeMail(mailEntries, { env, now }),
     snapshot: {
@@ -238,6 +245,20 @@ function formatLatestRun(run) {
   const link = run.artifactsUrl || run.runUrl || '';
   const mode = [run.targetRef, run.runMode].filter(Boolean).join(' / ');
   return `最近 UI 快照：${run.conclusion || 'unknown'}${mode ? `（${mode}）` : ''}${link ? ` ${link}` : ''}`;
+}
+
+function formatPipelineSignal(pipeline = {}) {
+  if (!pipeline || (!pipeline.source?.task && !pipeline.source?.state && !pipeline.totalStages)) {
+    return '- 每日流水线：暂无运行记录';
+  }
+  const parts = [];
+  if (pipeline.day) parts.push(pipeline.day);
+  if (pipeline.totalStages) parts.push(`${Number(pipeline.completedStages || 0)}/${Number(pipeline.totalStages || 0)} 阶段完成`);
+  if (pipeline.failedStages) parts.push(`失败 ${pipeline.failedStages}`);
+  const stageText = Array.isArray(pipeline.failedStageIds) && pipeline.failedStageIds.length
+    ? `；失败阶段：${pipeline.failedStageIds.slice(0, 3).join('、')}`
+    : '';
+  return `- 每日流水线：${parts.join('，') || '已有记录'}${stageText}`;
 }
 
 function buildClerkCommandCenterReply(options = {}) {
@@ -277,6 +298,9 @@ function buildClerkCommandCenterReply(options = {}) {
     ...(blockers.length ? blockers.map((item) => `- ${item}`) : ['- 暂无明确卡点，按计划推进。']),
     '',
     '运行信号：',
+    formatPipelineSignal(state.pipeline),
+    ...(state.pipeline?.failureDiagnosis ? [`- ${state.pipeline.failureDiagnosis}`] : []),
+    ...(state.pipeline?.nextAction ? [`- 下一步：${state.pipeline.nextAction}`] : []),
     `- ${state.snapshot.latestRun ? formatLatestRun(state.snapshot.latestRun) : '日报快照：暂无最近 run'}`,
     `- 模型账本：${state.usage.entries.length ? `${state.usage.entries.length} 条，约 ${state.usage.totalTokens} tokens` : '暂无可用记录'}`,
     `- 邮件流水：${state.mail.todayEntries.length ? `今天 ${state.mail.todayEntries.length} 条` : '暂无可用记录'}`,

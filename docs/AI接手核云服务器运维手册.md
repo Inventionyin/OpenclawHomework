@@ -423,6 +423,26 @@ FEISHU_USAGE_LEDGER_PATH=/var/log/openclaw-homework/usage-ledger.jsonl
 - GitHub 热榜可复用 `GITHUB_TOKEN` 或 `GH_TOKEN` 提高 API 限额；不要把 token 写进仓库。
 - `--skip-news` 可用于测试日报模板，避免测试时联网。
 
+### 每日流水线和 state 文件策略
+
+每日流水线脚本是 `scripts/daily-agent-pipeline.js`，安装脚本是 `scripts/install-daily-agent-pipeline.sh`。它把新闻摘要、UI 自动化、token 训练场和主动日报串起来跑，并把最终状态写入：
+
+```text
+/var/lib/openclaw-homework/daily-agent-pipeline-state.json
+data/memory/daily-agent-pipeline-state.json（本地开发默认）
+```
+
+飞书里优先用自然语言排查：
+
+```text
+文员，查看今天自动流水线状态
+文员，检查 daily pipeline 今天卡在哪一步
+文员，给我最近一次失败的原因和下一步命令
+文员，今天日报为什么没发？按收件人、定时器、最近错误三项回答
+```
+
+state 文件是运行态缓存和幂等控制，不是源码。它会记录“当天是否已跑/已发送”“上次 run 指针”“本机路径和时间状态”。这些文件不提交到 Git，原因是避免跨服务器污染、误判“今天已经执行”、以及多机冲突。规则很简单：仓库提交脚本、测试和配置模板；服务器本地保留 `/var/lib/openclaw-homework/*.json` 运行状态。
+
 ## Agent Router 和记忆
 
 当前桥梁服务采用轻量 Agent Router：

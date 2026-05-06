@@ -11,6 +11,7 @@ const {
 } = require('../scripts/background-task-store');
 const {
   listFailedTasks,
+  summarizeDailyPipeline,
   summarizeTaskCenterDigest,
   listTodayTasks,
   recordTaskEvent,
@@ -186,6 +187,98 @@ test('task center digest supports today/tomorrow and proactive types with bad ta
     assert.equal(Array.isArray(digest.nextSuggestedActions), true);
     assert.equal(digest.nextSuggestedActions.length > 0, true);
     assert.equal(Array.isArray(digest.tomorrowPlan), true);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('task center summarizes daily pipeline from task and state file', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'task-center-daily-pipeline-'));
+  const stateFile = join(tempDir, 'pipeline-state.json');
+  const env = {
+    TOKEN_FACTORY_TASK_DIR: join(tempDir, 'tasks'),
+    DAILY_AGENT_PIPELINE_STATE_FILE: stateFile,
+  };
+  try {
+    createTask({
+      id: 'daily-pipeline-2026-05-06',
+      type: 'daily-pipeline',
+      now: '2026-05-06T01:00:00.000Z',
+      status: 'failed',
+      summary: {
+        day: '2026-05-06',
+        totalStages: 4,
+        completedStages: 3,
+        failedStages: 1,
+        failedStageIds: 'scheduled-ui',
+      },
+      error: 'scheduled-ui: GitHub Actions timeout',
+    }, env);
+    require('node:fs').writeFileSync(stateFile, `${JSON.stringify({
+      lastRunDay: '2026-05-06',
+      lastRunAt: '2026-05-06T01:08:00.000Z',
+      totalStages: 4,
+      completedStages: 3,
+      failedStages: 1,
+      stageStatuses: [
+        { id: 'news-digest', status: 'completed' },
+        { id: 'scheduled-ui', status: 'failed', reason: 'runner_failed' },
+        { id: 'scheduled-token-lab', status: 'completed' },
+        { id: 'proactive-daily-digest', status: 'completed' },
+      ],
+    })}\n`, 'utf8');
+
+    const summary = summarizeDailyPipeline({
+      env,
+      now: new Date('2026-05-06T03:00:00.000Z'),
+    });
+
+    assert.equal(summary.day, '2026-05-06');
+    assert.equal(summary.taskId, 'daily-pipeline-2026-05-06');
+    assert.equal(summary.totalStages, 4);
+    assert.equal(summary.completedStages, 3);
+    assert.equal(summary.failedStages, 1);
+    assert.deepEqual(summary.failedStageIds, ['scheduled-ui']);
+    assert.equal(summary.stageStatuses.find((stage) => stage.id === 'scheduled-ui').status, 'failed');
+    assert.match(summary.failureDiagnosis, /scheduled-ui/);
+    assert.match(summary.nextAction, /重跑|修复/);
+    assert.deepEqual(summary.source, { task: true, state: true });
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('task center daily pipeline summary degrades when only state file exists', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'task-center-daily-pipeline-state-only-'));
+  const stateFile = join(tempDir, 'pipeline-state.json');
+  const env = {
+    TOKEN_FACTORY_TASK_DIR: join(tempDir, 'tasks'),
+    DAILY_AGENT_PIPELINE_STATE_FILE: stateFile,
+  };
+  try {
+    require('node:fs').writeFileSync(stateFile, `${JSON.stringify({
+      lastRunDay: '2026-05-06',
+      lastRunAt: '2026-05-06T01:08:00.000Z',
+      totalStages: 4,
+      completedStages: 4,
+      failedStages: 0,
+      stageStatuses: [
+        { id: 'news-digest', status: 'completed' },
+        { id: 'scheduled-ui', status: 'completed' },
+      ],
+    })}\n`, 'utf8');
+
+    const summary = summarizeDailyPipeline({
+      env,
+      now: new Date('2026-05-06T03:00:00.000Z'),
+    });
+
+    assert.equal(summary.day, '2026-05-06');
+    assert.equal(summary.taskId, null);
+    assert.equal(summary.completedStages, 4);
+    assert.equal(summary.failedStages, 0);
+    assert.match(summary.nextAction, /明天|定时|继续/);
+    assert.deepEqual(summary.source, { task: false, state: true });
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

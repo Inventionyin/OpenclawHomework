@@ -50,6 +50,7 @@ const {
   listFailedTasks,
   listTodayTasks,
   summarizeDailyPlan,
+  summarizeDailyPipeline,
   summarizeTasks,
 } = require('../task-center');
 const {
@@ -607,22 +608,59 @@ function buildDailyPipelineReply(route = {}, options = {}) {
   return lines.join('\n');
 }
 
+function formatPipelineStageBreakdown(summary = {}) {
+  const stages = Array.isArray(summary.stageStatuses)
+    ? summary.stageStatuses
+    : (Array.isArray(summary.stages) ? summary.stages : []);
+  if (!stages.length) return [];
+  return [
+    '阶段进度：',
+    ...stages.slice(0, 8).map((stage, index) => {
+      const reason = stage.reason ? `（${sanitizeReplyField(stage.reason, 120)}）` : '';
+      return `${index + 1}. ${sanitizeReplyField(stage.id || 'unknown', 120)}：${sanitizeReplyField(stage.status || 'unknown', 80)}${reason}`;
+    }),
+  ];
+}
+
+function formatPipelineFailureLines(summary = {}) {
+  const lines = [];
+  if (summary.failureDiagnosis) {
+    lines.push('失败诊断：');
+    lines.push(`- ${sanitizeReplyField(summary.failureDiagnosis.replace(/^失败诊断：/, ''), 500)}`);
+  } else if (Array.isArray(summary.failedStageIds) && summary.failedStageIds.length) {
+    lines.push('失败诊断：');
+    lines.push(`- 失败阶段：${summary.failedStageIds.map((id) => sanitizeReplyField(id, 120)).join('、')}`);
+  }
+  if (summary.nextAction) {
+    lines.push('下一步：');
+    lines.push(`- ${sanitizeReplyField(summary.nextAction, 500)}`);
+  }
+  return lines;
+}
+
 function buildDailyPipelineStatusReply(options = {}) {
-  const summary = (options.summarizeDailyPipeline || options.summarizeTasks || summarizeTasks)({
+  const summaryReader = options.summarizeDailyPipeline
+    || (options.summarizeTasks ? options.summarizeTasks : summarizeDailyPipeline);
+  const summary = (summaryReader || summarizeTasks)({
     env: options.env || process.env,
     now: options.now || new Date(),
     type: 'daily-pipeline',
   }) || {};
   const counts = summary.counts || {};
-  return [
+  const lines = [
     '每日流水线状态：',
+    summary.day ? `- 日期：${summary.day}` : null,
     `- 总任务：${counts.total || 0}`,
     `- 今天任务：${counts.today || 0}`,
     `- 运行中：${counts.running || 0}`,
     `- 失败：${counts.failed || 0}`,
     `- 可恢复：${counts.recoverable || 0}`,
     summary.latest ? `- 最新任务：${summary.latest.id}（${summary.latest.status}）` : '- 最新任务：暂无',
-  ].join('\n');
+    summary.totalStages ? `- 阶段：${summary.completedStages || 0}/${summary.totalStages} 完成，失败 ${summary.failedStages || 0}` : null,
+    ...formatPipelineStageBreakdown(summary),
+    ...formatPipelineFailureLines(summary),
+  ].filter(Boolean);
+  return lines.join('\n');
 }
 
 function loadClerkCommandCenter(options = {}) {

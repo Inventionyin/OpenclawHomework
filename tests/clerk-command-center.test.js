@@ -192,6 +192,36 @@ test('buildClerkCommandCenterReply renders a one-screen overview with next actio
   assert.match(reply, /文员，查看失败任务/);
 });
 
+test('buildClerkCommandCenterReply includes daily pipeline stage diagnosis when available', () => {
+  const reply = buildClerkCommandCenterReply({
+    now: new Date('2026-05-06T04:00:00.000Z'),
+    summarizeDailyPlan: () => samplePlan(),
+    summarizeTasks: () => sampleTaskSummary(),
+    summarizeDailyPipeline: () => ({
+      day: '2026-05-06',
+      totalStages: 4,
+      completedStages: 3,
+      failedStages: 1,
+      failedStageIds: ['scheduled-ui'],
+      stageStatuses: [
+        { id: 'news-digest', status: 'completed' },
+        { id: 'scheduled-ui', status: 'failed', reason: 'runner_failed' },
+        { id: 'scheduled-token-lab', status: 'completed' },
+      ],
+      failureDiagnosis: 'scheduled-ui 失败：runner_failed。',
+      nextAction: '先修复 scheduled-ui，再重跑每日流水线。',
+    }),
+    readUsageLedger: () => [],
+    readMailLedger: () => [],
+    readDailySummarySnapshot: () => ({ runs: [] }),
+  });
+
+  assert.match(reply, /每日流水线/);
+  assert.match(reply, /3\/4/);
+  assert.match(reply, /scheduled-ui/);
+  assert.match(reply, /先修复 scheduled-ui/);
+});
+
 test('buildClerkCommandCenterReply uses enhanced task-center sections when provided', () => {
   const reply = buildClerkCommandCenterReply({
     now: new Date('2026-05-06T04:00:00.000Z'),
