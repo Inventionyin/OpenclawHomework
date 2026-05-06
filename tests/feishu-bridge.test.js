@@ -9,6 +9,7 @@ const {
   buildFeishuTextMessage,
   buildEmailRunResultMessage,
   buildEmailRunResultSubject,
+  resolveClawEmailSenderForAction,
   buildRoutedChatReply,
   createServer,
   extractFeishuText,
@@ -700,6 +701,71 @@ test('sendEmailRunResultNotification can use evanshine report SMTP profile', asy
   assert.equal(transports[0].user, 'report@evanshine.me');
   assert.equal(transports[0].from, 'report@evanshine.me');
   assert.deepEqual(transports[0].to, ['a@example.com']);
+});
+
+test('resolveClawEmailSenderForAction maps actions to existing primary and sub mailboxes', () => {
+  assert.deepEqual(resolveClawEmailSenderForAction('report'), {
+    action: 'report',
+    primaryFrom: 'watchee@claw.163.com',
+    roleMailbox: 'watchee.report@claw.163.com',
+  });
+  assert.deepEqual(resolveClawEmailSenderForAction('verify'), {
+    action: 'verify',
+    primaryFrom: 'evasan@claw.163.com',
+    roleMailbox: 'evasan.account@claw.163.com',
+  });
+  assert.deepEqual(resolveClawEmailSenderForAction('files'), {
+    action: 'files',
+    primaryFrom: 'agent3@claw.163.com',
+    roleMailbox: 'agent3.files@claw.163.com',
+  });
+  assert.deepEqual(resolveClawEmailSenderForAction('daily'), {
+    action: 'daily',
+    primaryFrom: 'agent4@claw.163.com',
+    roleMailbox: 'agent4.daily@claw.163.com',
+  });
+  assert.deepEqual(resolveClawEmailSenderForAction('monitor'), {
+    action: 'monitor',
+    primaryFrom: 'hagent@claw.163.com',
+    roleMailbox: 'hagent.monitor@claw.163.com',
+  });
+});
+
+test('notifyUiMailboxActions can send role mail with primary ClawEmail identity', async () => {
+  const sent = [];
+
+  await notifyUiMailboxActions(
+    {
+      actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/789',
+      targetRef: 'main',
+      runMode: 'smoke',
+      mailboxAction: 'support',
+    },
+    {
+      conclusion: 'success',
+      html_url: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/789',
+    },
+    {
+      EMAIL_NOTIFY_ENABLED: 'true',
+      MAIL_ACTION_PROVIDER_OVERRIDES: 'report=clawemail-role,support=clawemail-role',
+    },
+    {
+      mailCliSender: async (message, profile) => {
+        sent.push({ message, profile });
+        return { sent: true, provider: profile.name };
+      },
+    },
+  );
+
+  assert.equal(sent.length, 2);
+  assert.equal(sent[0].message.action, 'report');
+  assert.equal(sent[0].profile.from, 'watchee@claw.163.com');
+  assert.equal(sent[0].profile.roleMailbox, 'watchee.report@claw.163.com');
+  assert.deepEqual(sent[0].message.to, ['watchee.report@claw.163.com']);
+  assert.equal(sent[1].message.action, 'support');
+  assert.equal(sent[1].profile.from, 'agent4@claw.163.com');
+  assert.equal(sent[1].profile.roleMailbox, 'agent4.support@claw.163.com');
+  assert.deepEqual(sent[1].message.to, ['agent4.support@claw.163.com']);
 });
 
 test('notifyUiMailboxActions uses evanshine SMTP profile for report action when configured', async () => {
@@ -1472,7 +1538,7 @@ test('buildRoutedAgentReply can run clerk token lab when explicitly requested', 
     },
     {
       tokenLabRunner: async (runnerOptions) => {
-        await runnerOptions.emailSender({ action: 'archive', mailbox: 'agent3.archive@claw.163.com' });
+        await runnerOptions.emailSender({ action: 'archive', mailbox: 'agent4.archive@claw.163.com' });
         sent.push('runner-called');
         return {
           report: {
@@ -1486,7 +1552,7 @@ test('buildRoutedAgentReply can run clerk token lab when explicitly requested', 
             items: '/tmp/qa-token-lab/items.json',
           },
           emailMessages: [
-            { action: 'archive', mailbox: 'agent3.archive@claw.163.com' },
+            { action: 'archive', mailbox: 'agent4.archive@claw.163.com' },
           ],
         };
       },
@@ -1564,8 +1630,8 @@ test('buildRoutedAgentReply can run clerk multi-agent lab when explicitly reques
     },
     {
       multiAgentLabRunner: async (runnerOptions) => {
-        await runnerOptions.emailSender({ action: 'archive', mailbox: 'agent3.archive@claw.163.com' });
-        await runnerOptions.emailSender({ action: 'eval', mailbox: 'hagent.eval@claw.163.com' });
+        await runnerOptions.emailSender({ action: 'archive', mailbox: 'agent4.archive@claw.163.com' });
+        await runnerOptions.emailSender({ action: 'eval', mailbox: 'agent4.archive@claw.163.com' });
         sent.push('runner-called');
         return {
           summary: {

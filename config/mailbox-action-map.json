@@ -44,25 +44,25 @@
       "enabled": true
     },
     "task": {
-      "mailbox": "watchee.task@claw.163.com",
+      "mailbox": "watchee.ui@claw.163.com",
       "subjectPrefix": "[QA Task]",
       "description": "邮箱调度入口：通过邮件触发 UI 自动化、日报、专项测试",
       "enabled": true
     },
     "eval": {
-      "mailbox": "hagent.eval@claw.163.com",
+      "mailbox": "agent4.archive@claw.163.com",
       "subjectPrefix": "[Agent Eval]",
       "description": "OpenClaw/Hermes 模型与 Agent 能力评测入口",
       "enabled": true
     },
     "verify": {
-      "mailbox": "evasan.verify@claw.163.com",
+      "mailbox": "evasan.account@claw.163.com",
       "subjectPrefix": "[Verify]",
       "description": "电商注册、邮箱验证码、账号验证专项入口",
       "enabled": true
     },
     "archive": {
-      "mailbox": "agent3.archive@claw.163.com",
+      "mailbox": "agent4.archive@claw.163.com",
       "subjectPrefix": "[Archive]",
       "description": "测试语料、报告、截图、失败样本归档入口",
       "enabled": true

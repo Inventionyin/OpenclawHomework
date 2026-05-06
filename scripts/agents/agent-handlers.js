@@ -513,8 +513,8 @@ function buildClerkTrainingDataReply() {
     '我建议今天这样用：',
     '- 先抽退款、物流、优惠券、账号验证码、AI 客服转人工这 5 类做小样本评测',
     '- 用 Hermes/LongCat 生成客服回复，再按“安抚用户、下一步、无敏感信息、无编造订单状态”打分',
-    '- 好样本归档到 agent3.archive@claw.163.com',
-    '- 评测结果发到 hagent.eval@claw.163.com',
+    '- 好样本归档到 agent4.archive@claw.163.com',
+    '- 评测结果发到 agent4.archive@claw.163.com',
     '',
     '数据位置：data/qa-assets/customer-service-cases.json',
   ].join('\n');
@@ -815,7 +815,7 @@ function buildQaAgentReply(route = {}) {
       '- 找出客服语料里还缺哪些场景',
       '',
       '数据位置：data/qa-assets/customer-service-cases.json',
-      '建议归档邮箱：agent3.archive@claw.163.com',
+      '建议归档邮箱：agent4.archive@claw.163.com',
     ].join('\n');
   }
 
@@ -825,7 +825,7 @@ function buildQaAgentReply(route = {}) {
       '可以这样玩：',
       '- 跑一轮 OpenClaw 和 Hermes 对比',
       '- 只测 UI 自动化、服务器运维、邮箱调度三类',
-      '- 生成评分报告并发到 hagent.eval@claw.163.com',
+      '- 生成评分报告并发到 agent4.archive@claw.163.com',
       '',
       '数据位置：data/qa-assets/agent-eval-tasks.json',
     ].join('\n');

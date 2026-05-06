@@ -205,9 +205,9 @@ test('buildClerkAgentReply shows practical workbench with mailbox and qa assets'
 test('buildClerkAgentReply explains real mailbox workbench bindings', () => {
   const reply = buildClerkAgentReply({ action: 'mailbox-workbench' });
   assert.match(reply, /邮箱工作台/);
-  assert.match(reply, /watchee\.task@claw\.163\.com/);
-  assert.match(reply, /evasan\.verify@claw\.163\.com/);
-  assert.match(reply, /agent3\.archive@claw\.163\.com/);
+  assert.match(reply, /watchee\.ui@claw\.163\.com/);
+  assert.match(reply, /evasan\.account@claw\.163\.com/);
+  assert.match(reply, /agent4\.archive@claw\.163\.com/);
   assert.match(reply, /子邮箱/);
   assert.match(reply, /注册验证码测试/);
 });
@@ -244,7 +244,7 @@ test('buildClerkAgentReply explains safe submailbox registration playbook', () =
   const reply = buildClerkAgentReply({ action: 'mailbox-registration-playbook' });
   assert.match(reply, /子邮箱注册测试/);
   assert.match(reply, /测试账号池/);
-  assert.match(reply, /evasan\.verify@claw\.163\.com/);
+  assert.match(reply, /evasan\.account@claw\.163\.com/);
   assert.match(reply, /不要批量注册/);
   assert.match(reply, /真实平台/);
 });
@@ -252,7 +252,7 @@ test('buildClerkAgentReply explains safe submailbox registration playbook', () =
 test('buildClerkAgentReply creates verification test plan from mailbox bindings', () => {
   const reply = buildClerkAgentReply({ action: 'verification-test-plan' });
   assert.match(reply, /注册验证码测试计划/);
-  assert.match(reply, /evasan\.verify@claw\.163\.com/);
+  assert.match(reply, /evasan\.account@claw\.163\.com/);
   assert.match(reply, /验证码有效期/);
   assert.match(reply, /错误验证码/);
   assert.match(reply, /Playwright|Cypress/);
@@ -265,7 +265,7 @@ test('buildClerkAgentReply returns platform registration dry-run plan', () => {
   });
   assert.match(reply, /projectku-web/);
   assert.match(reply, /dry-run/);
-  assert.match(reply, /evasan\.verify@claw\.163\.com/);
+  assert.match(reply, /evasan\.account@claw\.163\.com/);
   assert.match(reply, /打开 projectku-web 注册页/);
 });
 
@@ -303,8 +303,7 @@ test('buildClerkAgentReply turns training data into a clerk workflow', () => {
   const reply = buildClerkAgentReply({ action: 'training-data' });
   assert.match(reply, /电商客服训练数据/);
   assert.match(reply, /144/);
-  assert.match(reply, /hagent\.eval@claw\.163\.com/);
-  assert.match(reply, /agent3\.archive@claw\.163\.com/);
+  assert.match(reply, /agent4\.archive@claw\.163\.com/);
 });
 
 test('buildClerkAgentReply explains token lab before execution', () => {

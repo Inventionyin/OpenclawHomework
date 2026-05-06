@@ -53,10 +53,10 @@ test('resolveMailboxAction returns QA training and mailbox dispatch metadata', (
   const verify = resolveMailboxAction('verify');
   const archive = resolveMailboxAction('archive');
 
-  assert.equal(task.mailbox, 'watchee.task@claw.163.com');
-  assert.equal(evalAction.mailbox, 'hagent.eval@claw.163.com');
-  assert.equal(verify.mailbox, 'evasan.verify@claw.163.com');
-  assert.equal(archive.mailbox, 'agent3.archive@claw.163.com');
+  assert.equal(task.mailbox, 'watchee.ui@claw.163.com');
+  assert.equal(evalAction.mailbox, 'agent4.archive@claw.163.com');
+  assert.equal(verify.mailbox, 'evasan.account@claw.163.com');
+  assert.equal(archive.mailbox, 'agent4.archive@claw.163.com');
   assert.equal(task.enabled, true);
   assert.equal(evalAction.enabled, true);
   assert.equal(verify.enabled, true);

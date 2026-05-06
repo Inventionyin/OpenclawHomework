@@ -1,7 +1,7 @@
 [
   {
     "id": "submail-01",
-    "mailbox": "evasan.verify@claw.163.com",
+    "mailbox": "evasan.account@claw.163.com",
     "group": "registration-verify",
     "purpose": "自有电商平台注册、登录、找回密码验证码",
     "policy": "allowed",
@@ -65,7 +65,7 @@
   },
   {
     "id": "submail-05",
-    "mailbox": "hagent.eval@claw.163.com",
+    "mailbox": "agent4.archive@claw.163.com",
     "group": "agent-eval",
     "purpose": "Agent 评测和模型对比，不用于真实平台注册",
     "policy": "internal-only",
@@ -81,7 +81,7 @@
   },
   {
     "id": "submail-06",
-    "mailbox": "agent3.archive@claw.163.com",
+    "mailbox": "agent4.archive@claw.163.com",
     "group": "archive",
     "purpose": "失败样本、训练语料、复盘归档，不用于真实平台注册",
     "policy": "internal-only",

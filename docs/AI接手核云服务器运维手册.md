@@ -165,6 +165,7 @@ Hermes 服务器：
 - `hermes-clawemail-inbox-notifier.service` 是本仓库新增的收信通知器，只负责“ClawEmail 新邮件 -> 飞书提醒”，不替代 Hermes 官方网关。
 - OpenClaw 和 Hermes 使用不同的 ClawEmail 地址：OpenClaw 为 `watchee@claw.163.com`，Hermes 为 `shine1@claw.163.com`。
 - Hermes 的 `mail-cli` 管理 API 已认证，可以执行 `mail-cli clawemail list/create` 一类管理命令；当前管理 API 和 `hermes-gateway.service` 邮件网关都对应 `shine1@claw.163.com`。
+- ClawEmail 发信身份只使用 primary 主邮箱作为 SMTP From，例如 `watchee@claw.163.com` 或 `shine1@claw.163.com`；sub 子邮箱只作为 To / Archive / Role 收件地址或动作入口，不能配置成 From 发信身份。
 - 不要尝试直接把 OpenClaw 的 `/root/.config/mail-cli` 复制到 Hermes。`secrets.enc` 与本机 keychain 绑定，跨机器复制会报 `KEYCHAIN_ERROR`。
 - 不要为了配置 Hermes 而在 OpenClaw 服务器上执行新的 `claw-setup --auth-url ...`；那会切换 OpenClaw 的邮箱账号。Hermes 邮件网关只在 Hermes 服务器执行 `hermes-email-setup.sh`。
 
@@ -240,7 +241,7 @@ report@evanshine.me
 当前在本项目里的职责建议：
 
 ```text
-ClawEmail mailbox action -> 任务入口、验证码、业务动作邮箱、归档收件
+ClawEmail mailbox action -> 任务入口、验证码、业务动作邮箱、归档收件；sub 子邮箱只能作为 To / Archive / Role 收件或动作入口，不能作为 SMTP From
 Hermes ClawEmail SMTP    -> Hermes 飞书桥服务默认发信身份，shine1@claw.163.com
 OpenClaw QQ SMTP         -> OpenClaw 飞书桥服务当前保底发信身份
 evanshine.me SMTP        -> 品牌域名发件身份储备，暂不强制生产启用
@@ -320,9 +321,9 @@ Hermes   服务器 38.76.188.94 -> 801ef6e 或更新
 | Hermes `report` / `daily` | ClawEmail SMTP 465 | 可用 | 发件人 `shine1@claw.163.com`，已真实发到 QQ |
 | `report` 品牌域名发件身份 | `evanshine.me` 第二 SMTP | 部分可用 | 应用到自建邮局这一步是通的；继续向 `claw.163.com` 外发会受目标 MX `25` 连接影响 |
 | `daily` 品牌域名发件身份 | `evanshine.me` 第二 SMTP | 暂不建议生产启用 | 同上，当前测试到 `agent4.daily@claw.163.com` 会在自建邮局外发阶段超时 |
-| `verify` 注册 / 验证码 | ClawEmail mailbox action | 可用 | 用 `evasan.verify@claw.163.com`；这是收件 / 动作入口，不依赖 `evanshine.me` |
+| `verify` 注册 / 验证码 | ClawEmail mailbox action | 可用 | 用 `evasan.account@claw.163.com`；这是收件 / 动作入口，不依赖 `evanshine.me`，不能作为 From |
 | `files` 附件 / artifact | ClawEmail mailbox action | 可用 | `agent3.files@claw.163.com`，只做收件与归档提示 |
-| `archive` 归档 / 训练样本 | ClawEmail mailbox action | 可用 | `agent3.archive@claw.163.com`，不建议改到外部 SMTP |
+| `archive` 归档 / 训练样本 | ClawEmail mailbox action | 可用 | `agent4.archive@claw.163.com`，只做收件与归档提示，不建议改到外部 SMTP |
 | `account` / `shop` / `support` 业务动作 | ClawEmail mailbox action | 可用 | 继续按动作邮箱收件，不建议为了品牌域名去强制改发件通道 |
 | QQ 外部收件测试 | QQ SMTP / Hermes ClawEmail SMTP | 可用 | Hermes ClawEmail 465 已真实发到 QQ；OpenClaw QQ SMTP 继续兜底 |
 | `evanshine.me` 域内收件 | 自建邮箱系统 | 可用 | 自建域内投递正常，适合内部品牌邮箱、测试和身份储备 |

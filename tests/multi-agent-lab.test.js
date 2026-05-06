@@ -16,8 +16,8 @@ test('buildMultiAgentLabPlan creates generate review and summary rounds', () => 
   assert.equal(plan.rounds.length, 3);
   assert.deepEqual(plan.rounds.map((round) => round.kind), ['generate', 'review', 'summary']);
   assert.equal(plan.jobs.length, 3);
-  assert.equal(plan.mailboxActions.archive.mailbox, 'agent3.archive@claw.163.com');
-  assert.equal(plan.mailboxActions.eval.mailbox, 'hagent.eval@claw.163.com');
+  assert.equal(plan.mailboxActions.archive.mailbox, 'agent4.archive@claw.163.com');
+  assert.equal(plan.mailboxActions.eval.mailbox, 'agent4.archive@claw.163.com');
   assert.equal(plan.mailboxActions.report.mailbox, 'watchee.report@claw.163.com');
 });
 

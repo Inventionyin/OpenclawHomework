@@ -53,25 +53,25 @@ const UI_MATRIX = [
 ];
 
 const EMAIL_PLAYBOOK = [
-  ['watchee.task@claw.163.com', '收到“run smoke main”邮件后触发 GitHub Actions UI 自动化', 'task'],
+  ['watchee.ui@claw.163.com', '收到“run smoke main”邮件后触发 GitHub Actions UI 自动化', 'task'],
   ['watchee.report@claw.163.com', '接收 UI 自动化成功/失败摘要和 Allure 链接', 'report'],
-  ['evasan.verify@claw.163.com', '作为电商注册、登录、找回密码验证码测试收件箱', 'verify'],
+  ['evasan.account@claw.163.com', '作为电商注册、登录、找回密码验证码测试收件箱', 'verify'],
   ['evasan.account@claw.163.com', '归档账号体系专项测试结果', 'account'],
   ['evasan.shop@claw.163.com', '归档商品、购物车、订单、支付链路专项结果', 'shop'],
   ['agent4.support@claw.163.com', '模拟买家客服邮件，Hermes 分类并生成回复草稿', 'support'],
-  ['hagent.eval@claw.163.com', '接收 Agent 评测任务、评分结果和模型对比', 'eval'],
+  ['agent4.archive@claw.163.com', '接收 Agent 评测任务、评分结果和模型对比', 'eval'],
   ['agent3.files@claw.163.com', '保存截图、trace、video、Allure artifact 链接', 'files'],
-  ['agent3.archive@claw.163.com', '归档训练语料、失败样本、日报和复盘材料', 'archive'],
+  ['agent4.archive@claw.163.com', '归档训练语料、失败样本、日报和复盘材料', 'archive'],
   ['agent4.daily@claw.163.com', '每天凌晨接收服务器状态、测试趋势和失败摘要', 'daily'],
 ];
 
 const SUBMAILBOX_REGISTRATION_POOL = [
-  ['evasan.verify@claw.163.com', 'registration-verify', '自有电商平台注册、登录、找回密码验证码', 'allowed'],
+  ['evasan.account@claw.163.com', 'registration-verify', '自有电商平台注册、登录、找回密码验证码', 'allowed'],
   ['evasan.account@claw.163.com', 'account-regression', '账号体系回归测试账号和结果归档', 'allowed'],
   ['evasan.shop@claw.163.com', 'shop-flow', '购物车、下单、支付沙箱账号', 'allowed'],
   ['agent4.support@claw.163.com', 'support-simulator', '客服邮件模拟买家来信，不用于真实平台注册', 'internal-only'],
-  ['hagent.eval@claw.163.com', 'agent-eval', 'Agent 评测和模型对比，不用于真实平台注册', 'internal-only'],
-  ['agent3.archive@claw.163.com', 'archive', '失败样本、训练语料、复盘归档，不用于真实平台注册', 'internal-only'],
+  ['agent4.archive@claw.163.com', 'agent-eval', 'Agent 评测和模型对比，不用于真实平台注册', 'internal-only'],
+  ['agent4.archive@claw.163.com', 'archive', '失败样本、训练语料、复盘归档，不用于真实平台注册', 'internal-only'],
 ];
 
 function expandSeeds(seeds, targetCount, mapper) {

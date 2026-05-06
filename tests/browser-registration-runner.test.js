@@ -33,7 +33,7 @@ test('buildRegistrationPlan creates dry-run execution steps for allowed platform
 
   assert.equal(plan.allowed, true);
   assert.equal(plan.mode, 'dry-run');
-  assert.equal(plan.selectedMailbox.email, 'evasan.verify@claw.163.com');
+  assert.equal(plan.selectedMailbox.email, 'evasan.account@claw.163.com');
   assert.ok(plan.steps.length >= 6);
   assert.match(plan.steps[0], /打开/);
 });

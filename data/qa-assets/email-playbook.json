@@ -1,7 +1,7 @@
 [
   {
     "id": "mail-01",
-    "mailbox": "watchee.task@claw.163.com",
+    "mailbox": "watchee.ui@claw.163.com",
     "action": "收到“run smoke main”邮件后触发 GitHub Actions UI 自动化",
     "actionName": "task",
     "inputExample": "run smoke main",
@@ -17,7 +17,7 @@
   },
   {
     "id": "mail-03",
-    "mailbox": "evasan.verify@claw.163.com",
+    "mailbox": "evasan.account@claw.163.com",
     "action": "作为电商注册、登录、找回密码验证码测试收件箱",
     "actionName": "verify",
     "inputExample": "请归档 verify 相关结果",
@@ -49,7 +49,7 @@
   },
   {
     "id": "mail-07",
-    "mailbox": "hagent.eval@claw.163.com",
+    "mailbox": "agent4.archive@claw.163.com",
     "action": "接收 Agent 评测任务、评分结果和模型对比",
     "actionName": "eval",
     "inputExample": "请归档 eval 相关结果",
@@ -65,7 +65,7 @@
   },
   {
     "id": "mail-09",
-    "mailbox": "agent3.archive@claw.163.com",
+    "mailbox": "agent4.archive@claw.163.com",
     "action": "归档训练语料、失败样本、日报和复盘材料",
     "actionName": "archive",
     "inputExample": "请归档 archive 相关结果",

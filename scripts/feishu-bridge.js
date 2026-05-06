@@ -1819,6 +1819,9 @@ function parseMailActionProviderOverrides(value) {
 
 function normalizeMailProviderName(value) {
   const provider = String(value || '').trim().toLowerCase();
+  if (['clawemail-role', 'claw-role', 'role'].includes(provider)) {
+    return 'clawemail-role';
+  }
   if (!provider || ['default', 'legacy', 'primary', 'smtp', 'clawemail'].includes(provider)) {
     return 'default';
   }
@@ -1828,6 +1831,45 @@ function normalizeMailProviderName(value) {
   }
 
   return provider;
+}
+
+const CLAWEMAIL_ACTION_SENDERS = {
+  report: ['watchee@claw.163.com', 'watchee.report@claw.163.com'],
+  task: ['watchee@claw.163.com', 'watchee.ui@claw.163.com'],
+  ui: ['watchee@claw.163.com', 'watchee.ui@claw.163.com'],
+  github: ['watchee@claw.163.com', 'watchee.github@claw.163.com'],
+  ops: ['watchee@claw.163.com', 'watchee.ops@claw.163.com'],
+  replay: ['evasan@claw.163.com', 'evasan.replay@claw.163.com'],
+  verify: ['evasan@claw.163.com', 'evasan.account@claw.163.com'],
+  account: ['evasan@claw.163.com', 'evasan.account@claw.163.com'],
+  shop: ['evasan@claw.163.com', 'evasan.shop@claw.163.com'],
+  qa: ['evasan@claw.163.com', 'evasan.qa@claw.163.com'],
+  files: ['agent3@claw.163.com', 'agent3.files@claw.163.com'],
+  images: ['agent3@claw.163.com', 'agent3.images@claw.163.com'],
+  sandbox: ['agent3@claw.163.com', 'agent3.sandbox@claw.163.com'],
+  notify: ['agent3@claw.163.com', 'agent3.notify@claw.163.com'],
+  daily: ['agent4@claw.163.com', 'agent4.daily@claw.163.com'],
+  archive: ['agent4@claw.163.com', 'agent4.archive@claw.163.com'],
+  support: ['agent4@claw.163.com', 'agent4.support@claw.163.com'],
+  eval: ['agent4@claw.163.com', 'agent4.archive@claw.163.com'],
+  monitor: ['hagent@claw.163.com', 'hagent.monitor@claw.163.com'],
+  logs: ['hagent@claw.163.com', 'hagent.logs@claw.163.com'],
+  security: ['hagent@claw.163.com', 'hagent.security@claw.163.com'],
+  backup: ['hagent@claw.163.com', 'hagent.backup@claw.163.com'],
+};
+
+function resolveClawEmailSenderForAction(actionName) {
+  const action = String(actionName || '').trim().toLowerCase();
+  const mapping = CLAWEMAIL_ACTION_SENDERS[action];
+  if (!mapping) {
+    return null;
+  }
+
+  return {
+    action,
+    primaryFrom: mapping[0],
+    roleMailbox: mapping[1],
+  };
 }
 
 function resolveMailProviderForAction(actionName, env = process.env) {
@@ -1850,6 +1892,13 @@ function resolveMailProviderForAction(actionName, env = process.env) {
 
 function buildSmtpProfile(providerName, env = process.env) {
   const provider = normalizeMailProviderName(providerName);
+  if (provider === 'clawemail-role') {
+    return {
+      name: 'clawemail-role',
+      bin: env.CLAWEMAIL_MAIL_CLI_BIN || 'mail-cli',
+    };
+  }
+
   if (provider === 'evanshine') {
     return {
       name: 'evanshine',
@@ -1900,9 +1949,78 @@ async function sendSmtpMail(message, profile, options = {}) {
   return { sent: true, result, action: message.action, provider: profile.name };
 }
 
+async function sendClawEmailRoleMail(message, profile, options = {}) {
+  const resolved = resolveClawEmailSenderForAction(message?.action);
+  if (!resolved) {
+    return { sent: false, reason: 'missing_clawemail_role', action: message?.action || 'unknown', provider: profile.name };
+  }
+
+  const roleProfile = {
+    ...profile,
+    from: resolved.primaryFrom,
+    roleMailbox: resolved.roleMailbox,
+  };
+
+  if (options.mailCliSender) {
+    const result = await options.mailCliSender(message, roleProfile);
+    return {
+      sent: result?.sent !== false,
+      result,
+      action: message.action,
+      provider: profile.name,
+      from: resolved.primaryFrom,
+      roleMailbox: resolved.roleMailbox,
+    };
+  }
+
+  const { execFile } = require('node:child_process');
+  const recipients = Array.isArray(message.to) ? message.to.join(',') : String(message.to || '');
+  const args = [
+    'compose',
+    'send',
+    '--from',
+    resolved.primaryFrom,
+    '--to',
+    recipients,
+    '--subject',
+    message.subject || '',
+    '--body',
+    message.text || '',
+  ];
+
+  const result = await new Promise((resolve, reject) => {
+    execFile(profile.bin || 'mail-cli', args, { timeout: 60000 }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(`${error.message}\n${stderr || ''}`.trim()));
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+
+  return {
+    sent: true,
+    result,
+    action: message.action,
+    provider: profile.name,
+    from: resolved.primaryFrom,
+    roleMailbox: resolved.roleMailbox,
+  };
+}
+
 async function sendMailWithRouting(message, env = process.env, options = {}) {
   const providerName = resolveMailProviderForAction(message?.action, env);
   const selectedProfile = buildSmtpProfile(providerName, env);
+  if (selectedProfile.name === 'clawemail-role') {
+    const result = await sendClawEmailRoleMail(message, selectedProfile, options);
+    appendMailLedgerEntry(env, {
+      ...message,
+      ...result,
+      assistant: getAssistantName(env),
+    });
+    return result;
+  }
+
   if (!hasSmtpProfileConfig(selectedProfile)) {
     const result = { sent: false, reason: 'missing_smtp_config', action: message?.action || 'unknown', provider: selectedProfile.name };
     appendMailLedgerEntry(env, {
@@ -3618,6 +3736,7 @@ module.exports = {
   buildEmailRunResultSubject,
   buildRoutedChatReply,
   buildUiMailboxMessages,
+  resolveClawEmailSenderForAction,
   buildFeishuResultCard,
   buildRoutedAgentReply,
   buildRunArtifactsUrl,

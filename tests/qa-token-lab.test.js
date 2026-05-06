@@ -19,8 +19,8 @@ test('buildTokenLabPlan creates bounded high-token QA jobs with mailbox actions'
   assert(plan.jobs.some((job) => job.kind === 'agent-eval'));
   assert(plan.jobs.some((job) => job.kind === 'ui-automation'));
   assert(plan.jobs.every((job) => job.mailboxAction));
-  assert.equal(plan.mailboxActions.archive.mailbox, 'agent3.archive@claw.163.com');
-  assert.equal(plan.mailboxActions.eval.mailbox, 'hagent.eval@claw.163.com');
+  assert.equal(plan.mailboxActions.archive.mailbox, 'agent4.archive@claw.163.com');
+  assert.equal(plan.mailboxActions.eval.mailbox, 'agent4.archive@claw.163.com');
 });
 
 test('buildTokenLabPrompt asks for structured JSON without secrets', () => {
