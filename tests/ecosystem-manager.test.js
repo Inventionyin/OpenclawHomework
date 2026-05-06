@@ -5,6 +5,7 @@ const { join } = require('node:path');
 const test = require('node:test');
 
 const {
+  buildInstallShellScript,
   buildEcosystemStatusReply,
   createEcosystemInstallPlan,
   listEcosystemPlugins,
@@ -64,4 +65,13 @@ test('buildEcosystemStatusReply explains safe install policy', () => {
   assert.match(reply, /GBrain/);
   assert.match(reply, /Hermes WebUI/);
   assert.match(reply, /不会自动执行来路不明脚本/);
+});
+
+test('buildInstallShellScript keeps dirty external gbrain checkout instead of overwriting it', () => {
+  const script = buildInstallShellScript();
+
+  assert.match(script, /apt-get install -y unzip/);
+  assert.match(script, /git -C \/opt\/gbrain diff --quiet/);
+  assert.match(script, /Skipping GBrain update because \/opt\/gbrain has local changes/);
+  assert.doesNotMatch(script, /git reset --hard/);
 });
