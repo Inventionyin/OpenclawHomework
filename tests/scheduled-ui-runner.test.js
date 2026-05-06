@@ -9,6 +9,9 @@ const {
   parseArgs,
   runScheduledUi,
 } = require('../scripts/scheduled-ui-runner');
+const {
+  listTasks,
+} = require('../scripts/background-task-store');
 
 test('buildTriggerArgs uses scheduled UI defaults and env overrides', () => {
   const args = buildTriggerArgs({}, {
@@ -124,6 +127,37 @@ test('runScheduledUi records lookup status when workflow run url is missing', as
     assert.equal(result.state.status, 'run_lookup_not_found');
     assert.equal(result.state.lookup.status, 'not_found');
     assert.equal(readFileSync(stateFile, 'utf8').includes('ghp_secret_value'), false);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('runScheduledUi mirrors dispatch lifecycle into task center', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'scheduled-ui-task-center-'));
+  try {
+    const stateFile = join(tempDir, 'state.json');
+    const result = await runScheduledUi({
+      force: true,
+      day: '2026-05-06',
+      stateFile,
+      env: {
+        GITHUB_TOKEN: 'ghp_secret_value',
+        TOKEN_FACTORY_TASK_DIR: join(tempDir, 'tasks'),
+      },
+      dispatcher: async () => ({
+        workflowRunUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/12',
+        run: { id: 12, status: 'queued', html_url: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/12' },
+        actionsUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/workflows/ui-tests.yml',
+      }),
+    });
+
+    const tasks = listTasks(result.env);
+    assert.equal(tasks.length, 1);
+    assert.equal(tasks[0].type, 'ui-automation');
+    assert.equal(tasks[0].status, 'running');
+    assert.equal(tasks[0].summary.runMode, 'contracts');
+    assert.equal(tasks[0].files.workflowRunUrl, 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/12');
+    assert(tasks[0].events.some((event) => event.event === 'dispatched'));
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

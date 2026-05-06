@@ -120,3 +120,32 @@ test('runDigest dry-run builds message and respects already-sent state', async (
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('buildDigest uses task-center summary for today and tomorrow plan when provided', () => {
+  const digest = buildDigest({
+    assistant: 'OpenClaw',
+    day: '2026-05-06',
+    mailEntries: [],
+    usageEntries: [],
+    server: {
+      disk: '/dev/vda1 40G 20G 20G 50% /',
+      memory: 'Mem: 2.0Gi 800Mi 1.2Gi',
+      load: '0.01 0.02 0.03',
+    },
+    newsItems: [
+      { title: 'Playwright released new contracts helpers.', source: 'QA' },
+    ],
+    taskCenterPlan: {
+      todaySummaryText: '今天任务 4 个，完成 2 个，失败 1 个，运行中 1 个。',
+      tomorrowPlan: [
+        '优先复盘失败任务：新闻摘要 news-1。',
+        '恢复中断或超时任务：token 工厂 tf-1。',
+      ],
+    },
+  });
+
+  assert.match(digest.text, /今天任务 4 个/);
+  assert.match(digest.text, /优先复盘失败任务/);
+  assert.match(digest.html, /今天任务 4 个/);
+  assert.match(digest.html, /恢复中断或超时任务/);
+});

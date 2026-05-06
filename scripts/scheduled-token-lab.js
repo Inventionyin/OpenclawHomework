@@ -8,6 +8,9 @@ const {
 const {
   sendMailboxActionEmail,
 } = require('./feishu-bridge');
+const {
+  recordTaskEvent,
+} = require('./task-center');
 
 function parseArgs(argv = process.argv.slice(2)) {
   const args = { dryRun: false, force: false };
@@ -78,6 +81,7 @@ function writeState(file, state) {
 async function runScheduledTokenLab(options = {}) {
   const env = { ...process.env, ...loadEnvFile(options.envFile), ...(options.env || {}) };
   const day = options.day || getDayKey(new Date(), env.SCHEDULED_TOKEN_LAB_TZ_OFFSET_MINUTES || 480);
+  const now = new Date().toISOString();
   const stateFile = options.stateFile || env.SCHEDULED_TOKEN_LAB_STATE_FILE || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'memory', 'scheduled-token-lab-state.json');
   const state = readState(stateFile);
   if (!options.force && state.lastRunDay === day) {
@@ -91,15 +95,52 @@ async function runScheduledTokenLab(options = {}) {
     return { ran: false, reason: 'dry_run', day, batchSize, jobTimeoutMs, outputDir };
   }
 
-  const result = await (options.runner || runTokenLab)({
-    batchSize,
-    jobTimeoutMs,
-    outputDir,
-    env,
-    assistant: env.PROACTIVE_DIGEST_ASSISTANT_NAME || env.FEISHU_ASSISTANT_NAME || 'Hermes',
-    emailSender: options.emailSender || ((message, senderEnv) => sendMailboxActionEmail(message, senderEnv)),
-    modelRunner: options.modelRunner,
-  });
+  const task = recordTaskEvent({
+    taskId: `token-lab-${day}`,
+    type: 'token-lab',
+    event: 'scheduled',
+    status: 'running',
+    now,
+    summaryPatch: {
+      day,
+      batchSize,
+      jobTimeoutMs,
+    },
+    filesPatch: {
+      outputDir,
+    },
+  }, { env, now });
+
+  let result;
+  try {
+    result = await (options.runner || runTokenLab)({
+      batchSize,
+      jobTimeoutMs,
+      outputDir,
+      env,
+      assistant: env.PROACTIVE_DIGEST_ASSISTANT_NAME || env.FEISHU_ASSISTANT_NAME || 'Hermes',
+      emailSender: options.emailSender || ((message, senderEnv) => sendMailboxActionEmail(message, senderEnv)),
+      modelRunner: options.modelRunner,
+    });
+  } catch (error) {
+    recordTaskEvent({
+      taskId: task.id,
+      type: 'token-lab',
+      event: 'failed',
+      status: 'failed',
+      now: new Date().toISOString(),
+      error: String(error?.message || error || 'token lab failed'),
+      summaryPatch: {
+        day,
+        batchSize,
+        jobTimeoutMs,
+      },
+      filesPatch: {
+        outputDir,
+      },
+    }, { env });
+    throw error;
+  }
   const nextState = {
     lastRunDay: day,
     lastRunAt: new Date().toISOString(),
@@ -113,7 +154,27 @@ async function runScheduledTokenLab(options = {}) {
     files: result.files,
   };
   writeState(stateFile, nextState);
-  return { ran: true, day, result, state: nextState };
+  recordTaskEvent({
+    taskId: task.id,
+    type: 'token-lab',
+    event: 'completed',
+    status: 'completed',
+    now: new Date().toISOString(),
+    summaryPatch: {
+      day,
+      batchSize,
+      jobTimeoutMs,
+      totalJobs: result.report.totalJobs,
+      failedJobs: result.report.failedJobs,
+      totalTokens: result.report.totalTokens,
+      estimatedTotalTokens: result.report.estimatedTotalTokens,
+    },
+    filesPatch: {
+      outputDir,
+      ...(result.files || {}),
+    },
+  }, { env });
+  return { ran: true, day, result, state: nextState, env };
 }
 
 async function main() {

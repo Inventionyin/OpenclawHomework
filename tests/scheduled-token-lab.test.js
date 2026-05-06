@@ -8,6 +8,9 @@ const {
   parseArgs,
   runScheduledTokenLab,
 } = require('../scripts/scheduled-token-lab');
+const {
+  listTasks,
+} = require('../scripts/background-task-store');
 
 test('parseArgs reads scheduled token lab options', () => {
   assert.deepEqual(parseArgs([
@@ -89,6 +92,46 @@ test('runScheduledTokenLab writes state and skips same-day runs', async () => {
       env: {},
     });
     assert.equal(skipped.reason, 'already_ran');
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('runScheduledTokenLab records lifecycle into task center', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'scheduled-token-lab-task-'));
+  try {
+    const stateFile = join(tempDir, 'state.json');
+    const result = await runScheduledTokenLab({
+      force: true,
+      day: '2026-05-06',
+      stateFile,
+      outputDir: join(tempDir, 'output'),
+      env: {
+        LOCAL_PROJECT_DIR: tempDir,
+        TOKEN_FACTORY_TASK_DIR: join(tempDir, 'tasks'),
+      },
+      runner: async () => ({
+        report: {
+          totalJobs: 12,
+          failedJobs: 2,
+          totalTokens: 1800,
+          estimatedTotalTokens: 1900,
+        },
+        files: {
+          report: join(tempDir, 'output', 'report.md'),
+        },
+      }),
+    });
+
+    const tasks = listTasks(result.env);
+    assert.equal(tasks.length, 1);
+    assert.equal(tasks[0].type, 'token-lab');
+    assert.equal(tasks[0].status, 'completed');
+    assert.equal(tasks[0].summary.totalJobs, 12);
+    assert.equal(tasks[0].summary.failedJobs, 2);
+    assert.equal(tasks[0].summary.totalTokens, 1800);
+    assert.equal(tasks[0].files.report, join(tempDir, 'output', 'report.md'));
+    assert(tasks[0].events.some((event) => event.event === 'completed'));
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

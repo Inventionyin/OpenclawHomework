@@ -652,4 +652,9 @@ test('routeAgentIntent handles boss-style natural-language control phrases', () 
     action: 'guide',
     requiresAuth: false,
   });
+  assert.deepEqual(routeAgentIntent('文员，给我一个今日总结和明日计划'), {
+    agent: 'clerk-agent',
+    action: 'todo-summary',
+    requiresAuth: true,
+  });
 });

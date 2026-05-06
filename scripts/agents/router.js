@@ -356,6 +356,11 @@ function routeClerkIntent(text) {
     };
   }
 
+  if (/(今日|今天).{0,10}(总结).{0,10}(明日|明天).{0,10}(计划)/i.test(normalized)
+    || /(明日|明天).{0,10}(计划).{0,10}(今日|今天).{0,10}(总结)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'todo-summary', requiresAuth: true };
+  }
+
   if (/(待办|todo|清单|还没|未完成|下一步|整理一下)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'todo-summary', requiresAuth: true };
   }
@@ -439,7 +444,9 @@ function routeOfficeIntent(text) {
   }
 
   if (/(今天|现在).{0,8}(还有|还).{0,8}(什么|哪些).{0,8}(没做|未做|没完成|未完成)/i.test(normalized)
-    || /(昨天).{0,10}(失败了|失败的).{0,10}(什么|哪些)/i.test(normalized)) {
+    || /(昨天).{0,10}(失败了|失败的).{0,10}(什么|哪些)/i.test(normalized)
+    || /(今日|今天).{0,10}(总结).{0,10}(明日|明天).{0,10}(计划)/i.test(normalized)
+    || /(明日|明天).{0,10}(计划).{0,10}(今日|今天).{0,10}(总结)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'todo-summary', requiresAuth: true };
   }
 

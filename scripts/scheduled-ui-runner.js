@@ -6,6 +6,9 @@ const {
   dispatchWorkflow,
   parseCliArgs: parseTriggerCliArgs,
 } = require('./trigger-ui-tests');
+const {
+  recordTaskEvent,
+} = require('./task-center');
 
 function parseArgs(argv = process.argv.slice(2)) {
   const args = {
@@ -107,6 +110,7 @@ function buildTriggerArgs(options = {}, env = process.env) {
 async function runScheduledUi(options = {}) {
   const env = { ...process.env, ...loadEnvFile(options.envFile), ...(options.env || {}) };
   const day = options.day || getDayKey(new Date(), env.SCHEDULED_UI_TZ_OFFSET_MINUTES || 480);
+  const now = new Date().toISOString();
   const stateFile = options.stateFile || env.SCHEDULED_UI_STATE_FILE || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'memory', 'scheduled-ui-runner-state.json');
   const state = readState(stateFile);
   if (!options.force && state.lastRunDay === day) {
@@ -118,6 +122,23 @@ async function runScheduledUi(options = {}) {
   if (options.dryRun) {
     return { dispatched: false, reason: 'dry_run', day, config };
   }
+
+  const task = recordTaskEvent({
+    taskId: `ui-${day}-${String(config.inputs.run_mode || 'contracts').replace(/[^a-z0-9_-]/ig, '').toLowerCase()}`,
+    type: 'ui-automation',
+    event: 'scheduled',
+    status: 'running',
+    now,
+    summaryPatch: {
+      day,
+      runMode: config.inputs.run_mode,
+      mailboxAction: config.inputs.mailbox_action,
+      targetRepository: config.inputs.target_repository,
+      targetRef: config.inputs.target_ref,
+      appRepository: config.inputs.app_repository,
+      appRef: config.inputs.app_ref,
+    },
+  }, { env, now });
 
   let result;
   try {
@@ -136,6 +157,19 @@ async function runScheduledUi(options = {}) {
       error: sanitizeError(error),
     };
     writeState(stateFile, failedState);
+    recordTaskEvent({
+      taskId: task.id,
+      type: 'ui-automation',
+      event: 'dispatch_failed',
+      status: 'failed',
+      now: new Date().toISOString(),
+      error: sanitizeError(error),
+      summaryPatch: {
+        day,
+        runMode: config.inputs.run_mode,
+        mailboxAction: config.inputs.mailbox_action,
+      },
+    }, { env });
     throw error;
   }
   const nextState = {
@@ -156,7 +190,25 @@ async function runScheduledUi(options = {}) {
     actionsUrl: result.actionsUrl,
   };
   writeState(stateFile, nextState);
-  return { dispatched: true, day, config, result, state: nextState };
+  recordTaskEvent({
+    taskId: task.id,
+    type: 'ui-automation',
+    event: nextState.status === 'run_lookup_not_found' ? 'lookup_missing' : 'dispatched',
+    status: nextState.status === 'run_lookup_not_found' ? 'failed' : 'running',
+    now: new Date().toISOString(),
+    summaryPatch: {
+      day,
+      runMode: config.inputs.run_mode,
+      mailboxAction: config.inputs.mailbox_action,
+      githubRunStatus: result.run?.status || '',
+    },
+    filesPatch: {
+      workflowRunUrl: nextState.workflowRunUrl,
+      actionsUrl: nextState.actionsUrl,
+    },
+    error: nextState.status === 'run_lookup_not_found' ? 'workflow run lookup not found' : '',
+  }, { env });
+  return { dispatched: true, day, config, result, state: nextState, env };
 }
 
 async function main() {

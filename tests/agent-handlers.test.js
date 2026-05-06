@@ -131,13 +131,31 @@ test('buildClerkAgentReply does not claim token winner when every entry lacks us
 });
 
 test('buildClerkAgentReply gives safe office playbook for todos and reports', () => {
-  const todoReply = buildClerkAgentReply({ action: 'todo-summary' });
+  const todoReply = buildClerkAgentReply({ action: 'todo-summary' }, {
+    summarizeDailyPlan: () => ({
+      todaySummaryText: '今天任务 5 个，完成 2 个，失败 1 个，运行中 2 个。',
+      tomorrowPlan: [
+        '优先复盘失败任务：新闻摘要 news-1。',
+        '恢复中断或超时任务：token 工厂 tf-1。',
+      ],
+    }),
+  });
   assert.match(todoReply, /待办/);
+  assert.match(todoReply, /今天任务 5 个/);
+  assert.match(todoReply, /优先复盘失败任务/);
   assert.match(todoReply, /不会重启/);
 
-  const reportReply = buildClerkAgentReply({ action: 'daily-report' });
+  const reportReply = buildClerkAgentReply({ action: 'daily-report' }, {
+    summarizeDailyPlan: () => ({
+      todaySummaryText: '今天任务 5 个，完成 2 个，失败 1 个，运行中 2 个。',
+      tomorrowPlan: [
+        '优先复盘失败任务：新闻摘要 news-1。',
+      ],
+    }),
+  });
   assert.match(reportReply, /日报/);
   assert.match(reportReply, /最近一次任务/);
+  assert.match(reportReply, /今天任务 5 个/);
   assert.match(reportReply, /服务器部分仍建议只引用状态摘要/);
 });
 

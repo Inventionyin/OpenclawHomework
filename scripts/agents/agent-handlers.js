@@ -49,6 +49,7 @@ const {
 const {
   listFailedTasks,
   listTodayTasks,
+  summarizeDailyPlan,
   summarizeTasks,
 } = require('../task-center');
 
@@ -547,6 +548,21 @@ function buildTaskCenterContinueYesterdayReply(options = {}) {
   ].join('\n');
 }
 
+function buildClerkTodoSummaryReply(options = {}) {
+  const plan = (options.summarizeDailyPlan || summarizeDailyPlan)({
+    env: options.env || process.env,
+    now: options.now || new Date(),
+  });
+  return [
+    '文员待办整理：',
+    plan.todaySummaryText,
+    ...plan.tomorrowPlan.map((item) => `- ${item}`),
+    '- 我可以读取记忆和任务中枢整理清单，但不会重启、清理硬盘或互修服务器。',
+    '',
+    '你可以继续说：文员，整理今天项目待办。',
+  ].join('\n');
+}
+
 function buildClerkPlatformRegistrationReply(route = {}) {
   const parsed = parseRegistrationTaskRequest(route.rawText || '');
   const plan = buildRegistrationPlan(parsed);
@@ -730,20 +746,20 @@ function buildClerkAgentReply(route = {}, options = {}) {
   }
 
   if (route.action === 'todo-summary') {
-    return [
-      '文员待办整理：',
-      '- 先把今天新增问题归成三类：机器人聊天、UI 自动化、服务器/邮箱。',
-      '- 再把每类拆成“已完成 / 待验证 / 下一步”。',
-      '- 我可以读取记忆和文档整理清单，但不会重启、清理硬盘或互修服务器。',
-      '',
-      '你可以继续说：文员，整理今天项目待办。',
-    ].join('\n');
+    return buildClerkTodoSummaryReply(options);
   }
 
   if (route.action === 'daily-report') {
     const summary = buildDailySummary(loadDailySummaryArtifacts(options.env || process.env, options));
+    const plan = (options.summarizeDailyPlan || summarizeDailyPlan)({
+      env: options.env || process.env,
+      now: options.now || new Date(),
+    });
     return [
       '文员日报预览：',
+      plan.todaySummaryText,
+      ...plan.tomorrowPlan.map((item) => `- ${item}`),
+      '',
       summary.text,
       '',
       '服务器部分仍建议只引用状态摘要，不在日报阶段执行修复。',

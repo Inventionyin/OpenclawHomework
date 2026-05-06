@@ -16,6 +16,10 @@ const {
 const {
   collectNewsDigest,
 } = require('./news-digest');
+const {
+  recordTaskEvent,
+  summarizeDailyPlan,
+} = require('./task-center');
 
 function esc(value) {
   return String(value ?? '')
@@ -224,14 +228,23 @@ function buildDigest(input = {}) {
   const server = input.server || {};
   const automation = input.automation || {};
   const newsItems = input.newsItems || fallbackNewsItems(input.env || {});
+  const taskCenterPlan = input.taskCenterPlan || null;
   const aiSummary = input.aiSummary || buildAiSummary({ assistant, mailSummary, usageSummary, server, automation });
   const workItems = [
+    taskCenterPlan?.todaySummaryText || null,
     mailSummary.total ? `处理邮件动作 ${mailSummary.total} 条，成功 ${mailSummary.sent} 条。` : '暂无邮件动作，但收信通知器保持在线。',
     usageSummary.calls ? `记录模型调用 ${usageSummary.calls} 条，token 约 ${usageSummary.totalTokens}。` : '暂无模型调用账本，适合今天跑一轮训练场。',
     automation.ui?.workflowRunUrl ? `自动 UI 测试已调度：${automation.ui.runMode || 'unknown'}，${automation.ui.workflowRunUrl}` : '自动 UI 测试今日暂无调度记录。',
     automation.tokenLab?.totalJobs ? `自动 token 训练已完成：${automation.tokenLab.totalJobs} 条，真实 token ${automation.tokenLab.totalTokens || 0}，估算 ${automation.tokenLab.estimatedTotalTokens || 0}。` : '自动 token 训练今日暂无记录。',
     server.load ? `服务器负载 ${server.load}。` : '服务器负载未记录。',
-  ];
+  ].filter(Boolean);
+  const tomorrowPlan = Array.isArray(taskCenterPlan?.tomorrowPlan) && taskCenterPlan.tomorrowPlan.length
+    ? taskCenterPlan.tomorrowPlan
+    : [
+      '跑一次 UI 自动化冒烟测试并归档 Allure 报告。',
+      '让文员 Agent 生成客服训练数据并消耗一批低价 token。',
+      '检查邮件账本，确认日报和报告都能从主邮箱正常外发。',
+    ];
 
   const text = [
     `每日 Agent 主动报告：${assistant}`,
@@ -251,9 +264,7 @@ function buildDigest(input = {}) {
     ...newsItems.map((item, index) => `${index + 1}. ${item.title}（${item.source || 'news'}）`),
     '',
     '明日建议：',
-    '- 跑一次 UI 自动化冒烟测试并归档 Allure 报告。',
-    '- 让文员 Agent 生成客服训练数据并消耗一批低价 token。',
-    '- 检查邮件账本，确认日报和报告都能从主邮箱正常外发。',
+    ...tomorrowPlan.map((item) => `- ${item}`),
   ].filter(Boolean).join('\n');
 
   const statCards = [
@@ -313,9 +324,7 @@ function buildDigest(input = {}) {
     `<li>Token 训练：${esc(automation.tokenLab?.totalJobs ? `${automation.tokenLab.totalJobs} 条样本` : '暂无训练记录')}</li>`,
     '</ul></div>',
     '<div class="digest-section"><h3>明日建议</h3><ul>',
-    '<li>跑一次 UI 自动化冒烟测试并归档 Allure 报告。</li>',
-    '<li>让文员 Agent 生成客服训练数据并消耗一批低价 token。</li>',
-    '<li>检查邮件账本，确认日报和报告都能从主邮箱正常外发。</li>',
+    ...tomorrowPlan.map((item) => `<li>${esc(item)}</li>`),
     '</ul></div>',
     '<div class="digest-meta">由 OpenclawHomework proactive-daily-digest 自动生成。</div>',
     '</div></div></div>',
@@ -336,6 +345,7 @@ async function runDigest(options = {}) {
   const env = { ...process.env, ...loadEnvFile(options.envFile), ...(options.env || {}) };
   const timezoneOffsetMinutes = getTimezoneOffsetMinutes(env);
   const day = options.day || getDayKey(new Date(), timezoneOffsetMinutes);
+  const nowIso = new Date().toISOString();
   const stateFile = options.stateFile || env.PROACTIVE_DIGEST_STATE_FILE || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'memory', 'proactive-daily-digest-state.json');
   const state = readState(stateFile);
   if (!options.force && state.lastSentDay === day) {
@@ -351,6 +361,17 @@ async function runDigest(options = {}) {
     return filterMailLedgerEntriesForDay([{ timestamp }], { day, timezoneOffsetMinutes }).length > 0;
   });
   const automation = collectAutomationState(env);
+  const task = recordTaskEvent({
+    taskId: `daily-digest-${day}`,
+    type: 'daily-digest',
+    event: 'scheduled',
+    status: 'running',
+    now: nowIso,
+    summaryPatch: {
+      day,
+      assistant: getAssistantName(env),
+    },
+  }, { env, now: nowIso });
   let newsItems = fallbackNewsItems(env);
   if (!options.skipNews && String(env.PROACTIVE_DIGEST_LIVE_NEWS_ENABLED ?? 'true').toLowerCase() !== 'false') {
     try {
@@ -359,12 +380,41 @@ async function runDigest(options = {}) {
         newsItems = report.items;
       }
     } catch (error) {
+      recordTaskEvent({
+        taskId: `news-digest-${day}`,
+        type: 'news-digest',
+        event: 'failed',
+        status: 'failed',
+        now: new Date().toISOString(),
+        error: String(error.message || error),
+        summaryPatch: {
+          day,
+        },
+      }, { env });
       newsItems = [
         { title: `实时新闻抓取失败，已降级到固定趋势摘要：${error.message}`, source: '系统提示' },
         ...fallbackNewsItems(env),
       ];
     }
   }
+
+  recordTaskEvent({
+    taskId: `news-digest-${day}`,
+    type: 'news-digest',
+    event: 'completed',
+    status: 'completed',
+    now: new Date().toISOString(),
+    summaryPatch: {
+      day,
+      totalItems: newsItems.length,
+    },
+  }, { env });
+
+  const taskCenterPlan = summarizeDailyPlan({
+    env,
+    now: new Date(),
+    timezoneOffsetMinutes,
+  });
 
   const digest = buildDigest({
     assistant: getAssistantName(env),
@@ -375,6 +425,7 @@ async function runDigest(options = {}) {
     automation,
     newsItems,
     externalTo,
+    taskCenterPlan,
     env,
   });
   const message = {
@@ -394,7 +445,24 @@ async function runDigest(options = {}) {
   if (result.sent) {
     writeState(stateFile, { lastSentDay: day, lastSentAt: new Date().toISOString(), assistant: getAssistantName(env) });
   }
-  return { ...result, day, message };
+  recordTaskEvent({
+    taskId: task.id,
+    type: 'daily-digest',
+    event: result.sent ? 'completed' : 'failed',
+    status: result.sent ? 'completed' : 'failed',
+    now: new Date().toISOString(),
+    error: result.sent ? '' : String(result.reason || 'daily digest send failed'),
+    summaryPatch: {
+      day,
+      assistant: getAssistantName(env),
+      sent: Boolean(result.sent),
+      externalRecipients: externalTo.length,
+    },
+    filesPatch: {
+      subject: digest.subject,
+    },
+  }, { env });
+  return { ...result, day, message, env };
 }
 
 async function main() {

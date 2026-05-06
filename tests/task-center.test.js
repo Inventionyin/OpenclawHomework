@@ -7,11 +7,13 @@ const test = require('node:test');
 const {
   createTask,
   readTask,
+  updateTask,
 } = require('../scripts/background-task-store');
 const {
   listFailedTasks,
   listTodayTasks,
   recordTaskEvent,
+  summarizeDailyPlan,
   summarizeTasks,
 } = require('../scripts/task-center');
 
@@ -60,6 +62,74 @@ test('task center summarizes tasks and recoverable count', () => {
   }
 });
 
+test('task center summarizes multiple proactive task types', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'task-center-multi-'));
+  const env = { TOKEN_FACTORY_TASK_DIR: tempDir };
+  try {
+    createTask({ id: 'ui-today', type: 'ui-automation', now: '2026-05-06T01:00:00.000Z', status: 'running' }, env);
+    createTask({ id: 'daily-today', type: 'daily-digest', now: '2026-05-06T01:10:00.000Z', status: 'completed' }, env);
+    createTask({ id: 'news-fail', type: 'news-digest', now: '2026-05-06T01:20:00.000Z', status: 'failed', error: 'rss timeout' }, env);
+    createTask({ id: 'token-old', type: 'token-factory', now: '2026-05-05T01:20:00.000Z', status: 'completed' }, env);
+
+    const summary = summarizeTasks({
+      env,
+      now: new Date('2026-05-06T08:00:00.000Z'),
+      timezoneOffsetMinutes: 480,
+    });
+
+    assert.equal(summary.counts.total, 4);
+    assert.equal(summary.counts.today, 3);
+    assert.equal(summary.counts.running, 1);
+    assert.equal(summary.counts.completed, 2);
+    assert.equal(summary.counts.failed, 1);
+    assert.deepEqual(summary.byType.map((row) => row.type), [
+      'news-digest',
+      'ui-automation',
+      'daily-digest',
+      'token-factory',
+    ]);
+    assert.equal(summary.byType.find((row) => row.type === 'news-digest').failed, 1);
+
+    const uiOnly = summarizeTasks({
+      env,
+      type: 'ui-automation',
+      now: new Date('2026-05-06T08:00:00.000Z'),
+      timezoneOffsetMinutes: 480,
+    });
+    assert.equal(uiOnly.counts.total, 1);
+    assert.equal(uiOnly.latest.id, 'ui-today');
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('task center builds today summary and tomorrow plan from real task state', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'task-center-plan-'));
+  const env = { TOKEN_FACTORY_TASK_DIR: tempDir };
+  try {
+    createTask({ id: 'ui-ok', type: 'ui-automation', now: '2026-05-06T01:00:00.000Z', status: 'completed' }, env);
+    createTask({ id: 'news-fail', type: 'news-digest', now: '2026-05-06T01:10:00.000Z', status: 'failed', error: 'rss timeout' }, env);
+    createTask({ id: 'token-stale', type: 'token-factory', now: '2026-05-06T01:20:00.000Z', status: 'running' }, env);
+    updateTask('token-stale', { updatedAt: '2026-05-06T01:20:00.000Z' }, env);
+
+    const plan = summarizeDailyPlan({
+      env,
+      now: new Date('2026-05-06T03:00:00.000Z'),
+      staleMs: 30 * 60 * 1000,
+      timezoneOffsetMinutes: 480,
+    });
+
+    assert.match(plan.todaySummaryText, /今天任务 3 个/);
+    assert.match(plan.todaySummaryText, /完成 1/);
+    assert.match(plan.todaySummaryText, /失败 1/);
+    assert(plan.tomorrowPlan.some((item) => /优先复盘失败任务/.test(item)));
+    assert(plan.tomorrowPlan.some((item) => /恢复中断/.test(item)));
+    assert(plan.tomorrowPlan.some((item) => /日报/.test(item) || /UI 自动化/.test(item)));
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('task center records task event without breaking existing task file', () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'task-center-event-'));
   const env = { TOKEN_FACTORY_TASK_DIR: tempDir };
@@ -88,4 +158,3 @@ test('task center records task event without breaking existing task file', () =>
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
-
