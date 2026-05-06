@@ -71,10 +71,13 @@ function filterNewMessages(messages = [], state = {}) {
     updatedAt: new Date().toISOString(),
   };
 
-  if (!state.lastUid && !seen.size) {
+  if (!state.lastUid && !seen.size && !state.baselineInitialized) {
     return {
       newMessages: [],
-      nextState,
+      nextState: {
+        ...nextState,
+        baselineInitialized: true,
+      },
     };
   }
 
@@ -248,6 +251,12 @@ async function notifyMessage(message, env, options = {}) {
 async function runInboxNotifierOnce(config, env = process.env, options = {}) {
   const mergedEnv = { ...env, ...parseEnvFile(config.envFile) };
   const state = readState(config.stateFile);
+  if (String(mergedEnv.CLAWEMAIL_NOTIFY_FIRST_MESSAGE_AFTER_EMPTY_BASELINE || '').toLowerCase() === 'true'
+    && state.baselineInitialized
+    && Array.isArray(state.seenMessageIds)
+    && state.seenMessageIds.length === 0) {
+    state.lastUid = state.lastUid || -1;
+  }
   const fetchMessages = options.fetchMessages || ((runnerConfig, runnerEnv) => fetchMessagesWithMailCli(runnerConfig, runnerEnv, options));
   const messages = await fetchMessages(config, mergedEnv);
   const { newMessages, nextState } = filterNewMessages(messages, state);

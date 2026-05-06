@@ -277,3 +277,52 @@ test('runInboxNotifierOnce sends Feishu notification for new messages and writes
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('runInboxNotifierOnce can notify first message when baseline state is empty', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'clawemail-inbox-empty-baseline-'));
+  const stateFile = join(tempDir, 'state.json');
+  const sent = [];
+
+  try {
+    await runInboxNotifierOnce({
+      stateFile,
+      mailbox: 'watchee@claw.163.com',
+    }, {
+      CLAWEMAIL_NOTIFY_ENABLED: 'true',
+    }, {
+      fetchMessages: async () => [],
+      sendFeishuTextMessage: async () => {
+        throw new Error('should not send baseline');
+      },
+    });
+
+    const summary = await runInboxNotifierOnce({
+      stateFile,
+      mailbox: 'watchee@claw.163.com',
+    }, {
+      CLAWEMAIL_NOTIFY_ENABLED: 'true',
+      CLAWEMAIL_NOTIFY_FIRST_MESSAGE_AFTER_EMPTY_BASELINE: 'true',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+    }, {
+      fetchMessages: async () => [
+        {
+          uid: '56:first',
+          mailbox: 'watchee@claw.163.com',
+          from: 'shine1@claw.163.com',
+          subject: '业务演示：Hermes 外部邮件给 OpenClaw 龙虾',
+          text: '测试 OpenClaw 收信通知。',
+        },
+      ],
+      sendFeishuTextMessage: async (env, message) => {
+        sent.push({ env, message });
+      },
+    });
+
+    assert.equal(summary.newMessages, 1);
+    assert.equal(summary.notified, 1);
+    assert.equal(sent.length, 1);
+    assert.match(JSON.parse(sent[0].message.content).text, /OpenClaw|Hermes|收到新邮件/);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
