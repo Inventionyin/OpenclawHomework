@@ -195,10 +195,9 @@ Hermes 邮件网关的关键配置在：
 
 排障经验：
 
-- Hermes 邮件适配器使用 `smtplib.SMTP(...); starttls(...)`，所以需要 STARTTLS 端口。
-- 在当前 Hermes 服务器上，`claw.163.com:25` 的 STARTTLS 握手通过；`claw.163.com:587` TCP 可连，但 SMTP 握手会超时。
-- 因此当前 Hermes 配置使用 `EMAIL_SMTP_PORT=25`。
-- 不要把 `EMAIL_SMTP_PORT` 改成 `465`，因为 `465` 是隐式 SSL，而 Hermes 适配器不是 `SMTP_SSL`。
+- 这里说的是 `hermes-gateway.service` 这条 Hermes 原生邮件网关链路，不是 `hermes-feishu-bridge` 飞书桥服务。
+- `hermes-gateway.service` 的官方适配器仍按 STARTTLS 语境排查；如果它循环重启，先看 `/root/.hermes/logs/gateway.log`。
+- `hermes-feishu-bridge` 的日报/报告发信已经在 2026-05-06 切到 ClawEmail SMTP：`claw.163.com:465` + `SMTP_SECURE=true`，发件人 `shine1@claw.163.com`。
 - 如果 `hermes-gateway.service` 循环重启，先看 `/root/.hermes/logs/gateway.log` 里的 IMAP/SMTP 错误，不要先怀疑模型。
 - 如果网关因为邮件连接失败反复重启，生产飞书桥梁服务通常不受影响；优先确认 `hermes-feishu-bridge` 和 `/health`。
 
@@ -236,8 +235,10 @@ report@evanshine.me
 当前在本项目里的职责建议：
 
 ```text
-ClawEmail / 默认 SMTP -> 任务入口、验证码、业务动作邮箱、保底兼容发信
-evanshine.me SMTP     -> report / daily 这类正式报告邮件的品牌域名发件身份
+ClawEmail mailbox action -> 任务入口、验证码、业务动作邮箱、归档收件
+Hermes ClawEmail SMTP    -> Hermes 飞书桥服务默认发信身份，shine1@claw.163.com
+OpenClaw QQ SMTP         -> OpenClaw 飞书桥服务当前保底发信身份
+evanshine.me SMTP        -> 品牌域名发件身份储备，暂不强制生产启用
 ```
 
 如果桥梁服务环境里配置了 `REPORT_SMTP_*` 和 `MAIL_ACTION_PROVIDER_OVERRIDES=report=evanshine,daily=evanshine`，那么 `report` / `daily` 会先尝试走 `mail.evanshine.me`，失败时自动回退默认 SMTP；飞书结果通知主链路不受影响。
@@ -287,43 +288,45 @@ TXT   _dmarc            v=DMARC1; p=none; rua=mailto:admin@evanshine.me; adkim=s
 - 当前唯一未完成的邮件信誉项是 PTR 反向解析：`38.76.188.94 -> mail.evanshine.me`。
 - 邮件系统出问题时，先确认 `hermes-feishu-bridge` 和 `hermes-gateway` 是否仍正常，避免把邮件容器问题误判为 Hermes 主链路问题。
 
-## 2.4 2026-05-05 邮件链路现状与推荐矩阵
+## 2.4 2026-05-06 邮件链路现状与推荐矩阵
 
 当前两台桥梁服务都已经升级到支持 `REPORT_SMTP_*` 和 `MAIL_ACTION_PROVIDER_OVERRIDES` 的版本：
 
 ```text
-OpenClaw 服务器 38.76.178.91 -> e31dab0
-Hermes   服务器 38.76.188.94 -> e31dab0
+OpenClaw 服务器 38.76.178.91 -> 801ef6e 或更新
+Hermes   服务器 38.76.188.94 -> 801ef6e 或更新
 ```
 
-2026-05-05 当天实际联调结论：
+实际联调结论：
 
 - OpenClaw：默认 QQ SMTP 真实发 `report` 成功，SMTP 返回 `250 OK: queued as.`
 - OpenClaw：`daily` 调用链路无报错，桥梁服务健康正常
+- Hermes：2026-05-06 已把 `hermes-feishu-bridge` 默认 SMTP 切到 `shine1@claw.163.com`，`claw.163.com:465`，`SMTP_SECURE=true`
+- Hermes：已通过桥服务 `sendDailySummaryNotification` 真实发送到 `1693457391@qq.com`，同时归档到 `agent4.daily@claw.163.com`
 - Hermes：`report@evanshine.me` 可成功通过 `mail.evanshine.me:587` 认证登录
 - Hermes：当 `daily/report` 强制走 `evanshine.me` 第二 SMTP，并继续投递到 `claw.163.com` 收件域时，邮件会卡在自建邮局外发队列，错误表现为连接对端 MX `25` 端口超时
-- 因此当前生产推荐仍是：`daily/report` 默认走 QQ SMTP；`evanshine.me` 先保留为第二 SMTP 能力储备，不在生产上强制覆盖
+- 因此当前生产推荐是：OpenClaw 继续 QQ SMTP 兜底，Hermes 使用 ClawEmail 465 作为机器人自己的发件身份；`evanshine.me` 先保留为第二 SMTP 能力储备，不强制覆盖
 
 推荐矩阵：
 
 | 用途 | 推荐通道 | 当前是否可用 | 风险 / 备注 |
 | --- | --- | --- | --- |
-| `report` 正式报告 | 默认 QQ SMTP | 可用 | OpenClaw 已真实联调成功；当前最稳 |
-| `daily` 日报 | 默认 QQ SMTP | 可用 | 当前推荐继续走默认 SMTP，不强制切 `evanshine.me` |
+| OpenClaw `report` / `daily` | QQ SMTP | 可用 | 当前保持稳定兜底 |
+| Hermes `report` / `daily` | ClawEmail SMTP 465 | 可用 | 发件人 `shine1@claw.163.com`，已真实发到 QQ |
 | `report` 品牌域名发件身份 | `evanshine.me` 第二 SMTP | 部分可用 | 应用到自建邮局这一步是通的；继续向 `claw.163.com` 外发会受目标 MX `25` 连接影响 |
 | `daily` 品牌域名发件身份 | `evanshine.me` 第二 SMTP | 暂不建议生产启用 | 同上，当前测试到 `agent4.daily@claw.163.com` 会在自建邮局外发阶段超时 |
 | `verify` 注册 / 验证码 | ClawEmail mailbox action | 可用 | 用 `evasan.verify@claw.163.com`；这是收件 / 动作入口，不依赖 `evanshine.me` |
 | `files` 附件 / artifact | ClawEmail mailbox action | 可用 | `agent3.files@claw.163.com`，只做收件与归档提示 |
 | `archive` 归档 / 训练样本 | ClawEmail mailbox action | 可用 | `agent3.archive@claw.163.com`，不建议改到外部 SMTP |
 | `account` / `shop` / `support` 业务动作 | ClawEmail mailbox action | 可用 | 继续按动作邮箱收件，不建议为了品牌域名去强制改发件通道 |
-| QQ 外部收件测试 | 默认 QQ SMTP | 可用 | 当前最稳定、最适合作为生产兜底 |
+| QQ 外部收件测试 | QQ SMTP / Hermes ClawEmail SMTP | 可用 | Hermes ClawEmail 465 已真实发到 QQ；OpenClaw QQ SMTP 继续兜底 |
 | `evanshine.me` 域内收件 | 自建邮箱系统 | 可用 | 自建域内投递正常，适合内部品牌邮箱、测试和身份储备 |
 
 操作建议：
 
 ```text
-短期生产：保持默认 QQ SMTP 发送 report / daily
-中期优化：为 evanshine.me 增加专业 SMTP 中继 / smarthost，再考虑把 report 改回品牌域名发件
+短期生产：OpenClaw 保持 QQ SMTP；Hermes 使用 shine1@claw.163.com 的 ClawEmail SMTP 465
+中期优化：为 evanshine.me 增加专业 SMTP 中继 / smarthost，再考虑把 report/daily 改回品牌域名发件
 长期观察：补齐 PTR，持续观察自建邮局直投外部域的稳定性，但不要把 PTR 当成短期必然修复手段
 ```
 
@@ -507,12 +510,12 @@ TOKEN_FACTORY_TASK_DIR=/opt/OpenclawHomework/data/tasks/token-factory
 TOKEN_FACTORY_STALE_MS=1800000
 
 EMAIL_NOTIFY_ENABLED=true
-SMTP_HOST=smtp.qq.com
+SMTP_HOST=claw.163.com
 SMTP_PORT=465
 SMTP_SECURE=true
-SMTP_USER=发件邮箱
-SMTP_PASS=邮箱 SMTP 授权码
-EMAIL_FROM=发件邮箱
+SMTP_USER=shine1@claw.163.com
+SMTP_PASS=ClawEmail 邮箱密码或授权码
+EMAIL_FROM=shine1@claw.163.com
 EMAIL_TO=收件邮箱，多个用逗号分隔
 
 REPORT_SMTP_HOST=mail.evanshine.me
@@ -530,7 +533,7 @@ MAIL_ACTION_PROVIDER_OVERRIDES=report=evanshine,daily=evanshine
 - 允许动作只有 `status`、`health`、`logs`、`restart`、`repair`。
 - `repair` 会在对端执行：`git pull --ff-only`、`npm test`、重启对端桥梁服务、检查 `/health`。
 - 不要把这个通道改成普通无限制 root SSH，除非用户明确要求并理解风险。
-- 邮件通知在 GitHub Actions 完成后由桥梁服务发送。若配置了 `evanshine.me` 第二 SMTP，则 `report` / `daily` 会先尝试第二 SMTP，再回退默认 SMTP；只有两边都失败时才记最终邮件失败日志，不应阻断飞书报告。
+- 邮件通知在 GitHub Actions 完成后由桥梁服务发送。Hermes 当前默认 SMTP 是 ClawEmail 465；OpenClaw 当前默认 SMTP 是 QQ。若配置了 `evanshine.me` 第二 SMTP，则 `report` / `daily` 会先尝试第二 SMTP，再回退默认 SMTP；只有两边都失败时才记最终邮件失败日志，不应阻断飞书报告。
 - SMTP 密码或授权码只放服务器环境文件，不要写入仓库。
 
 流式回复说明：

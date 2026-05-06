@@ -238,12 +238,26 @@ Hermes 原生邮件网关服务：hermes-gateway.service
 ClawEmail 地址：shine1@claw.163.com
 Home email：1693457391@qq.com
 收信 IMAP：claw.163.com:993
-发信 SMTP：claw.163.com:25 + STARTTLS
+hermes-gateway 发信 SMTP：按 /root/.hermes/config.yaml 排查
+Hermes 飞书桥服务发信 SMTP：claw.163.com:465 + SMTP_SSL，发件人 shine1@claw.163.com
 ```
 
 2026-05-04 已使用官方推荐的 `hermes-email-setup.sh --auth-url ... --home-email 1693457391@qq.com` 重新配置，`hermes-gateway.service` 为 user 级服务，当前运行正常。
 
 注意：Hermes 服务器当前有两套 ClawEmail 能力。`hermes-gateway.service` 使用 `shine1@claw.163.com` 作为邮件网关账号，用于收发邮件；`mail-cli` 管理 API 已在 2026-05-04 单独认证，用于管理 ClawEmail 邮箱。不要从 OpenClaw 服务器直接复制 `/root/.config/mail-cli`，该目录里的 `secrets.enc` 与本机 keychain 绑定，跨机器复制会失效。
+
+2026-05-06：`hermes-feishu-bridge` 已切到 ClawEmail SMTP 465 发信。环境文件 `/etc/hermes-feishu-bridge.env` 里应看到：
+
+```text
+SMTP_HOST=claw.163.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=shine1@claw.163.com
+EMAIL_FROM=shine1@claw.163.com
+EMAIL_TO=1693457391@qq.com
+```
+
+已通过桥服务真实发送 `daily` 邮件到 `1693457391@qq.com`，同时归档到 `agent4.daily@claw.163.com`。
 
 2026-05-04 已创建的 Hermes ClawEmail 邮箱：
 
@@ -415,11 +429,10 @@ systemctl --user restart hermes-gateway
 
 关键排障点：
 
-- Hermes 邮件适配器使用 STARTTLS，不使用隐式 SSL。
-- 当前服务器上 `claw.163.com:25` 可完成 STARTTLS 握手，`claw.163.com:587` 会在 SMTP 握手阶段超时。
-- 因此不要随手把 `EMAIL_SMTP_PORT` 改成 `587` 或 `465`。
-- `465` 需要 `SMTP_SSL`，而当前 Hermes 官方适配器代码走的是 `SMTP` 后 `starttls()`。
-- 如果日志出现 `SMTP connection failed`，先做协议探测，再改端口。
+- 分清两条链路：`hermes-gateway.service` 是 Hermes 原生邮件网关；`hermes-feishu-bridge` 是飞书桥服务。
+- `hermes-feishu-bridge` 使用 Node/nodemailer，`SMTP_SECURE=true` 时可以走 `claw.163.com:465` 隐式 SSL；这条链路已经实测可用。
+- 如果 `hermes-gateway.service` 日志出现 `SMTP connection failed`，按它自己的 `/root/.hermes/config.yaml` 和官方适配器语境排查，不要反向改坏飞书桥服务。
+- 当前实测：Hermes 服务器到 `claw.163.com:465` TCP/EHLO/登录/发信可用；`25` 可能超时；`587` TCP 可连但 SMTP 握手可能超时。
 
 协议探测命令：
 
