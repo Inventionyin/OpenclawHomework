@@ -43,8 +43,14 @@ test('buildDigest creates a polished proactive agent report', () => {
   assert.match(digest.subject, /Hermes 每日主动报告 2026-05-06/);
   assert.match(digest.text, /收发信：1 封成功 \/ 1 封失败/);
   assert.match(digest.text, /模型：2 次调用 \/ 200 tokens/);
+  assert.match(digest.text, /真实 120/);
+  assert.match(digest.text, /字符估算 80/);
+  assert.match(digest.text, /失败诊断/);
+  assert.match(digest.text, /邮件归档/);
   assert.match(digest.text, /新闻日报/);
   assert.match(digest.html, /每日主动报告/);
+  assert.match(digest.html, /失败诊断/);
+  assert.match(digest.html, /邮件归档/);
   assert.match(digest.html, /服务器状态/);
 });
 
@@ -141,11 +147,14 @@ test('buildDigest uses task-center summary for today and tomorrow plan when prov
         '优先复盘失败任务：新闻摘要 news-1。',
         '恢复中断或超时任务：token 工厂 tf-1。',
       ],
+      failureDiagnosisText: '失败诊断：新闻摘要 news-1 是 RSS 超时。',
     },
   });
 
   assert.match(digest.text, /今天任务 4 个/);
+  assert.match(digest.text, /RSS 超时/);
   assert.match(digest.text, /优先复盘失败任务/);
   assert.match(digest.html, /今天任务 4 个/);
+  assert.match(digest.html, /RSS 超时/);
   assert.match(digest.html, /恢复中断或超时任务/);
 });

@@ -119,19 +119,32 @@ function writeState(filePath, state) {
 }
 
 function summarizeUsage(entries = []) {
+  const realTokens = entries.reduce((sum, entry) => sum + Number(entry.totalTokens || 0), 0);
+  const estimatedTokens = entries.reduce((sum, entry) => sum + Number(entry.estimatedTotalTokens || 0), 0);
   const total = entries.reduce((sum, entry) => sum + Number(entry.totalTokens || entry.estimatedTotalTokens || 0), 0);
   const byAssistant = new Map();
   for (const entry of entries) {
     const key = String(entry.assistant || 'unknown');
-    const current = byAssistant.get(key) || { assistant: key, calls: 0, tokens: 0, elapsedMs: 0 };
+    const current = byAssistant.get(key) || {
+      assistant: key,
+      calls: 0,
+      tokens: 0,
+      realTokens: 0,
+      estimatedTokens: 0,
+      elapsedMs: 0,
+    };
     current.calls += 1;
     current.tokens += Number(entry.totalTokens || entry.estimatedTotalTokens || 0);
+    current.realTokens += Number(entry.totalTokens || 0);
+    current.estimatedTokens += Number(entry.estimatedTotalTokens || 0);
     current.elapsedMs += Number(entry.modelElapsedMs || entry.elapsedMs || 0);
     byAssistant.set(key, current);
   }
   return {
     calls: entries.length,
     totalTokens: total,
+    realTokens,
+    estimatedTokens,
     byAssistant: Array.from(byAssistant.values()).sort((a, b) => b.tokens - a.tokens),
   };
 }
@@ -212,7 +225,7 @@ function buildAiSummary({ assistant, mailSummary, usageSummary, server, automati
   const parts = [
     `${assistant} 今日主动巡检完成。`,
     `邮件动作 ${mailSummary.total} 条，成功 ${mailSummary.sent} 条，失败 ${mailSummary.failed} 条。`,
-    usageSummary.calls ? `模型调用账本 ${usageSummary.calls} 条，token 约 ${usageSummary.totalTokens}。` : '模型调用账本今日暂无新增。',
+    usageSummary.calls ? `模型调用账本 ${usageSummary.calls} 条，token 约 ${usageSummary.totalTokens}（真实 ${usageSummary.realTokens} / 字符估算 ${usageSummary.estimatedTokens}）。` : '模型调用账本今日暂无新增。',
     automation?.ui?.workflowRunUrl ? `UI 自动化已调度：${automation.ui.runMode || 'unknown'}。` : '',
     automation?.tokenLab?.totalJobs ? `训练场已产出 ${automation.tokenLab.totalJobs} 条样本。` : '',
     server.disk ? `根分区状态：${server.disk.replace(/\s+/g, ' ')}。` : '服务器磁盘状态未取到。',
@@ -245,6 +258,14 @@ function buildDigest(input = {}) {
       '让文员 Agent 生成客服训练数据并消耗一批低价 token。',
       '检查邮件账本，确认日报和报告都能从主邮箱正常外发。',
     ];
+  const failureDiagnosis = taskCenterPlan?.failureDiagnosisText
+    || taskCenterPlan?.failureReview?.summaryText
+    || (mailSummary.failed ? `邮件失败 ${mailSummary.failed} 条，先检查 SMTP/ClawEmail 发送日志。` : '暂无失败诊断记录。');
+  const archiveSummary = [
+    `外部收件：${(input.externalTo || []).length ? input.externalTo.join(', ') : '未配置'}`,
+    '内部归档：agent4.daily@claw.163.com',
+    mailSummary.total ? `今日邮件流水 ${mailSummary.total} 条，成功 ${mailSummary.sent}，失败 ${mailSummary.failed}。` : '今日邮件流水暂无新增。',
+  ].join('；');
 
   const text = [
     `每日 Agent 主动报告：${assistant}`,
@@ -253,7 +274,7 @@ function buildDigest(input = {}) {
     `AI 总结：${aiSummary}`,
     '',
     `收发信：${mailSummary.sent} 封成功 / ${mailSummary.failed} 封失败 / ${mailSummary.outgoing} 个收件投递`,
-    `模型：${usageSummary.calls} 次调用 / ${usageSummary.totalTokens} tokens`,
+    `模型：${usageSummary.calls} 次调用 / ${usageSummary.totalTokens} tokens（真实 ${usageSummary.realTokens} / 字符估算 ${usageSummary.estimatedTokens}）`,
     server.disk ? `硬盘：${server.disk.replace(/\s+/g, ' ')}` : null,
     server.memory ? `内存：${server.memory.replace(/\s+/g, ' ')}` : null,
     '',
@@ -262,6 +283,17 @@ function buildDigest(input = {}) {
     '',
     '新闻日报：',
     ...newsItems.map((item, index) => `${index + 1}. ${item.title}（${item.source || 'news'}）`),
+    '',
+    '失败诊断：',
+    failureDiagnosis,
+    '',
+    'token 消耗：',
+    usageSummary.calls
+      ? `真实 ${usageSummary.realTokens}，字符估算 ${usageSummary.estimatedTokens}，合计约 ${usageSummary.totalTokens}。`
+      : '暂无模型调用账本。',
+    '',
+    '邮件归档：',
+    archiveSummary,
     '',
     '明日建议：',
     ...tomorrowPlan.map((item) => `- ${item}`),
@@ -323,6 +355,15 @@ function buildDigest(input = {}) {
     `<li>UI 自动化：${esc(automation.ui?.workflowRunUrl || '暂无调度记录')}</li>`,
     `<li>Token 训练：${esc(automation.tokenLab?.totalJobs ? `${automation.tokenLab.totalJobs} 条样本` : '暂无训练记录')}</li>`,
     '</ul></div>',
+    '<div class="digest-section"><h3>失败诊断</h3>',
+    `<p>${esc(failureDiagnosis)}</p>`,
+    '</div>',
+    '<div class="digest-section"><h3>token 消耗</h3>',
+    `<p>${esc(usageSummary.calls ? `真实 ${usageSummary.realTokens}，字符估算 ${usageSummary.estimatedTokens}，合计约 ${usageSummary.totalTokens}。` : '暂无模型调用账本。')}</p>`,
+    '</div>',
+    '<div class="digest-section"><h3>邮件归档</h3>',
+    `<p>${esc(archiveSummary)}</p>`,
+    '</div>',
     '<div class="digest-section"><h3>明日建议</h3><ul>',
     ...tomorrowPlan.map((item) => `<li>${esc(item)}</li>`),
     '</ul></div>',

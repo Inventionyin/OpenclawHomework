@@ -253,6 +253,50 @@ test('buildClerkCommandCenterReply uses enhanced task-center sections when provi
   assert.match(reply, /可复制指令：[\s\S]*文员，恢复任务 ui-stale/);
 });
 
+test('buildClerkCommandCenterReply renders task-center brain sections when available', () => {
+  const reply = buildClerkCommandCenterReply({
+    now: new Date('2026-05-06T04:00:00.000Z'),
+    summarizeDailyPlan: () => samplePlan(),
+    summarizeTasks: () => sampleTaskSummary(),
+    summarizeTaskCenterBrain: () => ({
+      today: {
+        summaryText: '主控脑今日任务：UI 1 个，日报 1 个。',
+      },
+      history: {
+        summaryText: '近 7 天历史任务 8 个，失败 2 个。',
+      },
+      failureReview: {
+        summaryText: '最近失败集中在 news-digest：rss timeout。',
+        items: [
+          { id: 'news-fail', type: 'news-digest', error: 'rss timeout' },
+        ],
+      },
+      nextPlan: {
+        items: [
+          '先复盘 news-fail，再重跑新闻摘要。',
+          '随后补跑 UI contracts。',
+        ],
+        quickCommands: [
+          '文员，查看失败任务',
+          '文员，启动今天的自动流水线',
+        ],
+      },
+    }),
+    readUsageLedger: () => [],
+    readMailLedger: () => [],
+    readDailySummarySnapshot: () => ({ runs: [] }),
+  });
+
+  assert.match(reply, /今日任务：/);
+  assert.match(reply, /历史任务：/);
+  assert.match(reply, /失败复盘：/);
+  assert.match(reply, /下一步计划：/);
+  assert.match(reply, /主控脑今日任务/);
+  assert.match(reply, /近 7 天历史任务/);
+  assert.match(reply, /rss timeout/);
+  assert.match(reply, /文员，启动今天的自动流水线/);
+});
+
 test('buildClerkCommandCenterState degrades bad ledgers and broken snapshots', () => {
   const state = buildClerkCommandCenterState({
     summarizeDailyPlan: () => samplePlan(),
@@ -318,6 +362,11 @@ test('buildClerkDailyReportReply builds daily preview from plan, snapshot, and u
   });
 
   assert.match(reply, /文员日报预览/);
+  assert.match(reply, /今日总结：/);
+  assert.match(reply, /明日计划：/);
+  assert.match(reply, /失败诊断：/);
+  assert.match(reply, /token 消耗：/);
+  assert.match(reply, /邮件归档：/);
   assert.match(reply, /今天任务 4 个/);
   assert.match(reply, /优先复盘失败任务/);
   assert.match(reply, /日报正文：1 runs，1 usage，classmate@example.com/);

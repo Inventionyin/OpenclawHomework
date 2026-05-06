@@ -39,6 +39,7 @@ const {
   rememberFeishuImage,
   uploadFeishuImage,
   buildRoutedAgentReply,
+  resolveAgentRoute,
   getDailySummarySnapshotFile,
   readDailySummarySnapshot,
   writeDailySummarySnapshot,
@@ -496,6 +497,86 @@ test('buildRouteEnv falls back to FEISHU_ENV_FILE peer ssh settings for Hermes r
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+test('resolveAgentRoute keeps explicit command routes ahead of model planner suggestions', async () => {
+  let plannerCalled = false;
+  const route = await resolveAgentRoute('/exec df -h', {
+    FEISHU_INTENT_PLANNER_ENABLED: 'true',
+  }, {
+    intentPlanner: async () => {
+      plannerCalled = true;
+      return '{"intent":"tool","agent":"chat-agent","action":"chat","confidence":"high","reason":"wrong"}';
+    },
+  });
+
+  assert.equal(plannerCalled, false);
+  assert.deepEqual(route, {
+    agent: 'ops-agent',
+    action: 'exec',
+    command: 'df -h',
+    requiresAuth: true,
+  });
+});
+
+test('resolveAgentRoute can upgrade safe fuzzy chat through model planner', async () => {
+  let promptText = '';
+  const route = await resolveAgentRoute('我有点乱，先听你判断', {
+    FEISHU_INTENT_PLANNER_ENABLED: 'true',
+    FEISHU_ASSISTANT_NAME: 'Hermes',
+  }, {
+    intentPlanner: async (prompt) => {
+      promptText = prompt;
+      return JSON.stringify({
+        intent: 'tool',
+        agent: 'clerk-agent',
+        action: 'command-center',
+        confidence: 'high',
+        reason: '用户要项目总控和下一步计划',
+      });
+    },
+  });
+
+  assert.match(promptText, /Hermes/);
+  assert.equal(route.agent, 'clerk-agent');
+  assert.equal(route.action, 'command-center');
+  assert.equal(route.requiresAuth, true);
+  assert.equal(route.intentSource, 'model-planner');
+  assert.match(route.reason, /下一步计划/);
+});
+
+test('resolveAgentRoute falls back to rule route when model planner fails or is unsafe', async () => {
+  const failedRoute = await resolveAgentRoute('我有点乱，先听你判断', {
+    FEISHU_INTENT_PLANNER_ENABLED: 'true',
+  }, {
+    intentPlanner: async () => {
+      throw new Error('planner timeout');
+    },
+  });
+
+  assert.deepEqual(failedRoute, {
+    agent: 'chat-agent',
+    action: 'chat',
+    requiresAuth: false,
+  });
+
+  const unsafeRoute = await resolveAgentRoute('我有点乱，先听你判断', {
+    FEISHU_INTENT_PLANNER_ENABLED: 'true',
+  }, {
+    intentPlanner: async () => JSON.stringify({
+      intent: 'tool',
+      agent: 'ops-agent',
+      action: 'restart',
+      confidence: 'high',
+      reason: 'unsafe escalation',
+    }),
+  });
+
+  assert.deepEqual(unsafeRoute, {
+    agent: 'chat-agent',
+    action: 'chat',
+    requiresAuth: false,
+  });
 });
 
 test('getFeishuDedupKeys prefers Feishu ids when present', () => {

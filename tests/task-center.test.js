@@ -11,7 +11,10 @@ const {
 } = require('../scripts/background-task-store');
 const {
   listFailedTasks,
+  listHistoricalTasks,
   summarizeDailyPipeline,
+  summarizeFailureReview,
+  summarizeTaskCenterBrain,
   summarizeTaskCenterDigest,
   listTodayTasks,
   recordTaskEvent,
@@ -187,6 +190,69 @@ test('task center digest supports today/tomorrow and proactive types with bad ta
     assert.equal(Array.isArray(digest.nextSuggestedActions), true);
     assert.equal(digest.nextSuggestedActions.length > 0, true);
     assert.equal(Array.isArray(digest.tomorrowPlan), true);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('task center brain exposes today history failure review and next plan', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'task-center-brain-'));
+  const env = { TOKEN_FACTORY_TASK_DIR: tempDir };
+  try {
+    createTask({ id: 'ui-ok', type: 'ui-automation', now: '2026-05-06T01:00:00.000Z', status: 'completed' }, env);
+    createTask({ id: 'news-fail', type: 'news-digest', now: '2026-05-06T01:10:00.000Z', status: 'failed', error: 'rss timeout' }, env);
+    createTask({ id: 'token-stale', type: 'token-factory', now: '2026-05-06T01:20:00.000Z', status: 'running' }, env);
+    updateTask('token-stale', { updatedAt: '2026-05-06T01:20:00.000Z' }, env);
+    createTask({ id: 'daily-old', type: 'daily-digest', now: '2026-05-04T03:00:00.000Z', status: 'completed' }, env);
+
+    const brain = summarizeTaskCenterBrain({
+      env,
+      now: new Date('2026-05-06T03:00:00.000Z'),
+      staleMs: 30 * 60 * 1000,
+      timezoneOffsetMinutes: 480,
+      proactiveTypes: ['proactive'],
+      historyDays: 5,
+    });
+
+    assert.equal(brain.today.day, '2026-05-06');
+    assert.match(brain.today.summaryText, /今天任务/);
+    assert.equal(brain.history.buckets.some((bucket) => bucket.day === '2026-05-06'), true);
+    assert.equal(brain.history.buckets.some((bucket) => bucket.day === '2026-05-04'), true);
+    assert.equal(brain.failureReview.items[0].id, 'news-fail');
+    assert.equal(brain.failureReview.byReason.some((row) => row.reason === 'network_timeout'), true);
+    assert.equal(brain.nextPlan.items.some((item) => /复盘失败任务/.test(item)), true);
+    assert.equal(brain.nextPlan.quickCommands.some((item) => /查看失败任务/.test(item)), true);
+    assert.equal(brain.meta.historyDays, 5);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('task center historical tasks and failure review tolerate malformed task shapes', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'task-center-history-'));
+  const env = { TOKEN_FACTORY_TASK_DIR: tempDir };
+  try {
+    createTask({ id: 'bad-time', type: '', now: '2026-05-06T01:00:00.000Z', status: '', error: '' }, env);
+    updateTask('bad-time', { createdAt: 'not-a-date', status: 'failed', error: '' }, env);
+    createTask({ id: 'quota-fail', type: 'token-lab', now: '2026-05-05T01:00:00.000Z', status: 'failed', error: 'quota exhausted' }, env);
+
+    const history = listHistoricalTasks({
+      env,
+      now: new Date('2026-05-06T03:00:00.000Z'),
+      historyDays: 7,
+      timezoneOffsetMinutes: 480,
+    });
+    const failureReview = summarizeFailureReview({
+      env,
+      now: new Date('2026-05-06T03:00:00.000Z'),
+      timezoneOffsetMinutes: 480,
+    });
+
+    assert.equal(history.items.some((task) => task.id === 'bad-time'), true);
+    assert.equal(history.buckets.some((bucket) => bucket.day === 'unknown'), true);
+    assert.equal(failureReview.byReason.some((row) => row.reason === 'quota_or_rate_limit'), true);
+    assert.equal(failureReview.byReason.some((row) => row.reason === 'unknown_failure'), true);
+    assert.match(failureReview.summaryText, /失败/);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

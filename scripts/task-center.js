@@ -133,6 +133,171 @@ function listFailedTasks(options = {}) {
     .slice(0, limit);
 }
 
+function getTaskTimestamp(task = {}) {
+  return task.createdAt || task.updatedAt || '';
+}
+
+function listHistoricalTasks(options = {}) {
+  const env = options.env || process.env;
+  const now = options.now || new Date();
+  const timezoneOffsetMinutes = Number(options.timezoneOffsetMinutes ?? env.MAIL_LEDGER_TIMEZONE_OFFSET_MINUTES ?? 480);
+  const historyDays = Math.max(1, Number(options.historyDays || 7));
+  const limit = Math.max(1, Number(options.limit || 50));
+  const sinceMs = now.getTime() - historyDays * 24 * 60 * 60 * 1000;
+  const tasks = filterTasks(listTasks(env), options)
+    .map(normalizeTaskShape)
+    .filter((task) => {
+      const timestamp = Date.parse(getTaskTimestamp(task));
+      return !Number.isFinite(timestamp) || timestamp >= sinceMs;
+    })
+    .slice(0, limit);
+  const buckets = new Map();
+  for (const task of tasks) {
+    const day = toLocalDayKey(getTaskTimestamp(task), timezoneOffsetMinutes) || 'unknown';
+    const bucket = buckets.get(day) || {
+      day,
+      total: 0,
+      queued: 0,
+      running: 0,
+      completed: 0,
+      failed: 0,
+      interrupted: 0,
+      unknown: 0,
+      types: {},
+      items: [],
+    };
+    bucket.total += 1;
+    if (Object.prototype.hasOwnProperty.call(bucket, task.status)) {
+      bucket[task.status] += 1;
+    } else {
+      bucket.unknown += 1;
+    }
+    const type = normalizeTaskType(task.type) || 'unknown';
+    bucket.types[type] = (bucket.types[type] || 0) + 1;
+    bucket.items.push(task);
+    buckets.set(day, bucket);
+  }
+  const bucketList = Array.from(buckets.values())
+    .sort((a, b) => String(b.day).localeCompare(String(a.day)));
+  const completed = tasks.filter((task) => task.status === 'completed').length;
+  const failed = tasks.filter((task) => task.status === 'failed').length;
+
+  return {
+    items: tasks,
+    buckets: bucketList,
+    historyDays,
+    limit,
+    summaryText: `近 ${historyDays} 天历史任务 ${tasks.length} 个，完成 ${completed} 个，失败 ${failed} 个。`,
+  };
+}
+
+function normalizeFailureReason(task = {}) {
+  const error = String(task.error || task.summary?.error || '').toLowerCase();
+  if (!error.trim()) return 'unknown_failure';
+  if (/(timeout|timed out|超时|rss|fetch|network|econn|socket)/i.test(error)) return 'network_timeout';
+  if (/(quota|rate|limit|429|额度|限流|too many requests)/i.test(error)) return 'quota_or_rate_limit';
+  if (/(auth|unauthorized|forbidden|permission|token|401|403|权限|未授权)/i.test(error)) return 'auth_or_permission';
+  if (/(github|actions|runner|workflow|allure|playwright|cypress|ci)/i.test(error)) return 'ci_or_ui_runner';
+  return 'other_failure';
+}
+
+function summarizeFailureReview(options = {}) {
+  const env = options.env || process.env;
+  const limit = Math.max(1, Number(options.limit || 20));
+  const failed = filterTasks(listTasks(env), options)
+    .map(normalizeTaskShape)
+    .filter((task) => task.status === 'failed')
+    .slice(0, limit);
+  const byReasonMap = new Map();
+  for (const task of failed) {
+    const reason = normalizeFailureReason(task);
+    const current = byReasonMap.get(reason) || {
+      reason,
+      count: 0,
+      latestTaskId: '',
+      examples: [],
+    };
+    current.count += 1;
+    if (!current.latestTaskId) current.latestTaskId = task.id;
+    if (current.examples.length < 3) {
+      current.examples.push({
+        id: task.id,
+        type: task.type,
+        error: task.error || '失败待复盘',
+      });
+    }
+    byReasonMap.set(reason, current);
+  }
+  const byReason = Array.from(byReasonMap.values())
+    .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason));
+  const recommendations = [];
+  if (byReason.some((row) => row.reason === 'network_timeout')) {
+    recommendations.push('网络/RSS/接口超时：先确认数据源连通性，再加重试或降级源。');
+  }
+  if (byReason.some((row) => row.reason === 'quota_or_rate_limit')) {
+    recommendations.push('额度/限流：检查 token 池自动切换和低价模型兜底。');
+  }
+  if (byReason.some((row) => row.reason === 'auth_or_permission')) {
+    recommendations.push('权限问题：优先检查飞书绑定、GitHub token、邮箱 key 和服务器环境变量。');
+  }
+  if (byReason.some((row) => row.reason === 'ci_or_ui_runner')) {
+    recommendations.push('CI/UI 失败：先打开 GitHub Actions 与 Allure/trace，再补一轮 smoke。');
+  }
+  if (!recommendations.length) {
+    recommendations.push(failed.length ? '先查看最近失败任务日志，补充可复现线索后再重试。' : '暂无失败任务，保持每日流水线巡检。');
+  }
+
+  return {
+    items: failed,
+    byReason,
+    latestFailure: failed[0] || null,
+    recommendations,
+    summaryText: failed.length
+      ? `最近失败任务 ${failed.length} 个，主要原因：${byReason.slice(0, 3).map((row) => `${row.reason} ${row.count} 个`).join('，')}。`
+      : '最近没有失败任务。',
+  };
+}
+
+function buildNextStepPlan(options = {}) {
+  const summary = options.summary || summarizeTasks(options);
+  const todayTasks = (summary.todayTasks || []).map(normalizeTaskShape);
+  const failureReview = options.failureReview || summarizeFailureReview(options);
+  const recoverableItems = (summary.recoverableTasks || []).map(normalizeTaskShape);
+  const activeTypes = new Set(todayTasks.map((task) => task.type));
+  const items = [];
+
+  if (failureReview.items?.length) {
+    items.push(`优先复盘失败任务：${failureReview.items.slice(0, 2).map((task) => `${formatTaskType(task.type)} ${task.id}`).join('、')}。`);
+  }
+  if (recoverableItems.length) {
+    items.push(`恢复可续跑任务：${recoverableItems.slice(0, 2).map((task) => `${formatTaskType(task.type)} ${task.id}`).join('、')}。`);
+  }
+  if (!activeTypes.has('ui-automation')) {
+    items.push('补一轮 UI 自动化 contracts 或 smoke，并归档 Actions/Allure 链接。');
+  }
+  if (!activeTypes.has('daily-digest')) {
+    items.push('生成今日总结并发送到 daily 邮箱归档。');
+  }
+  if (!activeTypes.has('news-digest')) {
+    items.push('跑一次新闻摘要，验证实时 RSS 源和降级源。');
+  }
+  if (!items.length) {
+    items.push('今日主线无明显阻塞，继续按定时流水线推进并记录复盘结论。');
+  }
+
+  const quickCommands = [
+    failureReview.items?.length ? '文员，查看失败任务' : null,
+    recoverableItems.length ? '文员，继续昨天 token-factory 任务' : null,
+    '文员，启动今天的自动流水线',
+    '文员，发送今天日报到邮箱',
+  ].filter(Boolean);
+
+  return {
+    items,
+    quickCommands,
+  };
+}
+
 function recordTaskEvent(input = {}, options = {}) {
   const env = options.env || process.env;
   const now = input.now || options.now || new Date().toISOString();
@@ -454,13 +619,61 @@ function summarizeTaskCenterDigest(options = {}) {
   };
 }
 
+function summarizeTaskCenterBrain(options = {}) {
+  const env = options.env || process.env;
+  const now = options.now || new Date();
+  const timezoneOffsetMinutes = Number(options.timezoneOffsetMinutes ?? env.MAIL_LEDGER_TIMEZONE_OFFSET_MINUTES ?? 480);
+  const proactiveTypes = resolveProactiveTypes(options.proactiveTypes);
+  const baseOptions = {
+    ...options,
+    env,
+    now,
+    timezoneOffsetMinutes,
+    type: proactiveTypes,
+  };
+  const summary = summarizeTasks(baseOptions);
+  const dailyPlan = summarizeDailyPlan(baseOptions);
+  const todayTasks = (summary.todayTasks || []).map(normalizeTaskShape);
+  const history = listHistoricalTasks(baseOptions);
+  const failureReview = summarizeFailureReview(baseOptions);
+  const nextPlan = buildNextStepPlan({
+    ...baseOptions,
+    summary,
+    failureReview,
+  });
+  const todayDay = toLocalDayKey(now, timezoneOffsetMinutes);
+
+  return {
+    today: {
+      day: todayDay,
+      summaryText: dailyPlan.todaySummaryText,
+      counts: summary.counts,
+      byType: summary.byType,
+      tasks: todayTasks,
+    },
+    history,
+    failureReview,
+    nextPlan,
+    meta: {
+      generatedAt: now.toISOString(),
+      timezoneOffsetMinutes,
+      proactiveTypes,
+      historyDays: history.historyDays,
+    },
+  };
+}
+
 module.exports = {
+  buildNextStepPlan,
   formatTaskType,
   listFailedTasks,
+  listHistoricalTasks,
   listTodayTasks,
   recordTaskEvent,
   summarizeDailyPlan,
   summarizeDailyPipeline,
+  summarizeFailureReview,
+  summarizeTaskCenterBrain,
   summarizeTaskCenterDigest,
   summarizeTasks,
   toLocalDayKey,

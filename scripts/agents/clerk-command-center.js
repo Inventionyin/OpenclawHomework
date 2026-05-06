@@ -14,6 +14,7 @@ const {
 const {
   summarizeDailyPlan,
   summarizeDailyPipeline,
+  summarizeTaskCenterBrain,
   summarizeTaskCenterDigest,
   summarizeTasks,
 } = require('../task-center');
@@ -79,6 +80,8 @@ function toLocalDayKey(input, timezoneOffsetMinutes = 480) {
 function summarizeUsage(entries = []) {
   return {
     entries,
+    realTokens: entries.reduce((total, entry) => total + Number(entry.totalTokens || 0), 0),
+    estimatedTokens: entries.reduce((total, entry) => total + Number(entry.estimatedTotalTokens || 0), 0),
     totalTokens: entries.reduce((total, entry) => total
       + Number(entry.totalTokens ?? entry.estimatedTotalTokens ?? 0), 0),
   };
@@ -128,6 +131,34 @@ function mergeTaskDigest(taskSummary = {}, digest = {}) {
     return taskSummary;
   }
   const merged = { ...taskSummary };
+  if (digest.today?.summaryText) {
+    merged.todaySummaryText = digest.today.summaryText;
+  }
+  if (digest.history?.summaryText) {
+    merged.historySummaryText = digest.history.summaryText;
+  }
+  if (digest.failureReview?.summaryText) {
+    merged.failureReviewText = digest.failureReview.summaryText;
+  }
+  if (Array.isArray(digest.failureReview?.items) && digest.failureReview.items.length) {
+    merged.failureItems = digest.failureReview.items;
+  }
+  if (Array.isArray(digest.failureReview?.recommendations) && digest.failureReview.recommendations.length) {
+    merged.failureRecommendations = digest.failureReview.recommendations;
+  }
+  if (Array.isArray(digest.nextPlan?.items) && digest.nextPlan.items.length) {
+    merged.tomorrowPlanText = digest.nextPlan.items;
+    merged.nextPlanItems = digest.nextPlan.items;
+  }
+  if (Array.isArray(digest.nextPlan?.quickCommands) && digest.nextPlan.quickCommands.length) {
+    merged.quickCommands = digest.nextPlan.quickCommands;
+  }
+  if (digest.today?.byType) {
+    merged.byType = digest.today.byType;
+  }
+  if (digest.today?.counts) {
+    merged.counts = digest.today.counts;
+  }
   if (digest.todaySummary) {
     merged.todaySummaryText = digest.todaySummary;
   }
@@ -137,6 +168,11 @@ function mergeTaskDigest(taskSummary = {}, digest = {}) {
   const blockers = formatDigestBlockers(digest);
   if (blockers.length) {
     merged.blockers = blockers;
+  } else if (Array.isArray(merged.failureItems) && merged.failureItems.length) {
+    merged.blockers = formatDigestBlockers({
+      failedItems: merged.failureItems,
+      recoverableItems: digest.recoverableItems,
+    });
   }
   if (Array.isArray(digest.nextSuggestedActions) && digest.nextSuggestedActions.length) {
     merged.quickCommands = digest.nextSuggestedActions;
@@ -174,7 +210,10 @@ function buildClerkCommandCenterState(options = {}) {
     recoverableTasks: [],
     todayTasks: [],
   }, 'task_center_unavailable', warnings);
-  const digestReader = options.summarizeTaskCenterDigest || (!options.summarizeTasks ? summarizeTaskCenterDigest : null);
+  const digestReader = options.summarizeTaskCenterBrain
+    || (!options.summarizeTasks ? summarizeTaskCenterBrain : null)
+    || options.summarizeTaskCenterDigest
+    || (!options.summarizeTasks ? summarizeTaskCenterDigest : null);
   const taskDigest = digestReader
     ? safeReadObject(() => digestReader({
       env,
@@ -206,6 +245,8 @@ function buildClerkCommandCenterState(options = {}) {
   );
   const runs = Array.isArray(snapshot.runs) ? snapshot.runs : [];
 
+  const mergedTasks = mergeTaskDigest(tasks, taskDigest);
+
   return {
     env,
     plan: {
@@ -215,9 +256,9 @@ function buildClerkCommandCenterState(options = {}) {
       counts: plan.counts || {},
     },
     tasks: {
-      ...mergeTaskDigest(tasks, taskDigest),
-      byType: Array.isArray(tasks.byType) ? tasks.byType : [],
-      counts: tasks.counts || {},
+      ...mergedTasks,
+      byType: Array.isArray(mergedTasks.byType) ? mergedTasks.byType : [],
+      counts: mergedTasks.counts || {},
     },
     pipeline,
     usage: summarizeUsage(usageEntries),
@@ -280,6 +321,13 @@ function buildClerkCommandCenterReply(options = {}) {
       ? state.plan.tomorrowPlan
       : ['先查看任务中枢，确认今天要推进的主线。']);
   const blockers = Array.isArray(state.tasks.blockers) ? state.tasks.blockers : [];
+  const historySummaryText = state.tasks.historySummaryText || '历史任务：暂无可用历史摘要。';
+  const failureReviewText = state.tasks.failureReviewText || (blockers.length
+    ? `失败复盘：${blockers.slice(0, 3).join('；')}`
+    : '失败复盘：暂无明确失败项。');
+  const failureRecommendations = Array.isArray(state.tasks.failureRecommendations)
+    ? state.tasks.failureRecommendations
+    : [];
   const nextActions = (Array.isArray(state.tasks.quickCommands) && state.tasks.quickCommands.length)
     ? state.tasks.quickCommands
     : defaultNextActions;
@@ -287,22 +335,30 @@ function buildClerkCommandCenterReply(options = {}) {
   return [
     '文员总控：今天一屏看懂。',
     '',
+    '今日任务：',
     '今日总结：',
     todaySummaryText,
     formatTypeHighlights(state.tasks.byType),
     '',
-    '明日计划：',
-    ...tomorrowPlanItems.map((item) => `- ${item}`),
+    '历史任务：',
+    historySummaryText,
     '',
+    '失败复盘：',
+    failureReviewText,
+    ...(failureRecommendations.length ? failureRecommendations.slice(0, 3).map((item) => `- ${item}`) : []),
     '当前卡点：',
     ...(blockers.length ? blockers.map((item) => `- ${item}`) : ['- 暂无明确卡点，按计划推进。']),
+    '',
+    '下一步计划：',
+    '明日计划：',
+    ...tomorrowPlanItems.map((item) => `- ${item}`),
     '',
     '运行信号：',
     formatPipelineSignal(state.pipeline),
     ...(state.pipeline?.failureDiagnosis ? [`- ${state.pipeline.failureDiagnosis}`] : []),
     ...(state.pipeline?.nextAction ? [`- 下一步：${state.pipeline.nextAction}`] : []),
     `- ${state.snapshot.latestRun ? formatLatestRun(state.snapshot.latestRun) : '日报快照：暂无最近 run'}`,
-    `- 模型账本：${state.usage.entries.length ? `${state.usage.entries.length} 条，约 ${state.usage.totalTokens} tokens` : '暂无可用记录'}`,
+    `- 模型账本：${state.usage.entries.length ? `${state.usage.entries.length} 条，约 ${state.usage.totalTokens} tokens（真实 ${state.usage.realTokens} / 字符估算 ${state.usage.estimatedTokens}）` : '暂无可用记录'}`,
     `- 邮件流水：${state.mail.todayEntries.length ? `今天 ${state.mail.todayEntries.length} 条` : '暂无可用记录'}`,
     ...(state.warnings.length ? [`- 降级提示：${state.warnings.join('、')}`] : []),
     '',
@@ -335,12 +391,40 @@ function buildClerkDailyReportReply(route = {}, options = {}) {
     todaySummaryText: '今天还没有可用任务摘要。',
     tomorrowPlan: [],
   });
+  const taskDigest = safeReadObject(() => (options.summarizeTaskCenterBrain || summarizeTaskCenterBrain)({
+    env,
+    now: options.now || new Date(),
+  }), {});
+  const mailEntries = safeReadList(() => (options.readMailLedger || defaultReadMailLedger)(env, 80));
+  const mailSummary = summarizeMail(mailEntries, { env, now: options.now || new Date() });
+  const usageSummary = summarizeUsage(artifacts.usageEntries || []);
   const tomorrowPlan = Array.isArray(plan.tomorrowPlan) ? plan.tomorrowPlan : [];
+  const failureText = taskDigest.failureReview?.summaryText
+    || (Array.isArray(taskDigest.failureReview?.items) && taskDigest.failureReview.items.length
+      ? `失败任务 ${taskDigest.failureReview.items.length} 个。`
+      : '暂无失败任务或失败诊断记录。');
 
   return [
     '文员日报预览：',
+    '',
+    '今日总结：',
     plan.todaySummaryText || '今天还没有可用任务摘要。',
+    '',
+    '明日计划：',
     ...tomorrowPlan.map((item) => `- ${item}`),
+    '',
+    '失败诊断：',
+    failureText,
+    '',
+    'token 消耗：',
+    artifacts.usageEntries.length
+      ? `调用 ${artifacts.usageEntries.length} 条，合计约 ${usageSummary.totalTokens} tokens（真实 ${usageSummary.realTokens} / 字符估算 ${usageSummary.estimatedTokens}）。`
+      : '暂无模型账本记录。',
+    '',
+    '邮件归档：',
+    mailSummary.todayEntries.length
+      ? `今天邮件动作 ${mailSummary.todayEntries.length} 条，日报会归档到 daily 邮箱动作。`
+      : '暂无今日邮件流水；发送日报时会归档到 daily 邮箱动作。',
     '',
     summary.text,
     '',

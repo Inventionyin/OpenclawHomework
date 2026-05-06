@@ -33,6 +33,10 @@ const {
   buildIntentDiagnosis,
 } = require('./agents/intent-diagnoser');
 const {
+  buildIntentPlannerPrompt,
+  parseIntentPlannerOutput,
+} = require('./agents/intent-planner');
+const {
   runPeerSshAction,
 } = require('./peer-client');
 const {
@@ -2727,6 +2731,152 @@ function isAsyncWebhookEnabled(env) {
   return String(env.FEISHU_WEBHOOK_ASYNC ?? 'true').toLowerCase() !== 'false';
 }
 
+function isIntentPlannerEnabled(env = process.env, options = {}) {
+  if (typeof options.intentPlanner === 'function') {
+    return true;
+  }
+  const flag = String(env.FEISHU_INTENT_PLANNER_ENABLED ?? env.INTENT_PLANNER_ENABLED ?? 'auto').toLowerCase();
+  if (['false', '0', 'off', 'no'].includes(flag)) {
+    return false;
+  }
+  if (['true', '1', 'on', 'yes'].includes(flag)) {
+    return true;
+  }
+  const config = buildStreamingChatConfig(env);
+  return Boolean(config.baseUrl && config.model && (config.apiKey || config.apiKeys?.length));
+}
+
+function isPlannerCandidateRoute(route = {}) {
+  if (route.agent === 'chat-agent') {
+    return true;
+  }
+  return route.agent === 'planner-agent'
+    && route.action === 'clarify'
+    && ['low', 'medium'].includes(String(route.confidence || 'low'));
+}
+
+function isStrongRuleRoute(route = {}) {
+  if (!isPlannerCandidateRoute(route)) {
+    return true;
+  }
+  return false;
+}
+
+function getPlannerRequiresAuth(agent, action) {
+  if (agent === 'chat-agent' || agent === 'capability-agent' || agent === 'planner-agent') {
+    return false;
+  }
+  if (agent === 'doc-agent') {
+    return true;
+  }
+  return Boolean(action && agent);
+}
+
+function isSafePlannerRoute(planned = {}) {
+  const agent = String(planned.agent || '').trim();
+  const action = String(planned.action || '').trim();
+  const confidence = String(planned.confidence || 'medium').trim();
+  if (!['high', 'medium'].includes(confidence)) {
+    return false;
+  }
+  const allowedAgents = new Set([
+    'chat-agent',
+    'qa-agent',
+    'ops-agent',
+    'ui-test-agent',
+    'image-agent',
+    'memory-agent',
+    'doc-agent',
+    'capability-agent',
+    'planner-agent',
+    'clerk-agent',
+  ]);
+  if (!allowedAgents.has(agent) || !action) {
+    return false;
+  }
+  if (agent === 'ops-agent') {
+    return new Set(['status', 'health', 'watchdog', 'logs', 'memory-summary', 'disk-summary', 'load-summary']).has(action);
+  }
+  return true;
+}
+
+function toPlannerRoute(planned = {}) {
+  return {
+    agent: String(planned.agent || 'chat-agent'),
+    action: String(planned.action || 'chat'),
+    confidence: String(planned.confidence || 'medium'),
+    reason: String(planned.reason || '').slice(0, 200),
+    missing: Array.isArray(planned.missing) ? planned.missing : [],
+    intentSource: 'model-planner',
+    requiresAuth: getPlannerRequiresAuth(planned.agent, planned.action),
+  };
+}
+
+async function runIntentPlanner(text, env = process.env, options = {}) {
+  const prompt = buildIntentPlannerPrompt(text, getAssistantName(env));
+  const startedAt = nowMs();
+  const timingContext = options.timingContext;
+  logFeishuTiming(env, timingContext, 'intent-planner:start', {
+    agent: 'intent-planner',
+  });
+
+  let output;
+  let modelResult = null;
+  if (typeof options.intentPlanner === 'function') {
+    output = await options.intentPlanner(prompt, { text, env });
+  } else {
+    const planner = options.intentPlannerRunner || ((plannerPrompt, plannerOptions) => streamModelText(plannerPrompt, {
+      env,
+      modelTier: 'simple',
+      requestTimeoutMs: Number(env.FEISHU_INTENT_PLANNER_TIMEOUT_MS || env.INTENT_PLANNER_TIMEOUT_MS || 15000),
+      ...plannerOptions,
+    }));
+    modelResult = await planner(prompt, {});
+    output = modelResult?.text || modelResult;
+  }
+
+  const parsed = output && typeof output === 'object' && output.agent
+    ? output
+    : parseIntentPlannerOutput(output);
+  if (modelResult) {
+    logUsageLedger(env, {
+      timingContext,
+      route: { agent: 'intent-planner', action: 'route' },
+      modelResult,
+      elapsedMs: elapsedMs(timingContext?.startedAt),
+      modelElapsedMs: elapsedMs(startedAt),
+      promptChars: prompt.length,
+      replyChars: String(modelResult.text || '').length,
+    });
+  }
+  logTimedModelFinish(env, timingContext, 'intent-planner:finish', startedAt, {
+    agent: parsed?.agent || 'unknown',
+    action: parsed?.action || 'unknown',
+    confidence: parsed?.confidence || 'unknown',
+  });
+  return parsed;
+}
+
+async function resolveAgentRoute(text, env = process.env, options = {}) {
+  const ruleRoute = routeAgentIntent(text);
+  if (isStrongRuleRoute(ruleRoute) || !isIntentPlannerEnabled(env, options)) {
+    return ruleRoute;
+  }
+
+  try {
+    const planned = await runIntentPlanner(text, env, options);
+    if (!planned || !isSafePlannerRoute(planned)) {
+      return ruleRoute;
+    }
+    return toPlannerRoute(planned);
+  } catch (error) {
+    logFeishuTiming(env, options.timingContext, 'intent-planner:error', {
+      message: error.message,
+    });
+    return ruleRoute;
+  }
+}
+
 function isChatStreamingEnabled(env = process.env) {
   if (!truthyEnv(env.FEISHU_CHAT_STREAMING_ENABLED)) {
     return false;
@@ -3570,74 +3720,79 @@ function runWebhookInBackground(payload, env, options = {}) {
       return;
     }
 
-    const route = routeAgentIntent(text);
-    logFeishuTiming(env, timingContext, 'route', {
-      agent: route.agent,
-      action: route.action,
-      requires_auth: route.requiresAuth,
-    });
-    if (shouldIgnorePassiveGroupMessage(payload, text, env, route)) {
-      console.log('Ignored passive Feishu group message.');
-      logFeishuTiming(env, timingContext, 'finish', { outcome: 'ignored_passive_group' });
-      return;
-    }
-
-    const smallTalkReply = parseSmallTalkMessage(extractFeishuText(payload), env);
-    if (smallTalkReply) {
-      const message = buildFeishuTextMessage(payload, smallTalkReply, env);
-      sendTimedFeishuMessage(receiptSender, message, env, timingContext, 'small-talk')
-        .then(() => logFeishuTiming(env, timingContext, 'finish', { outcome: 'small_talk' }))
-        .catch((error) => {
-          console.error(`Feishu small talk reply failed: ${error.message}`);
-        });
-      return;
-    }
-
-    if (route.agent !== 'ui-test-agent') {
-      Promise.resolve(buildRoutedAgentReply(payload, env, { ...options, receiptSender, timingContext }, route))
-        .then(({ replyText }) => sendRoutedFeishuReply(receiptSender, payload, replyText, env, 'routed-agent', timingContext))
-        .then(() => logFeishuTiming(env, timingContext, 'finish', { outcome: 'routed_agent' }))
-        .catch((error) => {
-          console.error(`Feishu routed agent failed: ${error.message}`);
-        });
-      return;
-    }
-
-    if (!isAuthorized(payload, env)) {
-      sendTimedFeishuMessage(receiptSender, buildFeishuTextMessage(payload, getUnauthorizedMessage(env), env), env, timingContext, 'unauthorized')
-        .then(() => logFeishuTiming(env, timingContext, 'finish', { outcome: 'unauthorized' }))
-        .catch((error) => {
-          console.error(`Feishu unauthorized reply failed: ${error.message}`);
-        });
-      return;
-    }
-
-    if (shouldNotifyFeishu(env) && shouldSendAutomationReceipt(env)) {
-      const receipt = buildFeishuTextMessage(
-        payload,
-        '收到了，正在运行 UI 自动化测试。报告生成后我会发给你。',
-        env,
-      );
-      sendTimedFeishuMessage(receiptSender, receipt, env, timingContext, 'automation-receipt').catch((error) => {
-        console.error(`Feishu receipt notification failed: ${error.message}`);
+    Promise.resolve(resolveAgentRoute(text, env, { ...options, timingContext })).then((route) => {
+      logFeishuTiming(env, timingContext, 'route', {
+        agent: route.agent,
+        action: route.action,
+        source: route.intentSource || 'rules',
+        requires_auth: route.requiresAuth,
       });
-    }
+      if (shouldIgnorePassiveGroupMessage(payload, text, env, route)) {
+        console.log('Ignored passive Feishu group message.');
+        logFeishuTiming(env, timingContext, 'finish', { outcome: 'ignored_passive_group' });
+        return;
+      }
 
-    handleFeishuWebhook(
-      payload,
-      env,
-      options.dispatch || dispatchWorkflow,
-      options.parser,
-      options.scheduler,
-      options.hermesParser,
-      options.parserSource,
-      options.fallbackParserSource,
-      timingContext,
-    ).then(() => {
-      logFeishuTiming(env, timingContext, 'finish', { outcome: 'ui_test' });
+      const smallTalkReply = parseSmallTalkMessage(extractFeishuText(payload), env);
+      if (smallTalkReply) {
+        const message = buildFeishuTextMessage(payload, smallTalkReply, env);
+        sendTimedFeishuMessage(receiptSender, message, env, timingContext, 'small-talk')
+          .then(() => logFeishuTiming(env, timingContext, 'finish', { outcome: 'small_talk' }))
+          .catch((error) => {
+            console.error(`Feishu small talk reply failed: ${error.message}`);
+          });
+        return;
+      }
+
+      if (route.agent !== 'ui-test-agent') {
+        Promise.resolve(buildRoutedAgentReply(payload, env, { ...options, receiptSender, timingContext }, route))
+          .then(({ replyText }) => sendRoutedFeishuReply(receiptSender, payload, replyText, env, 'routed-agent', timingContext))
+          .then(() => logFeishuTiming(env, timingContext, 'finish', { outcome: 'routed_agent' }))
+          .catch((error) => {
+            console.error(`Feishu routed agent failed: ${error.message}`);
+          });
+        return;
+      }
+
+      if (!isAuthorized(payload, env)) {
+        sendTimedFeishuMessage(receiptSender, buildFeishuTextMessage(payload, getUnauthorizedMessage(env), env), env, timingContext, 'unauthorized')
+          .then(() => logFeishuTiming(env, timingContext, 'finish', { outcome: 'unauthorized' }))
+          .catch((error) => {
+            console.error(`Feishu unauthorized reply failed: ${error.message}`);
+          });
+        return;
+      }
+
+      if (shouldNotifyFeishu(env) && shouldSendAutomationReceipt(env)) {
+        const receipt = buildFeishuTextMessage(
+          payload,
+          '收到了，正在运行 UI 自动化测试。报告生成后我会发给你。',
+          env,
+        );
+        sendTimedFeishuMessage(receiptSender, receipt, env, timingContext, 'automation-receipt').catch((error) => {
+          console.error(`Feishu receipt notification failed: ${error.message}`);
+        });
+      }
+
+      handleFeishuWebhook(
+        payload,
+        env,
+        options.dispatch || dispatchWorkflow,
+        options.parser,
+        options.scheduler,
+        options.hermesParser,
+        options.parserSource,
+        options.fallbackParserSource,
+        timingContext,
+      ).then(() => {
+        logFeishuTiming(env, timingContext, 'finish', { outcome: 'ui_test' });
+      }).catch((error) => {
+        logFeishuTiming(env, timingContext, 'finish', { outcome: 'error' });
+        console.error(`Feishu webhook background job failed: ${error.message}`);
+      });
     }).catch((error) => {
       logFeishuTiming(env, timingContext, 'finish', { outcome: 'error' });
-      console.error(`Feishu webhook background job failed: ${error.message}`);
+      console.error(`Feishu route resolution failed: ${error.message}`);
     });
   }, 0);
 }
@@ -3714,10 +3869,11 @@ function createServer(env = process.env, options = {}) {
       }
 
       const text = extractFeishuText(payload);
-      const route = routeAgentIntent(text);
+      const route = await resolveAgentRoute(text, routeEnv, timedRouteOptions);
       logFeishuTiming(routeEnv, timingContext, 'route', {
         agent: route.agent,
         action: route.action,
+        source: route.intentSource || 'rules',
         requires_auth: route.requiresAuth,
       });
       if (shouldIgnorePassiveGroupMessage(payload, text, routeEnv, route)) {
@@ -3805,6 +3961,7 @@ module.exports = {
   handleFeishuWebhook,
   isDuplicateFeishuEvent,
   notifyFeishuRunResult,
+  resolveAgentRoute,
   scheduleFeishuResultNotification,
   parseOpenClawChatOutput,
   parseSmallTalkMessage,
