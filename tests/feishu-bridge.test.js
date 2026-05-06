@@ -2610,6 +2610,66 @@ test('createServer accepts OpenClaw route for Feishu challenge', async () => {
   }
 });
 
+test('createServer serves lightweight dashboard HTML', async () => {
+  const server = createServer({
+    ASSISTANT_NAME: 'Hermes',
+  });
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/dashboard`);
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /text\/html/);
+    assert.match(html, /OpenClaw\/Hermes 控制台/);
+    assert.match(html, /\/api\/dashboard/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer serves dashboard JSON without touching webhook routes', async () => {
+  const server = createServer({
+    ASSISTANT_NAME: 'Hermes',
+    FEISHU_WEBHOOK_ASYNC: 'true',
+  }, {
+    dashboardState: async () => ({
+      ok: true,
+      generatedAt: '2026-05-07T00:00:00.000Z',
+      assistant: 'Hermes',
+      health: { ok: true },
+      tasks: {
+        counts: { total: 3, today: 2, failed: 1, running: 0, queued: 0, completed: 1, recoverable: 1 },
+        byType: [{ type: 'ui-automation', label: 'UI 自动化', today: 1, failed: 1 }],
+        latest: { id: 'task-1', type: 'ui-automation', status: 'failed', summary: { text: 'UI smoke failed' } },
+      },
+      usage: { entries: [{ assistant: 'Hermes', model: 'LongCat-Flash-Chat', totalTokens: 120 }], totalTokens: 120 },
+      mail: { todayEntries: [{ action: 'daily', subject: '日报' }], entries: [] },
+      pipeline: { status: 'failed', completedStages: 2, totalStages: 4, failedStages: 1 },
+      snapshot: { latestRun: { conclusion: 'failure', runUrl: 'https://github.com/example/run' } },
+      warnings: [],
+    }),
+  });
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/api/dashboard`);
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.assistant, 'Hermes');
+    assert.equal(body.tasks.counts.total, 3);
+    assert.equal(body.usage.totalTokens, 120);
+    assert.equal(body.mail.todayEntries.length, 1);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('createServer acknowledges Feishu webhook before background dispatch completes', async () => {
   let dispatchStarted = false;
   let finishDispatch;

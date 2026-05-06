@@ -361,6 +361,7 @@ test('buildClerkAgentReply lists today mailbox tasks without sending mail', () =
 
 test('buildClerkAgentReply summarizes recent mail ledger entries', () => {
   const reply = buildClerkAgentReply({ action: 'mail-ledger' }, {
+    now: new Date('2026-05-06T12:00:00.000Z'),
     readMailLedger: () => [
       {
         timestamp: '2026-05-06T00:02:03.000Z',

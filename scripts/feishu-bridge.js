@@ -90,6 +90,10 @@ const {
   getTokenFactoryTaskStatus,
   startTokenFactoryTask,
 } = require('./task-runner');
+const {
+  buildDashboardHtml,
+  buildDashboardState,
+} = require('./dashboard');
 
 const VALID_RUN_MODES = new Set(['contracts', 'smoke', 'all']);
 let openClawCliQueue = Promise.resolve();
@@ -2658,6 +2662,41 @@ function sendJson(response, statusCode, body) {
   response.end(JSON.stringify(body));
 }
 
+function sendHtml(response, statusCode, body) {
+  response.writeHead(statusCode, {
+    'Content-Type': 'text/html; charset=utf-8',
+  });
+  response.end(body);
+}
+
+function getRequestPath(url = '') {
+  try {
+    return new URL(String(url || '/'), 'http://127.0.0.1').pathname.replace(/\/+$/, '') || '/';
+  } catch {
+    return String(url || '').split('?')[0].replace(/\/+$/, '') || '/';
+  }
+}
+
+async function handleDashboardRequest(request, response, env = process.env, options = {}) {
+  if (request.method !== 'GET') {
+    return false;
+  }
+
+  const pathname = getRequestPath(request.url);
+  if (pathname === '/dashboard' || pathname === '/console') {
+    const state = await buildDashboardState(env, options);
+    sendHtml(response, 200, buildDashboardHtml(state));
+    return true;
+  }
+
+  if (pathname === '/api/dashboard' || pathname === '/api/console/status') {
+    sendJson(response, 200, await buildDashboardState(env, options));
+    return true;
+  }
+
+  return false;
+}
+
 function getFeishuRouteMode(url = '') {
   const pathname = String(url).split('?')[0].replace(/\/+$/, '');
   if (pathname === '/webhook/feishu') {
@@ -3824,6 +3863,10 @@ function createServer(env = process.env, options = {}) {
       return;
     }
 
+    if (await handleDashboardRequest(request, response, env, options)) {
+      return;
+    }
+
     const routeMode = getFeishuRouteMode(request.url);
     if (request.method !== 'POST' || !routeMode) {
       sendJson(response, 404, { ok: false, message: 'Not found' });
@@ -3976,6 +4019,7 @@ module.exports = {
   extractFeishuImageKeys,
   getFeishuDedupKeys,
   getFeishuRouteMode,
+  handleDashboardRequest,
   handleFeishuWebhook,
   isDuplicateFeishuEvent,
   notifyFeishuRunResult,
