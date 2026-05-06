@@ -181,19 +181,22 @@ docs/微信WebBridge接入说明.md
 
 当前微信 Bridge 是 dry-run 脚手架，不会真实登录微信。后续启用 Playwright 后，再做扫码、session 持久化、消息轮询和文件收发。
 
-### D. 夜间总结
+### D. 每日主动工作流
 
-定时每天凌晨：
+定时每天自动做三件事：
 
-- 跑 UI 自动化
-- 汇总 GitHub Actions 结果
-- 检查两台服务器健康
-- 查邮箱是否有异常报告
-- 发飞书和邮箱日报
+- OpenClaw 跑 UI 自动化，并把 Actions run 状态写入 state file
+- Hermes 跑 QA Token Lab，消耗 LongCat 等低价额度生成客服/测试训练数据
+- 主动日报汇总 RSS 新闻、GitHub 热榜、服务器状态、邮件账本、usage 账本和前两项自动任务状态
 
-当前已落地为“主动日报系统”：
+当前已落地脚本：
 
 ```text
+scripts/news-digest.js
+scripts/scheduled-ui-runner.js
+scripts/install-scheduled-ui-runner.sh
+scripts/scheduled-token-lab.js
+scripts/install-scheduled-token-lab.sh
 scripts/proactive-daily-digest.js
 scripts/install-proactive-daily-digest.sh
 ```
@@ -201,6 +204,8 @@ scripts/install-proactive-daily-digest.sh
 推荐玩法：
 
 ```text
+每天 00:10 OpenClaw 跑 UI 自动化 contracts
+每天 01:20 Hermes 跑 QA Token Lab
 每天 08:30 OpenClaw 发主控日报
 每天 08:35 Hermes 发邮箱/文员日报
 ```
@@ -211,7 +216,9 @@ scripts/install-proactive-daily-digest.sh
 - Agent 工作摘要
 - token / 耗时账本
 - 服务器硬盘、内存、负载
-- 新闻日报
+- RSS 新闻和 GitHub 热榜
+- UI 自动化调度状态
+- QA Token Lab 产出数量和 token 统计
 - 明日建议
 
 手动体验：
@@ -221,7 +228,7 @@ node scripts/proactive-daily-digest.js --dry-run --force --to 1693457391@qq.com
 node scripts/proactive-daily-digest.js --force --to 1693457391@qq.com
 ```
 
-新闻日报当前是可配置趋势摘要，可通过 `PROACTIVE_DIGEST_NEWS_ITEMS` 自定义。如果要升级成真正联网新闻，可以后续接 RSS/API，再让模型做摘要，不建议直接让模型编造“今日最新新闻”。
+新闻日报现在优先走 `scripts/news-digest.js`，会抓 RSS/Atom 和 GitHub Search API；失败时才降级到 `PROACTIVE_DIGEST_NEWS_ITEMS` 或内置趋势摘要。OpenClaw 更适合做主控 UI / GitHub Actions / 报告，Hermes 更适合做邮箱 / token lab / 归档。
 
 ### E. 工程型接手
 

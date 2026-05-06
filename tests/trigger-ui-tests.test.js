@@ -4,6 +4,7 @@ const test = require('node:test');
 const {
   buildWorkflowDispatchRequest,
   buildWorkflowRunRequest,
+  dispatchWorkflow,
   parseCliArgs,
   waitForLatestWorkflowRun,
 } = require('../scripts/trigger-ui-tests');
@@ -131,4 +132,44 @@ test('waitForLatestWorkflowRun returns first run created after dispatch', async 
   assert.equal(calls.length, 1);
   assert.equal(run.id, 123);
   assert.equal(run.html_url, 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123');
+});
+
+test('dispatchWorkflow reports lookup status when run is not found', async () => {
+  const calls = [];
+  const result = await dispatchWorkflow(
+    {
+      owner: 'Inventionyin',
+      repo: 'OpenclawHomework',
+      workflowId: 'ui-tests.yml',
+      ref: 'main',
+      token: 'ghp_example',
+      runLookupAttempts: 1,
+      runLookupIntervalMs: 1,
+      inputs: {
+        run_mode: 'smoke',
+        target_repository: 'Inventionyin/UItest',
+        target_ref: 'main',
+        app_repository: 'dengzhekun/projectku-web',
+        app_ref: 'main',
+        base_url: 'http://127.0.0.1:5173',
+        mailbox_action: 'report',
+      },
+    },
+    async (url, options) => {
+      calls.push({ url, options });
+      if (options.method === 'POST') {
+        return { ok: true, text: async () => '' };
+      }
+      return {
+        ok: true,
+        json: async () => ({ workflow_runs: [] }),
+      };
+    },
+  );
+
+  assert.equal(result.run, null);
+  assert.equal(result.lookup.status, 'not_found');
+  assert.equal(result.lookup.attempts, 1);
+  assert.match(result.actionsUrl, /actions\/workflows\/ui-tests.yml/);
+  assert.equal(calls.length, 2);
 });

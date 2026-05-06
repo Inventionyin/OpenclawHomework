@@ -355,9 +355,12 @@ Hermes   服务器 38.76.188.94 -> 801ef6e 或更新
 1. 邮件发送账本：今天发了多少封、失败多少、投递给谁
 2. 模型 usage 账本：调用次数、token 或字符估算 token
 3. 服务器快照：硬盘、内存、负载
-4. 新闻日报：默认内置 AI Agent / 软件测试 / 工程效率三类，也可用环境变量自定义
-5. 明日建议：UI 自动化、训练数据、邮件账本检查
+4. 新闻日报：优先抓取 RSS 和 GitHub 热榜，失败时降级到固定趋势摘要
+5. 自动任务状态：每日 UI 自动化、每日 token 训练是否执行
+6. 明日建议：UI 自动化、训练数据、邮件账本检查
 ```
+
+实时新闻已经落地在 `scripts/news-digest.js`，不是让模型编造“今日新闻”。默认 RSS 源包括 GitHub Blog、Playwright releases、Cypress releases；GitHub 热榜使用 GitHub Search API，按 topic、最近 pushed 时间和 star 排序。单个 RSS 或 GitHub topic 抓取失败时，会把失败原因写进新闻条目；整体失败时，`proactive-daily-digest` 会自动降级到固定趋势摘要。
 
 安装脚本：
 
@@ -392,8 +395,20 @@ journalctl -u hermes-proactive-daily-digest -n 80 --no-pager
 PROACTIVE_DIGEST_TO=1693457391@qq.com
 PROACTIVE_DIGEST_ASSISTANT_NAME=OpenClaw 或 Hermes
 PROACTIVE_DIGEST_NEWS_ITEMS=AI Agent 今日关注|软件测试今日关注|GitHub 热门项目跟踪
+PROACTIVE_DIGEST_LIVE_NEWS_ENABLED=true
+PROACTIVE_DIGEST_RSS_ENABLED=true
+PROACTIVE_DIGEST_RSS_FEEDS=GitHub Blog|https://github.blog/feed/
+PROACTIVE_DIGEST_RSS_PER_FEED=3
+PROACTIVE_DIGEST_RSS_MAX_FEEDS=8
+PROACTIVE_DIGEST_GITHUB_TRENDING_ENABLED=true
+PROACTIVE_DIGEST_GITHUB_TOPICS=ai-agent,playwright,software-testing,e2e-testing
+PROACTIVE_DIGEST_GITHUB_DAYS=14
+PROACTIVE_DIGEST_GITHUB_PER_TOPIC=3
+PROACTIVE_DIGEST_NEWS_OUTPUT=/opt/OpenclawHomework/data/news-digest/latest.json
 PROACTIVE_DIGEST_TZ_OFFSET_MINUTES=480
 PROACTIVE_DIGEST_STATE_FILE=/var/lib/openclaw-homework/proactive-daily-digest-state.json
+SCHEDULED_UI_STATE_FILE=/var/lib/openclaw-homework/scheduled-ui-runner-state.json
+SCHEDULED_TOKEN_LAB_STATE_FILE=/var/lib/openclaw-homework/scheduled-token-lab-state.json
 MAIL_LEDGER_ENABLED=true
 MAIL_LEDGER_PATH=/var/log/openclaw-homework/mail-ledger.jsonl
 FEISHU_USAGE_LEDGER_ENABLED=true
@@ -404,7 +419,8 @@ FEISHU_USAGE_LEDGER_PATH=/var/log/openclaw-homework/usage-ledger.jsonl
 
 - `proactive-daily-digest` 默认每天只发一次，同一天重复触发会返回 `already_sent`；调试时加 `--force`。
 - 它复用桥服务邮件通道，OpenClaw 当前使用 QQ SMTP 兜底，Hermes 当前使用 `shine1@claw.163.com`。
-- 新闻日报当前是“可配置固定新闻/趋势摘要”，不是实时联网抓取新闻；如果后续要做实时抓取，优先接 RSS/API，不要靠模型编造最新新闻。
+- GitHub 热榜可复用 `GITHUB_TOKEN` 或 `GH_TOKEN` 提高 API 限额；不要把 token 写进仓库。
+- `--skip-news` 可用于测试日报模板，避免测试时联网。
 
 ## Agent Router 和记忆
 
@@ -903,6 +919,48 @@ systemctl start hermes-token-factory-worker.service
 
 注意：上面两个 `systemctl start` 要分别在对应服务器执行。
 
+安装或更新每日自动任务：
+
+推荐顺序是 OpenClaw 先跑 UI，Hermes 再跑 token lab，早上日报汇总前两者状态。
+
+OpenClaw 每日 UI 自动化：
+
+```bash
+cd /opt/OpenclawHomework
+bash scripts/install-scheduled-ui-runner.sh \
+  --unit-name openclaw-scheduled-ui-runner \
+  --env-file /etc/openclaw-feishu-bridge.env \
+  --on-calendar "*-*-* 00:10:00" \
+  --run-mode contracts \
+  --mailbox-action report
+```
+
+Hermes 每日 token 训练：
+
+```bash
+cd /opt/OpenclawHomework
+bash scripts/install-scheduled-token-lab.sh \
+  --unit-name hermes-scheduled-token-lab \
+  --env-file /etc/hermes-feishu-bridge.env \
+  --on-calendar "*-*-* 01:20:00" \
+  --batch-size 16
+```
+
+验证：
+
+```bash
+systemctl list-timers '*scheduled-ui*' '*scheduled-token-lab*' --no-pager
+node scripts/scheduled-ui-runner.js --dry-run --force --env-file /etc/openclaw-feishu-bridge.env
+node scripts/scheduled-token-lab.js --dry-run --force --env-file /etc/hermes-feishu-bridge.env
+```
+
+说明：
+
+- 两个脚本都用 state file 做“当天只跑一次”；需要手动重跑时加 `--force`。
+- UI 状态默认写到 `/var/lib/openclaw-homework/scheduled-ui-runner-state.json`，日报会读取 `SCHEDULED_UI_STATE_FILE`。
+- token lab 状态默认写到 `/var/lib/openclaw-homework/scheduled-token-lab-state.json`，日报会读取 `SCHEDULED_TOKEN_LAB_STATE_FILE`。
+- UI 调度失败会写 `dispatch_failed`；GitHub 已触发但暂未定位到 run 会写 `run_lookup_not_found`，状态文件不会保存 GitHub token。
+
 ## 8.1 官方 OpenClaw/Hermes 更新流程
 
 更新官方组件前，先记录当前版本和服务状态：
@@ -1120,6 +1178,43 @@ grep -E 'GITHUB_OWNER|GITHUB_REPO|GITHUB_WORKFLOW_ID|GITHUB_REF_NAME' /etc/openc
 ```text
 https://github.com/Inventionyin/OpenclawHomework/actions
 ```
+
+### 11.7 每日主动任务排查
+
+新闻为空或不是实时内容：
+
+```bash
+cd /opt/OpenclawHomework
+node scripts/news-digest.js
+journalctl -u openclaw-proactive-daily-digest -n 80 --no-pager
+grep -E 'PROACTIVE_DIGEST_LIVE_NEWS_ENABLED|PROACTIVE_DIGEST_RSS|PROACTIVE_DIGEST_GITHUB' /etc/openclaw-feishu-bridge.env
+```
+
+UI 每日任务没跑：
+
+```bash
+systemctl list-timers '*scheduled-ui*' --no-pager
+journalctl -u openclaw-scheduled-ui-runner -n 80 --no-pager
+cat /var/lib/openclaw-homework/scheduled-ui-runner-state.json
+```
+
+token lab 没产出：
+
+```bash
+systemctl list-timers '*scheduled-token-lab*' --no-pager
+journalctl -u hermes-scheduled-token-lab -n 80 --no-pager
+cat /var/lib/openclaw-homework/scheduled-token-lab-state.json
+```
+
+日报没发：
+
+```bash
+journalctl -u openclaw-proactive-daily-digest -n 80 --no-pager
+journalctl -u hermes-proactive-daily-digest -n 80 --no-pager
+grep -E 'PROACTIVE_DIGEST_TO|DAILY_SUMMARY_EXTERNAL_TO|EMAIL_TO' /etc/openclaw-feishu-bridge.env /etc/hermes-feishu-bridge.env
+```
+
+如果没有外部收件人，`proactive-daily-digest` 默认返回 `missing_external_recipient`，不会乱发。
 
 ## 12. 安全边界
 

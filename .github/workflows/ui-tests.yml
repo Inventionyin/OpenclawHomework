@@ -77,6 +77,25 @@ jobs:
         run: npm ci
         working-directory: app/frontend
 
+      - name: Write dispatch context
+        shell: bash
+        run: |
+          {
+            echo "## UI Automation Dispatch"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Run mode | \`${{ inputs.run_mode }}\` |"
+            echo "| Mailbox action | \`${{ inputs.mailbox_action }}\` |"
+            echo "| Test repo | \`${{ inputs.target_repository }}@${{ inputs.target_ref }}\` |"
+            echo "| Test SHA | \`$(git -C ui-tests rev-parse --short HEAD)\` |"
+            echo "| App repo | \`${{ inputs.app_repository }}@${{ inputs.app_ref }}\` |"
+            echo "| App SHA | \`$(git -C app rev-parse --short HEAD)\` |"
+            echo "| Base URL | \`${{ inputs.base_url }}\` |"
+            echo "| Node | \`$(node --version)\` |"
+            echo "| npm | \`$(npm --version)\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Start app frontend
         shell: bash
         working-directory: app/frontend
@@ -98,11 +117,14 @@ jobs:
         working-directory: ui-tests
 
       - name: List Playwright tests
+        id: list-tests
+        shell: bash
         run: npx playwright test --list
         working-directory: ui-tests
         env:
           BASE_URL: ${{ inputs.base_url }}
           HEADLESS: "true"
+          MAILBOX_ACTION: ${{ inputs.mailbox_action }}
 
       - name: Run selected UI tests
         shell: bash
@@ -110,6 +132,7 @@ jobs:
         env:
           BASE_URL: ${{ inputs.base_url }}
           HEADLESS: "true"
+          MAILBOX_ACTION: ${{ inputs.mailbox_action }}
         run: |
           set -euo pipefail
           case "${{ inputs.run_mode }}" in
@@ -127,6 +150,33 @@ jobs:
               exit 1
               ;;
           esac
+
+      - name: Collect diagnostic files
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostics
+          cp /tmp/projectku-frontend.log diagnostics/projectku-frontend.log 2>/dev/null || true
+          {
+            echo "## Diagnostic Inventory"
+            echo ""
+            echo "### Frontend log"
+            if [ -s diagnostics/projectku-frontend.log ]; then
+              echo "Captured \`projectku-frontend.log\`."
+            else
+              echo "No frontend log was captured."
+            fi
+            echo ""
+            echo "### Report directories"
+            for dir in ui-tests/playwright-report ui-tests/allure-results ui-tests/allure-report ui-tests/output/reports; do
+              if [ -d "$dir" ]; then
+                echo "- \`$dir\`: $(find "$dir" -type f | wc -l | tr -d ' ') files"
+              else
+                echo "- \`$dir\`: missing"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Playwright HTML report
         if: always()
@@ -158,4 +208,12 @@ jobs:
         with:
           name: summary-report
           path: ui-tests/output/reports/
+          if-no-files-found: ignore
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostics
+          path: diagnostics/
           if-no-files-found: ignore

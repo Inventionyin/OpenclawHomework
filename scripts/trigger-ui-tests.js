@@ -198,14 +198,22 @@ async function dispatchWorkflow(config, fetchImpl = fetch) {
     throw new Error(`GitHub workflow dispatch failed: ${response.status} ${response.statusText}\n${body}`);
   }
 
+  const lookupAttempts = Number(config.runLookupAttempts ?? 10);
+  const lookupIntervalMs = Number(config.runLookupIntervalMs ?? 3000);
   const run = await waitForLatestWorkflowRun(config, dispatchedAt, fetchImpl, {
-    attempts: Number(config.runLookupAttempts ?? 10),
-    intervalMs: Number(config.runLookupIntervalMs ?? 3000),
+    attempts: lookupAttempts,
+    intervalMs: lookupIntervalMs,
   });
 
   return {
     actionsUrl: `https://github.com/${config.owner}/${config.repo}/actions/workflows/${config.workflowId}`,
     run,
+    lookup: {
+      status: run ? 'found' : 'not_found',
+      sinceIso: dispatchedAt,
+      attempts: lookupAttempts,
+      intervalMs: lookupIntervalMs,
+    },
     workflowRunUrl: run?.html_url,
   };
 }
@@ -220,6 +228,11 @@ async function main() {
   console.log(`Run mode: ${config.inputs.run_mode}`);
   if (config.inputs.mailbox_action) {
     console.log(`Mailbox action: ${config.inputs.mailbox_action}`);
+  }
+  if (result.workflowRunUrl) {
+    console.log(`Run: ${result.workflowRunUrl}`);
+  } else {
+    console.log('Run: dispatched, but the workflow run was not located yet. Check the workflow page above.');
   }
 }
 

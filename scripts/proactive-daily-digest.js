@@ -13,6 +13,9 @@ const {
 const {
   sendMailboxActionEmail,
 } = require('./feishu-bridge');
+const {
+  collectNewsDigest,
+} = require('./news-digest');
 
 function esc(value) {
   return String(value ?? '')
@@ -47,6 +50,8 @@ function parseArgs(argv = process.argv.slice(2)) {
     } else if (arg === '--state-file') {
       args.stateFile = argv[index + 1];
       index += 1;
+    } else if (arg === '--skip-news') {
+      args.skipNews = true;
     } else {
       throw new Error(`Unknown option: ${arg}`);
     }
@@ -164,7 +169,26 @@ function collectServerSnapshot() {
   return { disk, memory, load };
 }
 
-function defaultNewsItems(env = process.env) {
+function readJsonFileSafe(filePath) {
+  if (!filePath || !existsSync(filePath)) {
+    return null;
+  }
+  try {
+    return JSON.parse(readFileSync(filePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function collectAutomationState(env = process.env) {
+  const baseDir = env.LOCAL_PROJECT_DIR || process.cwd();
+  return {
+    ui: readJsonFileSafe(env.SCHEDULED_UI_STATE_FILE || join(baseDir, 'data', 'memory', 'scheduled-ui-runner-state.json')),
+    tokenLab: readJsonFileSafe(env.SCHEDULED_TOKEN_LAB_STATE_FILE || join(baseDir, 'data', 'memory', 'scheduled-token-lab-state.json')),
+  };
+}
+
+function fallbackNewsItems(env = process.env) {
   const configured = String(env.PROACTIVE_DIGEST_NEWS_ITEMS || '').trim();
   if (configured) {
     return configured.split(/\s*\|\s*/).filter(Boolean).slice(0, 8).map((title, index) => ({
@@ -180,13 +204,15 @@ function defaultNewsItems(env = process.env) {
   ];
 }
 
-function buildAiSummary({ assistant, mailSummary, usageSummary, server }) {
+function buildAiSummary({ assistant, mailSummary, usageSummary, server, automation }) {
   const parts = [
     `${assistant} 今日主动巡检完成。`,
     `邮件动作 ${mailSummary.total} 条，成功 ${mailSummary.sent} 条，失败 ${mailSummary.failed} 条。`,
     usageSummary.calls ? `模型调用账本 ${usageSummary.calls} 条，token 约 ${usageSummary.totalTokens}。` : '模型调用账本今日暂无新增。',
+    automation?.ui?.workflowRunUrl ? `UI 自动化已调度：${automation.ui.runMode || 'unknown'}。` : '',
+    automation?.tokenLab?.totalJobs ? `训练场已产出 ${automation.tokenLab.totalJobs} 条样本。` : '',
     server.disk ? `根分区状态：${server.disk.replace(/\s+/g, ' ')}。` : '服务器磁盘状态未取到。',
-  ];
+  ].filter(Boolean);
   return parts.join('');
 }
 
@@ -196,11 +222,14 @@ function buildDigest(input = {}) {
   const mailSummary = summarizeMail(input.mailEntries || []);
   const usageSummary = summarizeUsage(input.usageEntries || []);
   const server = input.server || {};
-  const newsItems = input.newsItems || defaultNewsItems(input.env || {});
-  const aiSummary = input.aiSummary || buildAiSummary({ assistant, mailSummary, usageSummary, server });
+  const automation = input.automation || {};
+  const newsItems = input.newsItems || fallbackNewsItems(input.env || {});
+  const aiSummary = input.aiSummary || buildAiSummary({ assistant, mailSummary, usageSummary, server, automation });
   const workItems = [
     mailSummary.total ? `处理邮件动作 ${mailSummary.total} 条，成功 ${mailSummary.sent} 条。` : '暂无邮件动作，但收信通知器保持在线。',
     usageSummary.calls ? `记录模型调用 ${usageSummary.calls} 条，token 约 ${usageSummary.totalTokens}。` : '暂无模型调用账本，适合今天跑一轮训练场。',
+    automation.ui?.workflowRunUrl ? `自动 UI 测试已调度：${automation.ui.runMode || 'unknown'}，${automation.ui.workflowRunUrl}` : '自动 UI 测试今日暂无调度记录。',
+    automation.tokenLab?.totalJobs ? `自动 token 训练已完成：${automation.tokenLab.totalJobs} 条，真实 token ${automation.tokenLab.totalTokens || 0}，估算 ${automation.tokenLab.estimatedTotalTokens || 0}。` : '自动 token 训练今日暂无记录。',
     server.load ? `服务器负载 ${server.load}。` : '服务器负载未记录。',
   ];
 
@@ -279,6 +308,10 @@ function buildDigest(input = {}) {
     `<li>内存：${esc(server.memory || '未记录')}</li>`,
     `<li>负载：${esc(server.load || '未记录')}</li>`,
     '</ul></div>',
+    '<div class="digest-section"><h3>自动任务</h3><ul>',
+    `<li>UI 自动化：${esc(automation.ui?.workflowRunUrl || '暂无调度记录')}</li>`,
+    `<li>Token 训练：${esc(automation.tokenLab?.totalJobs ? `${automation.tokenLab.totalJobs} 条样本` : '暂无训练记录')}</li>`,
+    '</ul></div>',
     '<div class="digest-section"><h3>明日建议</h3><ul>',
     '<li>跑一次 UI 自动化冒烟测试并归档 Allure 报告。</li>',
     '<li>让文员 Agent 生成客服训练数据并消耗一批低价 token。</li>',
@@ -317,13 +350,30 @@ async function runDigest(options = {}) {
     const timestamp = entry.timestamp || '';
     return filterMailLedgerEntriesForDay([{ timestamp }], { day, timezoneOffsetMinutes }).length > 0;
   });
+  const automation = collectAutomationState(env);
+  let newsItems = fallbackNewsItems(env);
+  if (!options.skipNews && String(env.PROACTIVE_DIGEST_LIVE_NEWS_ENABLED ?? 'true').toLowerCase() !== 'false') {
+    try {
+      const report = await collectNewsDigest(env, options.fetchImpl || fetch);
+      if (report.items?.length) {
+        newsItems = report.items;
+      }
+    } catch (error) {
+      newsItems = [
+        { title: `实时新闻抓取失败，已降级到固定趋势摘要：${error.message}`, source: '系统提示' },
+        ...fallbackNewsItems(env),
+      ];
+    }
+  }
+
   const digest = buildDigest({
     assistant: getAssistantName(env),
     day,
     mailEntries,
     usageEntries,
     server: collectServerSnapshot(),
-    newsItems: defaultNewsItems(env),
+    automation,
+    newsItems,
     externalTo,
     env,
   });
@@ -370,8 +420,9 @@ if (require.main === module) {
 
 module.exports = {
   buildDigest,
+  collectAutomationState,
   collectServerSnapshot,
-  defaultNewsItems,
+  fallbackNewsItems,
   getDayKey,
   parseArgs,
   runDigest,

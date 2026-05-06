@@ -6,7 +6,7 @@ const test = require('node:test');
 
 const {
   buildDigest,
-  defaultNewsItems,
+  fallbackNewsItems,
   getDayKey,
   parseArgs,
   runDigest,
@@ -48,8 +48,8 @@ test('buildDigest creates a polished proactive agent report', () => {
   assert.match(digest.html, /服务器状态/);
 });
 
-test('defaultNewsItems supports configured custom items', () => {
-  const items = defaultNewsItems({
+test('fallbackNewsItems supports configured custom items', () => {
+  const items = fallbackNewsItems({
     PROACTIVE_DIGEST_NEWS_ITEMS: 'AI测试工具更新|GitHub热门项目跟踪',
   });
 
@@ -89,6 +89,7 @@ test('runDigest dry-run builds message and respects already-sent state', async (
     const result = await runDigest({
       dryRun: true,
       force: true,
+      skipNews: true,
       day: '2026-05-06',
       stateFile,
       to: '1693457391@qq.com',
@@ -107,6 +108,7 @@ test('runDigest dry-run builds message and respects already-sent state', async (
     const skipped = await runDigest({
       day: '2026-05-06',
       stateFile,
+      skipNews: true,
       to: '1693457391@qq.com',
       env: {
         MAIL_LEDGER_PATH: mailLedgerPath,
