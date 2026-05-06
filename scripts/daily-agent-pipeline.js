@@ -22,11 +22,13 @@ function parseArgs(argv = process.argv.slice(2)) {
   const args = {
     dryRun: false,
     force: false,
+    once: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--dry-run') args.dryRun = true;
     else if (arg === '--force') args.force = true;
+    else if (arg === '--once') args.once = true;
     else if (arg === '--env-file') {
       args.envFile = argv[index + 1];
       index += 1;

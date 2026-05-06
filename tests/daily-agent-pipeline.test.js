@@ -17,6 +17,7 @@ test('parseArgs reads daily pipeline options', () => {
   assert.deepEqual(parseArgs([
     '--dry-run',
     '--force',
+    '--once',
     '--day',
     '2026-05-06',
     '--env-file',
@@ -24,6 +25,7 @@ test('parseArgs reads daily pipeline options', () => {
   ]), {
     dryRun: true,
     force: true,
+    once: true,
     day: '2026-05-06',
     envFile: '/tmp/pipeline.env',
   });
