@@ -568,6 +568,13 @@ function buildClerkTodoSummaryReply(options = {}) {
   ].join('\n');
 }
 
+function loadClerkCommandCenter(options = {}) {
+  if (options.clerkCommandCenter) {
+    return options.clerkCommandCenter;
+  }
+  return require('./clerk-command-center');
+}
+
 function buildClerkPlatformRegistrationReply(route = {}) {
   const parsed = parseRegistrationTaskRequest(route.rawText || '');
   const plan = buildRegistrationPlan(parsed);
@@ -754,21 +761,12 @@ function buildClerkAgentReply(route = {}, options = {}) {
     return buildClerkTodoSummaryReply(options);
   }
 
+  if (route.action === 'command-center') {
+    return loadClerkCommandCenter(options).buildClerkCommandCenterReply(route, options);
+  }
+
   if (route.action === 'daily-report') {
-    const summary = buildDailySummary(loadDailySummaryArtifacts(options.env || process.env, options));
-    const plan = (options.summarizeDailyPlan || summarizeDailyPlan)({
-      env: options.env || process.env,
-      now: options.now || new Date(),
-    });
-    return [
-      '文员日报预览：',
-      plan.todaySummaryText,
-      ...plan.tomorrowPlan.map((item) => `- ${item}`),
-      '',
-      summary.text,
-      '',
-      '服务器部分仍建议只引用状态摘要，不在日报阶段执行修复。',
-    ].join('\n');
+    return loadClerkCommandCenter(options).buildClerkDailyReportReply(route, options);
   }
 
   if (route.action === 'daily-email') {

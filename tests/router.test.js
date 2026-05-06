@@ -224,6 +224,31 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'workbench',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，给我一屏看懂'), {
+    agent: 'clerk-agent',
+    action: 'command-center',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，今天有什么进展'), {
+    agent: 'clerk-agent',
+    action: 'command-center',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，今天做了啥'), {
+    agent: 'clerk-agent',
+    action: 'command-center',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，现在该怎么玩'), {
+    agent: 'clerk-agent',
+    action: 'command-center',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，给我总览'), {
+    agent: 'clerk-agent',
+    action: 'command-center',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，邮箱平台现在怎么结合起来玩'), {
     agent: 'clerk-agent',
     action: 'mailbox-workbench',
@@ -357,6 +382,11 @@ test('routeAgentIntent routes office work without requiring clerk wake word', ()
   assert.deepEqual(routeAgentIntent('查看今天任务中枢'), {
     agent: 'clerk-agent',
     action: 'task-center-today',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('给我一屏看懂今天项目'), {
+    agent: 'clerk-agent',
+    action: 'command-center',
     requiresAuth: true,
   });
   assert.deepEqual(routeAgentIntent('今天发了哪些邮件'), {

@@ -130,7 +130,7 @@ test('buildClerkAgentReply does not claim token winner when every entry lacks us
   assert.doesNotMatch(reply, /token 用量最高/);
 });
 
-test('buildClerkAgentReply gives safe office playbook for todos and reports', () => {
+test('buildClerkAgentReply keeps todo summary behavior in the handler', () => {
   const todoReply = buildClerkAgentReply({ action: 'todo-summary' }, {
     summarizeDailyPlan: () => ({
       todaySummaryText: '今天任务 5 个，完成 2 个，失败 1 个，运行中 2 个。',
@@ -144,22 +144,39 @@ test('buildClerkAgentReply gives safe office playbook for todos and reports', ()
   assert.match(todoReply, /今天任务 5 个/);
   assert.match(todoReply, /优先复盘失败任务/);
   assert.match(todoReply, /不会重启/);
-
-  const reportReply = buildClerkAgentReply({ action: 'daily-report' }, {
-    summarizeDailyPlan: () => ({
-      todaySummaryText: '今天任务 5 个，完成 2 个，失败 1 个，运行中 2 个。',
-      tomorrowPlan: [
-        '优先复盘失败任务：新闻摘要 news-1。',
-      ],
-    }),
-  });
-  assert.match(reportReply, /日报/);
-  assert.match(reportReply, /最近一次任务/);
-  assert.match(reportReply, /今天任务 5 个/);
-  assert.match(reportReply, /服务器部分仍建议只引用状态摘要/);
 });
 
-test('buildClerkAgentReply previews a richer daily report from local artifacts', () => {
+test('buildClerkAgentReply delegates command center requests to clerk command center module', () => {
+  const route = { action: 'command-center', rawText: '文员，打开任务中枢' };
+  const options = {
+    clerkCommandCenter: {
+      buildClerkCommandCenterReply: (receivedRoute, receivedOptions) => {
+        assert.equal(receivedRoute, route);
+        assert.equal(receivedOptions, options);
+        return 'command center delegated';
+      },
+    },
+  };
+
+  assert.equal(buildClerkAgentReply(route, options), 'command center delegated');
+});
+
+test('buildClerkAgentReply delegates daily report requests to clerk command center module', () => {
+  const route = { action: 'daily-report', rawText: '文员，生成今日日报' };
+  const options = {
+    clerkCommandCenter: {
+      buildClerkDailyReportReply: (receivedRoute, receivedOptions) => {
+        assert.equal(receivedRoute, route);
+        assert.equal(receivedOptions, options);
+        return 'daily report delegated';
+      },
+    },
+  };
+
+  assert.equal(buildClerkAgentReply(route, options), 'daily report delegated');
+});
+
+test('buildClerkAgentReply passes daily report artifacts options to delegated module', () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'clerk-daily-preview-'));
   const ledgerFile = join(tempDir, 'usage.jsonl');
   const stateFile = join(tempDir, 'daily-state.json');
@@ -191,7 +208,8 @@ test('buildClerkAgentReply previews a richer daily report from local artifacts',
       totalTokens: 300,
     }, null, 2)}\n`, 'utf8');
 
-    const reportReply = buildClerkAgentReply({ action: 'daily-report' }, {
+    const route = { action: 'daily-report' };
+    const options = {
       env: {
         FEISHU_USAGE_LEDGER_PATH: ledgerFile,
         DAILY_SUMMARY_STATE_FILE: stateFile,
@@ -208,20 +226,29 @@ test('buildClerkAgentReply previews a richer daily report from local artifacts',
           },
         ],
       }),
-    });
+      clerkCommandCenter: {
+        buildClerkDailyReportReply: (receivedRoute, receivedOptions) => {
+          assert.equal(receivedRoute, route);
+          assert.equal(receivedOptions.env.FEISHU_USAGE_LEDGER_PATH, ledgerFile);
+          assert.equal(receivedOptions.env.DAILY_SUMMARY_STATE_FILE, stateFile);
+          assert.equal(receivedOptions.env.MULTI_AGENT_LAB_OUTPUT_DIR, multiAgentDir);
+          assert.equal(typeof receivedOptions.readDailySummarySnapshot, 'function');
+          return 'daily report delegated with artifacts';
+        },
+      },
+    };
 
-    assert.match(reportReply, /文员日报预览/);
-    assert.match(reportReply, /run-1#artifacts/);
-    assert.match(reportReply, /Hermes：66 tokens/);
-    assert.match(reportReply, /OpenClaw：33 tokens/);
-    assert.match(reportReply, /多 Agent 训练场：3 个样本/);
+    const reportReply = buildClerkAgentReply(route, options);
+
+    assert.equal(reportReply, 'daily report delegated with artifacts');
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
 
-test('buildClerkAgentReply still returns task summary when snapshot is broken', () => {
-  const reportReply = buildClerkAgentReply({ action: 'daily-report' }, {
+test('buildClerkAgentReply leaves snapshot handling to delegated daily report module', () => {
+  const route = { action: 'daily-report' };
+  const options = {
     readDailySummarySnapshot: () => {
       throw new Error('broken snapshot');
     },
@@ -232,12 +259,16 @@ test('buildClerkAgentReply still returns task summary when snapshot is broken', 
       ],
     }),
     readUsageLedger: () => [],
-  });
+    clerkCommandCenter: {
+      buildClerkDailyReportReply: (receivedRoute, receivedOptions) => {
+        assert.equal(receivedRoute, route);
+        assert.equal(receivedOptions, options);
+        return 'daily report delegated after snapshot setup';
+      },
+    },
+  };
 
-  assert.match(reportReply, /文员日报预览/);
-  assert.match(reportReply, /今天任务 3 个/);
-  assert.match(reportReply, /优先复盘失败任务/);
-  assert.match(reportReply, /服务器部分仍建议只引用状态摘要/);
+  assert.equal(buildClerkAgentReply(route, options), 'daily report delegated after snapshot setup');
 });
 
 test('buildClerkAgentReply shows practical workbench with mailbox and qa assets', () => {

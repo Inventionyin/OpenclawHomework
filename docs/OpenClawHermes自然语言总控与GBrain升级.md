@@ -115,6 +115,7 @@ bash scripts/sync-gbrain-knowledge.sh
 
 当前已接入的第一批动作：
 
+- `command-center`：文员总控，一屏汇总任务中枢、token/耗时、邮件流水和最近 UI 快照。
 - `token-summary`：读取 `/var/log/openclaw-homework/usage-ledger.jsonl`，按机器人和模型汇总 token 与模型耗时。
 - `workbench`：汇总文员当天可做的低风险工作，把 token 账本、QA 数据、daily/archive 邮箱入口串起来。
 - `mailbox-workbench`：列出 ClawEmail 动作分工，例如 `task/report/verify/support/eval/files/archive/daily`。
@@ -134,6 +135,9 @@ bash scripts/sync-gbrain-knowledge.sh
 
 新增自然语言示例：
 
+- 文员，给我一屏看懂
+- 文员，今天有什么进展
+- 文员，现在该怎么玩
 - 文员，今天可以帮我干嘛
 - 文员，邮箱平台现在怎么结合起来玩
 - 文员，帮我生成一批电商平台客服训练数据

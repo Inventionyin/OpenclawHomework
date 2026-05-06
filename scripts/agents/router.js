@@ -260,6 +260,11 @@ function routeClerkIntent(text) {
     return { agent: 'clerk-agent', action: 'mail-ledger', requiresAuth: true };
   }
 
+  if (/(一屏看懂|总览|项目总览|整体情况|今天.*(进展|做了啥|做了什么|情况)|现在.*(该怎么玩|先做什么))/i.test(normalized)
+    || /((进展|做了啥|做了什么|情况).{0,12}(总览|一屏|汇总))/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'command-center', requiresAuth: true };
+  }
+
   if (/(启动|开始|跑|执行|开).{0,12}(多\s*agent|多智能体|agent).{0,20}(训练场|实验室|lab|对打|评测|生成|归档)/i.test(normalized)
     || /(多\s*agent|多智能体|agent).{0,20}(训练场|实验室|lab|对打|评测|生成|归档)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'multi-agent-lab', requiresAuth: true };
@@ -431,6 +436,11 @@ function routeOfficeIntent(text) {
   if (/(邮件|邮箱).{0,18}(发了|发送了|发出去|发送记录|流水|账本|历史|记录|哪些|列表)/i.test(normalized)
     || /(发了|发送了|发出去|发送记录|流水|账本|历史|记录|哪些|列表).{0,18}(邮件|邮箱)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'mail-ledger', requiresAuth: true };
+  }
+
+  if (/(一屏看懂|总览|项目总览|整体情况|今天.*(进展|做了啥|做了什么|情况)|现在.*(该怎么玩|先做什么))/i.test(normalized)
+    || /((进展|做了啥|做了什么|情况).{0,12}(总览|一屏|汇总))/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'command-center', requiresAuth: true };
   }
 
   if (/(今天|今日|今天的).{0,12}(任务|待办).{0,12}(中枢|中心)/i.test(normalized)
