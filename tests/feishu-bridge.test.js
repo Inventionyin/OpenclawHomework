@@ -707,31 +707,42 @@ test('resolveClawEmailSenderForAction maps actions to existing primary and sub m
   assert.deepEqual(resolveClawEmailSenderForAction('report'), {
     action: 'report',
     primaryFrom: 'watchee@claw.163.com',
+    mappedPrimaryFrom: 'watchee@claw.163.com',
     roleMailbox: 'watchee.report@claw.163.com',
   });
   assert.deepEqual(resolveClawEmailSenderForAction('verify'), {
     action: 'verify',
     primaryFrom: 'evasan@claw.163.com',
+    mappedPrimaryFrom: 'evasan@claw.163.com',
     roleMailbox: 'evasan.account@claw.163.com',
   });
   assert.deepEqual(resolveClawEmailSenderForAction('files'), {
     action: 'files',
     primaryFrom: 'agent3@claw.163.com',
+    mappedPrimaryFrom: 'agent3@claw.163.com',
     roleMailbox: 'agent3.files@claw.163.com',
   });
   assert.deepEqual(resolveClawEmailSenderForAction('daily'), {
     action: 'daily',
     primaryFrom: 'agent4@claw.163.com',
+    mappedPrimaryFrom: 'agent4@claw.163.com',
     roleMailbox: 'agent4.daily@claw.163.com',
   });
   assert.deepEqual(resolveClawEmailSenderForAction('monitor'), {
     action: 'monitor',
     primaryFrom: 'hagent@claw.163.com',
+    mappedPrimaryFrom: 'hagent@claw.163.com',
     roleMailbox: 'hagent.monitor@claw.163.com',
+  });
+  assert.deepEqual(resolveClawEmailSenderForAction('support', { EMAIL_FROM: 'shine1@claw.163.com' }), {
+    action: 'support',
+    primaryFrom: 'shine1@claw.163.com',
+    mappedPrimaryFrom: 'agent4@claw.163.com',
+    roleMailbox: 'agent4.support@claw.163.com',
   });
 });
 
-test('notifyUiMailboxActions can send role mail with primary ClawEmail identity', async () => {
+test('notifyUiMailboxActions can send role mail with current ClawEmail primary identity', async () => {
   const sent = [];
 
   await notifyUiMailboxActions(
@@ -747,6 +758,7 @@ test('notifyUiMailboxActions can send role mail with primary ClawEmail identity'
     },
     {
       EMAIL_NOTIFY_ENABLED: 'true',
+      EMAIL_FROM: 'watchee@claw.163.com',
       MAIL_ACTION_PROVIDER_OVERRIDES: 'report=clawemail-role,support=clawemail-role',
     },
     {
@@ -763,9 +775,22 @@ test('notifyUiMailboxActions can send role mail with primary ClawEmail identity'
   assert.equal(sent[0].profile.roleMailbox, 'watchee.report@claw.163.com');
   assert.deepEqual(sent[0].message.to, ['watchee.report@claw.163.com']);
   assert.equal(sent[1].message.action, 'support');
-  assert.equal(sent[1].profile.from, 'agent4@claw.163.com');
+  assert.equal(sent[1].profile.from, 'watchee@claw.163.com');
+  assert.equal(sent[1].profile.mappedPrimaryFrom, 'agent4@claw.163.com');
   assert.equal(sent[1].profile.roleMailbox, 'agent4.support@claw.163.com');
   assert.deepEqual(sent[1].message.to, ['agent4.support@claw.163.com']);
+});
+
+test('resolveClawEmailSenderForAction can use mapped action primary when explicitly enabled', () => {
+  assert.deepEqual(resolveClawEmailSenderForAction('support', {
+    EMAIL_FROM: 'shine1@claw.163.com',
+    CLAWEMAIL_ROLE_USE_ACTION_PRIMARY: 'true',
+  }), {
+    action: 'support',
+    primaryFrom: 'agent4@claw.163.com',
+    mappedPrimaryFrom: 'agent4@claw.163.com',
+    roleMailbox: 'agent4.support@claw.163.com',
+  });
 });
 
 test('notifyUiMailboxActions uses evanshine SMTP profile for report action when configured', async () => {

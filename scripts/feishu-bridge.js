@@ -1858,16 +1858,28 @@ const CLAWEMAIL_ACTION_SENDERS = {
   backup: ['hagent@claw.163.com', 'hagent.backup@claw.163.com'],
 };
 
-function resolveClawEmailSenderForAction(actionName) {
+function resolveClawEmailSenderForAction(actionName, env = process.env) {
   const action = String(actionName || '').trim().toLowerCase();
   const mapping = CLAWEMAIL_ACTION_SENDERS[action];
   if (!mapping) {
     return null;
   }
 
+  const configuredPrimary = String(
+    env.CLAWEMAIL_ROLE_PRIMARY_FROM
+    || env.EMAIL_FROM
+    || env.SMTP_USER
+    || '',
+  ).trim();
+  const useActionPrimary = String(env.CLAWEMAIL_ROLE_USE_ACTION_PRIMARY || '').toLowerCase() === 'true';
+  const primaryFrom = !useActionPrimary && configuredPrimary.endsWith('@claw.163.com')
+    ? configuredPrimary
+    : mapping[0];
+
   return {
     action,
-    primaryFrom: mapping[0],
+    primaryFrom,
+    mappedPrimaryFrom: mapping[0],
     roleMailbox: mapping[1],
   };
 }
@@ -1950,7 +1962,7 @@ async function sendSmtpMail(message, profile, options = {}) {
 }
 
 async function sendClawEmailRoleMail(message, profile, options = {}) {
-  const resolved = resolveClawEmailSenderForAction(message?.action);
+  const resolved = resolveClawEmailSenderForAction(message?.action, options.env || process.env);
   if (!resolved) {
     return { sent: false, reason: 'missing_clawemail_role', action: message?.action || 'unknown', provider: profile.name };
   }
@@ -1958,6 +1970,7 @@ async function sendClawEmailRoleMail(message, profile, options = {}) {
   const roleProfile = {
     ...profile,
     from: resolved.primaryFrom,
+    mappedPrimaryFrom: resolved.mappedPrimaryFrom,
     roleMailbox: resolved.roleMailbox,
   };
 
@@ -2012,7 +2025,7 @@ async function sendMailWithRouting(message, env = process.env, options = {}) {
   const providerName = resolveMailProviderForAction(message?.action, env);
   const selectedProfile = buildSmtpProfile(providerName, env);
   if (selectedProfile.name === 'clawemail-role') {
-    const result = await sendClawEmailRoleMail(message, selectedProfile, options);
+    const result = await sendClawEmailRoleMail(message, selectedProfile, { ...options, env });
     appendMailLedgerEntry(env, {
       ...message,
       ...result,
