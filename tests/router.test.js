@@ -249,6 +249,11 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'command-center',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('飞书里面打开控制台看板'), {
+    agent: 'clerk-agent',
+    action: 'dashboard-card',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，邮箱平台现在怎么结合起来玩'), {
     agent: 'clerk-agent',
     action: 'mailbox-workbench',

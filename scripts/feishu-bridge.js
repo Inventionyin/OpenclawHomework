@@ -1247,7 +1247,7 @@ function truthyEnv(value) {
 function formatDuration(ms) {
   const value = Number(ms);
   if (!Number.isFinite(value) || value < 0) {
-    return 'unknown';
+    return '';
   }
   if (value < 1000) {
     return `${Math.round(value)}ms`;
@@ -1261,7 +1261,10 @@ function appendFeishuReplyFooter(text, env = process.env, metadata = {}) {
     footer.push(`状态：${metadata.status || '完成'}`);
   }
   if (truthyEnv(env.FEISHU_REPLY_FOOTER_ELAPSED) || truthyEnv(env.FEISHU_FOOTER_ELAPSED_ENABLED)) {
-    footer.push(`耗时：${formatDuration(metadata.elapsedMs)}`);
+    const duration = formatDuration(metadata.elapsedMs);
+    if (duration) {
+      footer.push(`耗时：${duration}`);
+    }
   }
 
   if (footer.length === 0) {
@@ -1336,7 +1339,10 @@ function buildFeishuStreamingCard(text, env = process.env, metadata = {}) {
     footer.push(`状态：${status}`);
   }
   if (truthyEnv(env.FEISHU_REPLY_FOOTER_ELAPSED) || truthyEnv(env.FEISHU_FOOTER_ELAPSED_ENABLED)) {
-    footer.push(`耗时：${formatDuration(metadata.elapsedMs)}`);
+    const duration = formatDuration(metadata.elapsedMs);
+    if (duration) {
+      footer.push(`耗时：${duration}`);
+    }
   }
 
   return {
@@ -1434,6 +1440,91 @@ function buildFeishuResultCard(job, run) {
             content: success ? '打开 Allure 报告 artifact 可查看测试明细。' : '打开 GitHub Actions 可查看失败截图、trace 和日志 artifact。',
           },
         ],
+      },
+    ],
+  };
+}
+
+function formatDashboardNumber(value) {
+  return Number(value || 0).toLocaleString('zh-CN');
+}
+
+function resolveDashboardPublicUrl(env = process.env) {
+  return env.DASHBOARD_PUBLIC_URL
+    || env.PUBLIC_DASHBOARD_URL
+    || env.BRIDGE_PUBLIC_URL
+    || '';
+}
+
+function buildFeishuDashboardCard(state = {}, env = process.env) {
+  const assistantName = state.assistant || getAssistantName(env);
+  const counts = state.tasks?.counts || {};
+  const pipeline = state.pipeline || {};
+  const latestRun = state.snapshot?.latestRun || {};
+  const dashboardUrl = resolveDashboardPublicUrl(env);
+  const generatedAt = state.generatedAt ? new Date(state.generatedAt).toLocaleString('zh-CN') : '';
+  const summaryLines = [
+    `**今日任务**：${formatDashboardNumber(counts.today)} 个，运行中 ${formatDashboardNumber(counts.running)}，失败 ${formatDashboardNumber(counts.failed)}，可恢复 ${formatDashboardNumber(counts.recoverable)}`,
+    `**每日流水线**：${pipeline.status || '暂无'} · ${formatDashboardNumber(pipeline.completedStages)}/${formatDashboardNumber(pipeline.totalStages)} 阶段 · 失败 ${formatDashboardNumber(pipeline.failedStages)}`,
+    `**Token**：${formatDashboardNumber(state.usage?.totalTokens)} · **邮件**：今日 ${formatDashboardNumber(state.mail?.todayCount)} 条`,
+    `**服务**：${state.service?.streaming ? '流式开启' : '流式关闭'} · commit ${state.service?.commit || 'unknown'}`,
+    latestRun.conclusion ? `**最近 UI**：${latestRun.conclusion}` : null,
+    pipeline.nextAction ? `**下一步**：${pipeline.nextAction}` : null,
+  ].filter(Boolean);
+
+  const actions = [];
+  if (dashboardUrl) {
+    actions.push({
+      tag: 'button',
+      text: {
+        tag: 'plain_text',
+        content: '打开网页看板',
+      },
+      type: 'primary',
+      url: dashboardUrl,
+    });
+  }
+  if (latestRun.runUrl) {
+    actions.push({
+      tag: 'button',
+      text: {
+        tag: 'plain_text',
+        content: 'GitHub Run',
+      },
+      type: dashboardUrl ? 'default' : 'primary',
+      url: latestRun.runUrl,
+    });
+  }
+
+  return {
+    config: {
+      wide_screen_mode: true,
+    },
+    header: {
+      template: Number(counts.failed || 0) > 0 || Number(pipeline.failedStages || 0) > 0 ? 'yellow' : 'green',
+      title: {
+        tag: 'plain_text',
+        content: `${assistantName} 控制台`,
+      },
+    },
+    elements: [
+      {
+        tag: 'div',
+        text: {
+          tag: 'lark_md',
+          content: summaryLines.join('\n'),
+        },
+      },
+      ...(actions.length > 0 ? [{
+        tag: 'action',
+        actions,
+      }] : []),
+      {
+        tag: 'note',
+        elements: [{
+          tag: 'plain_text',
+          content: generatedAt ? `数据时间：${generatedAt}` : '这是飞书内摘要卡片；完整详情请打开网页看板。',
+        }],
       },
     ],
   };
@@ -3429,6 +3520,28 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
       };
     }
 
+    if (route.action === 'dashboard-card') {
+      if (!options.receiptSender) {
+        return {
+          handled: true,
+          replyText: '当前飞书回复通道不可用，网页看板地址请直接打开 /dashboard。',
+        };
+      }
+      const dashboardStateBuilder = options.dashboardStateBuilder || buildDashboardState;
+      const state = await dashboardStateBuilder(env, options);
+      await sendTimedFeishuMessage(
+        options.receiptSender,
+        buildFeishuCardMessage(payload, buildFeishuDashboardCard(state, env), env),
+        env,
+        options.timingContext,
+        'dashboard-card',
+      );
+      return {
+        handled: true,
+        replyText: null,
+      };
+    }
+
     if (route.action === 'token-factory') {
       if (options.receiptSender) {
         await sendTimedFeishuMessage(
@@ -3999,6 +4112,7 @@ module.exports = {
   buildRoutedChatReply,
   buildUiMailboxMessages,
   resolveClawEmailSenderForAction,
+  buildFeishuDashboardCard,
   buildFeishuResultCard,
   buildRoutedAgentReply,
   buildRunArtifactsUrl,

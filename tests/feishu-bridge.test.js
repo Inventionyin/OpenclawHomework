@@ -6,6 +6,7 @@ const test = require('node:test');
 
 const {
   buildFeishuResultCard,
+  buildFeishuDashboardCard,
   buildFeishuTextMessage,
   buildEmailRunResultMessage,
   buildEmailRunResultSubject,
@@ -406,6 +407,74 @@ test('buildFeishuTextMessage can append elapsed and status footer', () => {
   assert.match(content.text, /测试完成/);
   assert.match(content.text, /状态：完成/);
   assert.match(content.text, /耗时：1\.2s/);
+});
+
+test('buildFeishuTextMessage omits unknown elapsed footer when elapsed is unavailable', () => {
+  const payload = {
+    event: {
+      message: {
+        chat_id: 'chat-a',
+      },
+    },
+  };
+
+  const message = buildFeishuTextMessage(payload, '测试完成', {
+    FEISHU_REPLY_FOOTER_ELAPSED: 'true',
+    FEISHU_REPLY_FOOTER_STATUS: 'true',
+  });
+
+  const content = JSON.parse(message.content);
+  assert.match(content.text, /状态：完成/);
+  assert.doesNotMatch(content.text, /耗时：unknown/);
+  assert.doesNotMatch(content.text, /耗时：/);
+});
+
+test('buildFeishuDashboardCard summarizes dashboard state with links', () => {
+  const card = buildFeishuDashboardCard({
+    assistant: 'Hermes',
+    generatedAt: '2026-05-07T00:00:00.000Z',
+    service: {
+      streaming: true,
+      commit: 'abc1234',
+    },
+    tasks: {
+      counts: {
+        today: 3,
+        running: 1,
+        failed: 1,
+        recoverable: 1,
+      },
+    },
+    pipeline: {
+      status: 'running',
+      completedStages: 2,
+      totalStages: 4,
+      failedStages: 1,
+      nextAction: '查看失败任务',
+    },
+    usage: {
+      totalTokens: 12345,
+    },
+    mail: {
+      todayCount: 2,
+    },
+    snapshot: {
+      latestRun: {
+        conclusion: 'success',
+        runUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/1',
+      },
+    },
+  }, {
+    DASHBOARD_PUBLIC_URL: 'https://hermes.evanshine.me/dashboard',
+  });
+
+  const content = JSON.stringify(card);
+  assert.match(content, /Hermes 控制台/);
+  assert.match(content, /今日任务/);
+  assert.match(content, /12,345/);
+  assert.match(content, /打开网页看板/);
+  assert.match(content, /https:\/\/hermes\.evanshine\.me\/dashboard/);
+  assert.match(content, /GitHub Run/);
 });
 
 test('getFeishuRouteMode supports default and named bot routes', () => {
@@ -1993,6 +2062,69 @@ test('buildRoutedAgentReply can query latest token factory task status', async (
 
   assert.equal(reply.handled, true);
   assert.match(reply.replyText, /token-factory|还没有/);
+});
+
+test('buildRoutedAgentReply sends dashboard card for Feishu dashboard request', async () => {
+  const sent = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-dashboard-card',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '飞书里面打开控制台看板' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      DASHBOARD_PUBLIC_URL: 'https://openclaw.evanshine.me/dashboard',
+    },
+    {
+      receiptSender: async (message) => {
+        sent.push(message);
+      },
+      dashboardStateBuilder: async () => ({
+        assistant: 'OpenClaw',
+        generatedAt: '2026-05-07T00:00:00.000Z',
+        service: {
+          streaming: true,
+          commit: 'abc1234',
+        },
+        tasks: {
+          counts: {
+            today: 1,
+            running: 0,
+            failed: 0,
+            recoverable: 0,
+          },
+        },
+        pipeline: {},
+        usage: {
+          totalTokens: 100,
+        },
+        mail: {
+          todayCount: 1,
+        },
+        snapshot: {},
+      }),
+    },
+    { agent: 'clerk-agent', action: 'dashboard-card', requiresAuth: true },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.equal(reply.replyText, null);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].msgType, 'interactive');
+  const content = JSON.stringify(JSON.parse(sent[0].content));
+  assert.match(content, /OpenClaw 控制台/);
+  assert.match(content, /打开网页看板/);
+  assert.match(content, /https:\/\/openclaw\.evanshine\.me\/dashboard/);
 });
 
 test('buildRoutedAgentReply can apply high-confidence image channel switch', async () => {

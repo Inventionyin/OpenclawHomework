@@ -272,6 +272,11 @@ function routeClerkIntent(text) {
     };
   }
 
+  if (/(飞书|消息|聊天|群里|里面|卡片).{0,16}(嵌入|打开|查看|显示|发).{0,16}(控制台|看板|dashboard|console)/i.test(normalized)
+    || /(控制台|看板|dashboard|console).{0,16}(飞书|消息|聊天|群里|里面|卡片|打开|查看|显示)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'dashboard-card', requiresAuth: true };
+  }
+
   if (/(一屏看懂|总览|项目总览|整体情况|今天.*(进展|做了啥|做了什么|情况)|现在.*(该怎么玩|先做什么))/i.test(normalized)
     || /((进展|做了啥|做了什么|情况).{0,12}(总览|一屏|汇总))/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'command-center', requiresAuth: true };
@@ -448,6 +453,11 @@ function routeOfficeIntent(text) {
   if (/(邮件|邮箱).{0,18}(发了|发送了|发出去|发送记录|流水|账本|历史|记录|哪些|列表)/i.test(normalized)
     || /(发了|发送了|发出去|发送记录|流水|账本|历史|记录|哪些|列表).{0,18}(邮件|邮箱)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'mail-ledger', requiresAuth: true };
+  }
+
+  if (/(飞书|消息|聊天|群里|里面|卡片).{0,16}(嵌入|打开|查看|显示|发).{0,16}(控制台|看板|dashboard|console)/i.test(normalized)
+    || /(控制台|看板|dashboard|console).{0,16}(飞书|消息|聊天|群里|里面|卡片|打开|查看|显示)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'dashboard-card', requiresAuth: true };
   }
 
   if (/(一屏看懂|总览|项目总览|整体情况|今天.*(进展|做了啥|做了什么|情况)|现在.*(该怎么玩|先做什么))/i.test(normalized)
