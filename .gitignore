@@ -9,6 +9,7 @@ allure-report/
 data/qa-token-lab/
 data/multi-agent-lab/
 data/tasks/
+data/memory/daily-summary-state.json
 .env
 .playwright-mcp/
 .worktrees/

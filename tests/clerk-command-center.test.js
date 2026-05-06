@@ -219,3 +219,20 @@ test('buildClerkDailyReportReply builds daily preview from plan, snapshot, and u
   assert.equal(buildCalls.length, 1);
   assert.equal(buildCalls[0].runs[0].id, 42);
 });
+
+test('buildClerkDailyReportReply degrades broken ledger and snapshot readers', () => {
+  const reply = buildClerkDailyReportReply({}, {
+    summarizeDailyPlan: () => samplePlan(),
+    readUsageLedger: () => {
+      throw new Error('usage ledger broken');
+    },
+    readDailySummarySnapshot: () => 'broken snapshot',
+    buildDailySummary: (input) => ({
+      text: `日报正文：${input.runs.length} runs，${input.usageEntries.length} usage`,
+    }),
+  });
+
+  assert.match(reply, /文员日报预览/);
+  assert.match(reply, /日报正文：0 runs，0 usage/);
+  assert.match(reply, /服务器部分仍建议只引用状态摘要/);
+});
