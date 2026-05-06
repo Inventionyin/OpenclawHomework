@@ -150,6 +150,13 @@ bash scripts/sync-gbrain-knowledge.sh
 - 每天早上生成“昨日运行报告”：成功率、失败用例、token 用量、慢请求、服务器磁盘余量。
 - 每周生成一次“测试资产清单”：新增客服训练数据、UI 测试矩阵、邮箱验证记录。
 
+每日流水线可用 systemd timer 安装，默认执行 `scripts/daily-agent-pipeline.js --once`：
+
+```bash
+cd /opt/OpenclawHomework
+sudo bash scripts/install-daily-agent-pipeline.sh --env-file /etc/openclaw-feishu-bridge.env
+```
+
 安全边界：
 
 - 文员 agent 默认不能执行 `/exec`、重启、清理硬盘、互修。

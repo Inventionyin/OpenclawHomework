@@ -260,6 +260,18 @@ function routeClerkIntent(text) {
     return { agent: 'clerk-agent', action: 'mail-ledger', requiresAuth: true };
   }
 
+  if (/(自动流水线|每日流水线|daily\s*pipeline)/i.test(normalized)) {
+    if (/(状态|进度|查看|查询|跑到哪|怎么样)/i.test(normalized)) {
+      return { agent: 'clerk-agent', action: 'daily-pipeline-status', requiresAuth: true };
+    }
+    return {
+      agent: 'clerk-agent',
+      action: 'daily-pipeline',
+      ...(/(试跑|dry\s*-?\s*run|预演|演练)/i.test(normalized) ? { dryRun: true } : {}),
+      requiresAuth: true,
+    };
+  }
+
   if (/(一屏看懂|总览|项目总览|整体情况|今天.*(进展|做了啥|做了什么|情况)|现在.*(该怎么玩|先做什么))/i.test(normalized)
     || /((进展|做了啥|做了什么|情况).{0,12}(总览|一屏|汇总))/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'command-center', requiresAuth: true };

@@ -438,6 +438,67 @@ test('buildClerkAgentReply supports today and failed task center views', () => {
   assert.match(failedReply, /quota exhausted/);
 });
 
+test('buildClerkAgentReply delegates daily pipeline starts to injected runner', () => {
+  const route = { action: 'daily-pipeline', rawText: '文员，启动今天的自动流水线' };
+  const reply = buildClerkAgentReply(route, {
+    runDailyPipeline: (request) => {
+      assert.equal(request.route, route);
+      assert.equal(request.dryRun, false);
+      return {
+        accepted: true,
+        taskId: 'dp-1',
+        mode: 'run',
+        steps: ['整理任务中枢', '生成日报草稿'],
+      };
+    },
+  });
+
+  assert.match(reply, /每日流水线/);
+  assert.match(reply, /已委托/);
+  assert.match(reply, /dp-1/);
+  assert.match(reply, /整理任务中枢/);
+});
+
+test('buildClerkAgentReply passes dry-run mode to daily pipeline runner', () => {
+  const reply = buildClerkAgentReply({
+    action: 'daily-pipeline',
+    dryRun: true,
+    rawText: '文员，试跑今天的自动流水线',
+  }, {
+    runDailyPipeline: (request) => {
+      assert.equal(request.dryRun, true);
+      return {
+        accepted: true,
+        taskId: 'dp-dry',
+        mode: 'dry-run',
+        steps: ['检查触发条件'],
+      };
+    },
+  });
+
+  assert.match(reply, /试跑|dry-run/i);
+  assert.match(reply, /dp-dry/);
+  assert.match(reply, /检查触发条件/);
+});
+
+test('buildClerkAgentReply summarizes daily pipeline status from injected helper', () => {
+  const reply = buildClerkAgentReply({ action: 'daily-pipeline-status' }, {
+    summarizeDailyPipeline: (request) => {
+      assert.equal(request.type, 'daily-pipeline');
+      return {
+        counts: { total: 4, today: 2, running: 1, failed: 1, recoverable: 1 },
+        latest: { id: 'dp-latest', status: 'running' },
+      };
+    },
+  });
+
+  assert.match(reply, /每日流水线状态/);
+  assert.match(reply, /总任务：4/);
+  assert.match(reply, /今天任务：2/);
+  assert.match(reply, /失败：1/);
+  assert.match(reply, /dp-latest/);
+});
+
 test('buildClerkAgentReply supports continue yesterday suggestion', () => {
   const reply = buildClerkAgentReply({ action: 'task-center-continue-yesterday' }, {
     summarizeTasks: () => ({

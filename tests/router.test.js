@@ -324,6 +324,22 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'task-center-today',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，启动今天的自动流水线'), {
+    agent: 'clerk-agent',
+    action: 'daily-pipeline',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，查看今天自动流水线状态'), {
+    agent: 'clerk-agent',
+    action: 'daily-pipeline-status',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，试跑今天的自动流水线'), {
+    agent: 'clerk-agent',
+    action: 'daily-pipeline',
+    dryRun: true,
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，查看失败任务'), {
     agent: 'clerk-agent',
     action: 'task-center-failed',

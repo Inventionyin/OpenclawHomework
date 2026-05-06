@@ -568,6 +568,63 @@ function buildClerkTodoSummaryReply(options = {}) {
   ].join('\n');
 }
 
+function buildDailyPipelineReply(route = {}, options = {}) {
+  const dryRun = Boolean(route.dryRun);
+  const runner = options.runDailyPipeline;
+  const result = runner ? (runner({
+    env: options.env || process.env,
+    now: options.now || new Date(),
+    dryRun,
+    route,
+  }) || {}) : {};
+  const mode = result.mode || (dryRun ? 'dry-run' : 'run');
+  const lines = [
+    dryRun
+      ? '每日流水线试跑：已委托执行器做 dry-run。'
+      : '每日流水线：已委托执行器启动今天的自动流水线。',
+  ];
+
+  if (!runner) {
+    lines.push('- 执行器：未注入 runner，本次只完成自然语言委托。');
+  }
+  if (result.accepted === false) {
+    lines.push('- 状态：执行器未接受。');
+  }
+  if (result.taskId) {
+    lines.push(`- 任务：${result.taskId}`);
+  }
+  lines.push(`- 模式：${mode}`);
+  if (result.summary) {
+    lines.push(`- 摘要：${sanitizeReplyField(result.summary, 400)}`);
+  }
+  if (Array.isArray(result.steps) && result.steps.length) {
+    lines.push('- 步骤：');
+    result.steps.slice(0, 8).forEach((step, index) => {
+      lines.push(`${index + 1}. ${sanitizeReplyField(step, 200)}`);
+    });
+  }
+  lines.push('- 边界：文员只负责委托和汇报，不在这里写部署逻辑。');
+  return lines.join('\n');
+}
+
+function buildDailyPipelineStatusReply(options = {}) {
+  const summary = (options.summarizeDailyPipeline || options.summarizeTasks || summarizeTasks)({
+    env: options.env || process.env,
+    now: options.now || new Date(),
+    type: 'daily-pipeline',
+  }) || {};
+  const counts = summary.counts || {};
+  return [
+    '每日流水线状态：',
+    `- 总任务：${counts.total || 0}`,
+    `- 今天任务：${counts.today || 0}`,
+    `- 运行中：${counts.running || 0}`,
+    `- 失败：${counts.failed || 0}`,
+    `- 可恢复：${counts.recoverable || 0}`,
+    summary.latest ? `- 最新任务：${summary.latest.id}（${summary.latest.status}）` : '- 最新任务：暂无',
+  ].join('\n');
+}
+
 function loadClerkCommandCenter(options = {}) {
   if (options.clerkCommandCenter) {
     return options.clerkCommandCenter;
@@ -699,6 +756,14 @@ function buildClerkAgentReply(route = {}, options = {}) {
       '',
       '启动口令：文员，启动高 token 训练场。',
     ].join('\n');
+  }
+
+  if (route.action === 'daily-pipeline') {
+    return buildDailyPipelineReply(route, options);
+  }
+
+  if (route.action === 'daily-pipeline-status') {
+    return buildDailyPipelineStatusReply(options);
   }
 
   if (route.action === 'token-factory') {
