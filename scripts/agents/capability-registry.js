@@ -14,8 +14,8 @@ const CAPABILITIES = [
   {
     id: 'ops.status',
     agent: 'ops-agent',
-    name: '服务器状态和互修',
-    description: '查询 OpenClaw/Hermes 各自服务器状态、硬盘、内存、负载，并支持明确授权后的重启和修复。',
+    name: '日常体检与互修',
+    description: '做日常体检（内存/硬盘/负载/健康检查），并在明确授权后执行 OpenClaw/Hermes 互修。',
     examples: [
       '你现在内存多少',
       '看看 Hermes 的服务器状态',
@@ -27,8 +27,8 @@ const CAPABILITIES = [
   {
     id: 'qa.assets',
     agent: 'qa-agent',
-    name: 'QA 数据资产',
-    description: '生成和整理电商客服训练数据、Agent 评测题、UI 自动化测试矩阵、邮箱平台玩法。',
+    name: '测试资产工坊',
+    description: '生成和整理电商客服训练数据、Agent 评测题、UI 自动化测试矩阵、邮箱玩法模板。',
     examples: [
       '帮我生成一批电商平台客服训练数据',
       '帮我做一轮 OpenClaw 和 Hermes 的能力评测',
@@ -40,7 +40,7 @@ const CAPABILITIES = [
   {
     id: 'memory.brain',
     agent: 'memory-agent',
-    name: '长期记忆和知识库',
+    name: '知识库与长期记忆',
     description: '把项目经验沉淀到本地 Markdown/Obsidian，后续可接 GBrain 做 Agent 检索、知识图谱和工作流记忆。',
     examples: [
       'Obsidian 存储和 GBrain 工作流怎么结合',
@@ -53,7 +53,7 @@ const CAPABILITIES = [
   {
     id: 'mailbox.qa',
     agent: 'qa-agent',
-    name: '邮箱调度',
+    name: '邮箱与日报',
     description: '用 ClawEmail/SMTP 发送测试报告、验证码测试邮件、归档失败样本和日报。',
     examples: [
       '邮箱平台可以怎么玩',
@@ -114,7 +114,7 @@ const CAPABILITIES = [
   {
     id: 'token.training',
     agent: 'clerk-agent',
-    name: 'token 训练场',
+    name: 'token 工厂',
     description: '批量生成训练数据、跑模型评审、记录 token/耗时，并把结果整理成日报和邮箱归档。',
     examples: [
       '文员，开一轮 token 训练场',

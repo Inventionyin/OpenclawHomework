@@ -6,6 +6,12 @@ function inferIntentLabel(route = {}) {
     if (route.action === 'daily-report') {
       return '查看日报预览';
     }
+    if (route.action === 'todo-summary') {
+      return '整理项目待办与失败复盘';
+    }
+    if (route.action === 'token-factory') {
+      return '推进 token 工厂流水线';
+    }
     return '文员办公类任务';
   }
 
@@ -109,6 +115,28 @@ function buildIntentDiagnosis(text = '', route = {}) {
     diagnosis.nextStep = route.recipientEmail
       ? `会优先发到 ${route.recipientEmail}，并保留内部归档。`
       : '如果你要指定收件人，可以直接说：文员，把今日日报发到 xxx@qq.com';
+    return diagnosis;
+  }
+
+  if (route.agent === 'clerk-agent' && route.action === 'todo-summary') {
+    diagnosis.reason = '我识别到你在问今天/昨天的任务和失败情况，会先整理待办与失败复盘视角。';
+    diagnosis.nextStep = '我会先给出已完成、未完成和失败项清单，再建议下一步优先级。';
+    return diagnosis;
+  }
+
+  if (route.agent === 'clerk-agent' && route.action === 'token-factory') {
+    diagnosis.reason = '我识别到你要继续推进 token 工厂，会按生成、评测、归档的流水线继续。';
+    diagnosis.nextStep = '我会延续昨天未完成部分，并在结束后回报进度与产出。';
+    return diagnosis;
+  }
+
+  if (route.agent === 'planner-agent' && route.action === 'clarify') {
+    diagnosis.outcome = 'clarify';
+    diagnosis.canExecute = false;
+    diagnosis.reason = '我理解你在做总控级安排，但范围较大，先拆成可执行子任务再推进更稳。';
+    diagnosis.missing = ['scope', 'priority'];
+    diagnosis.blockedBy = ['broad_request'];
+    diagnosis.nextStep = '可以先确认优先级：先做 UI 自动化 / 新闻摘要 / token 训练中的哪一项，或给出今天的 P0。';
     return diagnosis;
   }
 

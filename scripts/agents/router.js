@@ -134,7 +134,18 @@ function routeNaturalLanguageOps(text) {
     return toOpsRoute('disk-audit', target, 'high');
   }
 
-  if (/(重启|修复|重起|搞一下)/.test(normalized)) {
+  if (/(你|本机|服务器).{0,8}(搞一下|处理一下)/.test(normalized)
+    || /你帮我搞一下/.test(normalized)) {
+    return {
+      agent: 'ops-agent',
+      action: 'clarify',
+      target: 'unknown',
+      confidence: 'low',
+      requiresAuth: true,
+    };
+  }
+
+  if (/(重启|修复|重起)/.test(normalized)) {
     const selfRestart = /(重启|重起).{0,8}(你自己|自己|你这台|本机)|你.{0,4}(重启|重起).{0,4}(一下)?/.test(normalized);
     const peerRestart = hasExplicitPeer && /(重启|重起)/.test(normalized);
     const selfRepair = /修复.{0,8}(你自己|自己|你这台|本机)|你.{0,4}修复/.test(normalized);
@@ -153,7 +164,7 @@ function routeNaturalLanguageOps(text) {
     if (selfRepair) {
       return toOpsRoute('repair', 'self', 'high');
     }
-    if (/(重启|重起|修复|搞一下)/.test(normalized)) {
+    if (/(重启|重起|修复)/.test(normalized)) {
       return {
         agent: 'ops-agent',
         action: 'clarify',
@@ -291,13 +302,33 @@ function routeClerkIntent(text) {
     };
   }
 
+  if (/(今天|今日|今天的).{0,12}(任务|待办).{0,12}(中枢|中心)/i.test(normalized)
+    || /(任务中枢|任务中心).{0,12}(今天|今日|待办|任务)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'task-center-today', requiresAuth: true };
+  }
+
+  if (/(失败任务|失败的任务|失败清单|失败列表).{0,12}(查看|汇总|有哪些|整理)?/i.test(normalized)
+    || /(查看|汇总|整理).{0,12}(失败任务|失败清单|失败列表)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'task-center-failed', requiresAuth: true };
+  }
+
+  if (/(继续|恢复|接着跑|接着做).{0,10}(昨天|昨日).{0,24}(任务中枢|任务中心|任务|token.?factory|token\s*工厂)/i.test(normalized)
+    || /(昨天|昨日).{0,24}(任务中枢|任务中心|任务|token.?factory|token\s*工厂).{0,10}(继续|恢复|接着跑|接着做)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'task-center-continue-yesterday', requiresAuth: true };
+  }
+
+  if (/(继续|接着|延续).{0,12}(昨天|昨晚|昨日).{0,12}(没跑完|没做完|没完成).{0,12}(token|token\s*工厂|token-factory)/i.test(normalized)
+    || /(token|token\s*工厂|token-factory).{0,18}(继续|接着).{0,12}(昨天|昨晚|昨日)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'token-factory', requiresAuth: true };
+  }
+
   if (/(启动|开始|跑|执行|开).{0,12}(高\s*token|token).{0,20}(训练场|实验室|lab|额度|数据|训练|烧|消耗)/i.test(normalized)
     || /(高\s*token|token).{0,20}(训练场|实验室|lab|额度|烧|消耗)/i.test(normalized)
     || /(烧|消耗|花完).{0,12}(token|额度).{0,20}(训练|数据|训练场)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'token-lab', requiresAuth: true };
   }
 
-  if (/(token|耗时|用量|账本|谁更费|谁更省|统计|对比)/i.test(normalized)) {
+  if (/(耗时|用量|账本|谁更费|谁更省|统计|对比|token\s*(用量|消耗|统计|账本|对比))/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'token-summary', requiresAuth: true };
   }
 
@@ -352,7 +383,12 @@ function routeOfficeIntent(text) {
   const recipientMatch = original.match(/\b([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\b/i);
   const recipientEmail = recipientMatch ? recipientMatch[1] : '';
 
-  if (/(token|耗时|用量|账本|谁更费|谁更省|统计|对比).{0,30}(hermes|openclaw|模型|调用|今天|最近)?/i.test(normalized)) {
+  if (/(继续|接着|延续).{0,12}(昨天|昨晚|昨日).{0,12}(没跑完|没做完|没完成).{0,12}(token|token\s*工厂|token-factory)/i.test(normalized)
+    || /(token|token\s*工厂|token-factory).{0,18}(继续|接着).{0,12}(昨天|昨晚|昨日)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'token-factory', requiresAuth: true };
+  }
+
+  if (/(耗时|用量|账本|谁更费|谁更省|统计|对比|token\s*(用量|消耗|统计|账本|对比)).{0,30}(hermes|openclaw|模型|调用|今天|最近)?/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'token-summary', requiresAuth: true };
   }
 
@@ -392,8 +428,18 @@ function routeOfficeIntent(text) {
     return { agent: 'clerk-agent', action: 'mail-ledger', requiresAuth: true };
   }
 
+  if (/(今天|今日|今天的).{0,12}(任务|待办).{0,12}(中枢|中心)/i.test(normalized)
+    || /(任务中枢|任务中心).{0,12}(今天|今日|待办|任务)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'task-center-today', requiresAuth: true };
+  }
+
   if (/(整理|列一下|看看|汇总).{0,12}(今天|当前|项目)?.{0,12}(待办|todo|清单|还没|未完成|下一步)/i.test(normalized)
     || /(待办|todo|清单|还没|未完成|下一步).{0,12}(整理|列一下|看看|汇总)?/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'todo-summary', requiresAuth: true };
+  }
+
+  if (/(今天|现在).{0,8}(还有|还).{0,8}(什么|哪些).{0,8}(没做|未做|没完成|未完成)/i.test(normalized)
+    || /(昨天).{0,10}(失败了|失败的).{0,10}(什么|哪些)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'todo-summary', requiresAuth: true };
   }
 
@@ -404,7 +450,8 @@ function routeCapabilityIntent(text) {
   const normalized = String(text ?? '').trim().toLowerCase();
   if (/(你|我)?(现在)?(能|可以|会).{0,12}(做|干|玩).{0,20}(什么|哪些|啥|事情|功能)/i.test(normalized)
     || /(有哪些|有什么).{0,16}(功能|能力|玩法|指令|命令|技能)/i.test(normalized)
-    || /^(帮助|help|怎么用|使用说明|你会做什么|你能做什么|怎么玩|玩法)$/i.test(normalized)) {
+    || /^(帮助|help|怎么用|使用说明|你会做什么|你能做什么|怎么玩|玩法)$/i.test(normalized)
+    || /(现在|今天).{0,8}(我|我们).{0,8}(该|可以).{0,8}(怎么玩|怎么用|做什么)/i.test(normalized)) {
     return { agent: 'capability-agent', action: 'guide', requiresAuth: false };
   }
   return null;
@@ -508,7 +555,9 @@ function routeEcosystemIntent(text) {
 function routeBroadPlannerIntent(text) {
   const normalized = String(text ?? '').trim().toLowerCase();
   if (/(帮我|给我|把|将|来).{0,12}(项目|机器人|openclaw|hermes|龙虾|系统).{0,18}(优化|升级|完善|搞好|弄好|改好|二改|重构|增强)/i.test(normalized)
-    || /(搞|做|整|安排).{0,12}(完整|全套|一套|重度).{0,16}(工作流|系统|方案|agent|智能体)/i.test(normalized)) {
+    || /(搞|做|整|安排).{0,12}(完整|全套|一套|重度).{0,16}(工作流|系统|方案|agent|智能体)/i.test(normalized)
+    || /(项目|整体).{0,12}(质量).{0,12}(搞一下|提升|优化|加强)/i.test(normalized)
+    || /(ui\s*自动化|自动化|新闻|token).{0,20}(都|一起).{0,10}(安排|规划|统筹)/i.test(normalized)) {
     return {
       agent: 'planner-agent',
       action: 'clarify',

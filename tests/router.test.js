@@ -294,6 +294,21 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'token-factory-status',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，查看今天任务中枢'), {
+    agent: 'clerk-agent',
+    action: 'task-center-today',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，查看失败任务'), {
+    agent: 'clerk-agent',
+    action: 'task-center-failed',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，继续昨天 token-factory 任务'), {
+    agent: 'clerk-agent',
+    action: 'task-center-continue-yesterday',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，启动多 Agent 训练场，用邮箱归档结果'), {
     agent: 'clerk-agent',
     action: 'multi-agent-lab',
@@ -337,6 +352,11 @@ test('routeAgentIntent routes office work without requiring clerk wake word', ()
   assert.deepEqual(routeAgentIntent('今天邮箱里有哪些任务'), {
     agent: 'clerk-agent',
     action: 'mailbox-tasks',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('查看今天任务中枢'), {
+    agent: 'clerk-agent',
+    action: 'task-center-today',
     requiresAuth: true,
   });
   assert.deepEqual(routeAgentIntent('今天发了哪些邮件'), {
@@ -409,6 +429,18 @@ test('routeAgentIntent asks for clarification on broad natural-language work req
     requiresAuth: false,
   });
   assert.deepEqual(routeAgentIntent('帮我搞一个完整工作流'), {
+    agent: 'planner-agent',
+    action: 'clarify',
+    confidence: 'low',
+    requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('今天帮我把项目质量搞一下'), {
+    agent: 'planner-agent',
+    action: 'clarify',
+    confidence: 'low',
+    requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('把 UI 自动化、新闻、token 训练都安排一下'), {
     agent: 'planner-agent',
     action: 'clarify',
     confidence: 'low',
@@ -595,6 +627,29 @@ test('routeAgentIntent does not run tests for questions negations or failure dis
   assert.deepEqual(routeAgentIntent('contract test failure 怎么办'), {
     agent: 'chat-agent',
     action: 'chat',
+    requiresAuth: false,
+  });
+});
+
+test('routeAgentIntent handles boss-style natural-language control phrases', () => {
+  assert.deepEqual(routeAgentIntent('今天还有什么没做'), {
+    agent: 'clerk-agent',
+    action: 'todo-summary',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('昨天失败了什么'), {
+    agent: 'clerk-agent',
+    action: 'todo-summary',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('继续昨天没跑完的 token 工厂'), {
+    agent: 'clerk-agent',
+    action: 'token-factory',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('现在我该怎么玩'), {
+    agent: 'capability-agent',
+    action: 'guide',
     requiresAuth: false,
   });
 });

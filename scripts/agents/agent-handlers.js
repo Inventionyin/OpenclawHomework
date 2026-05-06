@@ -46,6 +46,11 @@ const {
   buildRegistrationPlan,
   parseRegistrationTaskRequest,
 } = require('../browser-registration-runner');
+const {
+  listFailedTasks,
+  listTodayTasks,
+  summarizeTasks,
+} = require('../task-center');
 
 const OPS_SECRET_PATTERNS = [
   /\bauthorization\s*:\s*\S+/i,
@@ -114,38 +119,44 @@ function buildDocAgentReply(text, memoryContext = buildMemoryContext()) {
 function buildCapabilityGuideReply(assistantName = 'OpenClaw') {
   const capabilities = listCapabilities();
   return [
-    `${assistantName} 日常玩法菜单：你不用记命令，直接按想做的事说就行。`,
+    `${assistantName} 大神版玩法菜单：你不用背命令，按目标直接说。`,
     '',
-    '跑网页和看报告：',
-    '- 让网页自己跑一遍：帮我跑一下 main 分支的 UI 自动化冒烟测试',
-    '- 想复盘结果：把这次 Allure 报告整理成一句话',
-    '- 想补用例：整理一下 UI 自动化测试矩阵',
-    '',
-    '看机器和互相照看：',
-    '- 看我自己：你现在内存多少 / 你硬盘还剩多少',
-    '- 看看你现在卡不卡',
-    '- 你硬盘还剩多少',
-    '- 硬盘清理：看看哪些东西占硬盘 / khoj 可以清理吗 / 确认清理第 1 个',
+    '1) 日常体检（低风险，随问随回）：',
+    '- 看我自己：你现在内存多少 / 你硬盘还剩多少 / 你现在卡不卡',
     '- 看对方：看看 Hermes 的服务器状态 / OpenClaw 硬盘还剩多少',
-    '- 互相照看：修复 Hermes / 修复 OpenClaw',
+    '- 硬盘清理：看看哪些东西占硬盘 / khoj 可以清理吗（先盘点再确认）',
     '',
-    '日报、邮箱和文件通道：',
-    '- 每天收一封小结：文员，发送今天日报到邮箱',
-    '- 把报告和截图走文件通道：文员，把失败样本归档到 files',
+    '2) UI 自动化（触发 + 复盘）：',
+    '- 帮我跑一下 main 分支的 UI 自动化冒烟测试',
+    '- 把这次 Allure 报告整理成一句话',
+    '- 整理一下 UI 自动化测试矩阵',
+    '',
+    '3) 邮箱/日报（文员流）：',
+    '- 文员，发送今天日报到邮箱',
     '- 邮箱平台可以怎么玩',
     '- 文员，今天邮箱里有哪些任务',
+    '- 默认不会自动发信，要你明确说“发送”才会执行',
     '',
-    '资料、训练和评测：',
-    '- 帮我生成一批电商客服训练数据',
-    '- 帮我做一轮 OpenClaw 和 Hermes 的能力评测',
-    '- 开一轮 token 训练场：文员，今天按 token-factory 跑一轮',
+    '4) token 工厂（训练流水线）：',
+    '- 文员，今天按 token-factory 跑一轮',
+    '- 文员，启动高 token 训练场',
+    '- 文员，启动多 Agent 训练场',
     '',
-    '记忆和脑库：',
-    '- 记到脑库里：把这段经验沉淀到知识库：UI 自动化失败先看 Allure',
-    '- 查一下以前怎么处理：问脑库 UI 自动化报告怎么发邮箱',
+    '5) 知识库（记忆沉淀）：',
+    '- 把这段经验沉淀到知识库：UI 自动化失败先看 Allure',
+    '- 问脑库 UI 自动化报告怎么发邮箱',
     '- Obsidian 存储和 GBrain 工作流怎么结合',
     '',
-    '图片和后续桥接：',
+    '6) 互修（高风险动作，需明确指令）：',
+    '- 修复 Hermes / 修复 OpenClaw / 重启你自己',
+    '- 模糊说法不会执行，会先让你确认',
+    '',
+    '7) 测试资产（可复用产物）：',
+    '- 帮我生成一批电商客服训练数据',
+    '- 帮我做一轮 OpenClaw 和 Hermes 的能力评测',
+    '- 把报告和截图走文件通道：文员，把失败样本归档到 files',
+    '',
+    '补充能力：',
     '- 画一张商品主图：生成一张图片：极简科技风商品主图',
     '- 修一张图：把刚才那张旧照片修复清晰',
     '- 微信 Bridge 计划：帮我整理微信 Bridge 的第一版入口',
@@ -483,6 +494,59 @@ function buildClerkMailboxTasksReply(env = process.env) {
   ].join('\n');
 }
 
+function buildTaskCenterTodayReply(options = {}) {
+  const env = options.env || process.env;
+  const tasks = (options.listTodayTasks || listTodayTasks)({
+    env,
+    now: options.now || new Date(),
+    type: 'token-factory',
+  });
+  if (!tasks.length) {
+    return [
+      '任务中枢（今天）：当前还没有 token-factory 任务。',
+      '你可以说：文员，今天按 token-factory 跑一轮。',
+    ].join('\n');
+  }
+  const lines = ['任务中枢（今天 token-factory）：'];
+  tasks.slice(0, 8).forEach((task, index) => {
+    lines.push(`${index + 1}. ${task.id} | ${task.status} | ${task.updatedAt || task.createdAt || 'unknown'}`);
+  });
+  return lines.join('\n');
+}
+
+function buildTaskCenterFailedReply(options = {}) {
+  const env = options.env || process.env;
+  const tasks = (options.listFailedTasks || listFailedTasks)({ env, limit: 8 });
+  if (!tasks.length) {
+    return '任务中枢：当前没有失败任务。';
+  }
+  return [
+    '任务中枢（失败任务）：',
+    ...tasks.map((task, index) => `${index + 1}. ${task.id} | ${task.updatedAt || task.createdAt || 'unknown'}${task.error ? ` | ${task.error}` : ''}`),
+  ].join('\n');
+}
+
+function buildTaskCenterContinueYesterdayReply(options = {}) {
+  const env = options.env || process.env;
+  const summary = (options.summarizeTasks || summarizeTasks)({
+    env,
+    now: options.now || new Date(),
+    type: 'token-factory',
+  });
+  const recoverable = Number(summary?.counts?.recoverable || 0);
+  const failed = Number(summary?.counts?.failed || 0);
+  const latest = summary?.latest || null;
+  return [
+    '任务中枢（继续昨天任务建议）：',
+    `- 可恢复任务：${recoverable}`,
+    `- 失败任务：${failed}`,
+    latest ? `- 最新任务：${latest.id}（${latest.status}）` : '- 最新任务：暂无',
+    recoverable
+      ? '- 建议：可直接触发 token-factory-worker 的恢复逻辑继续跑。'
+      : '- 建议：没有可恢复任务，直接新开一轮 token-factory。',
+  ].join('\n');
+}
+
 function buildClerkPlatformRegistrationReply(route = {}) {
   const parsed = parseRegistrationTaskRequest(route.rawText || '');
   const plan = buildRegistrationPlan(parsed);
@@ -620,6 +684,36 @@ function buildClerkAgentReply(route = {}, options = {}) {
       '',
       '你只要继续一句：文员，今天就按 token-factory 跑一轮。',
     ].join('\n');
+  }
+
+  if (route.action === 'token-factory-status') {
+    const summary = (options.summarizeTasks || summarizeTasks)({
+      env: options.env || process.env,
+      now: options.now || new Date(),
+      type: 'token-factory',
+    });
+    const counts = summary.counts || {};
+    return [
+      '文员 token-factory 任务中枢：',
+      `- 总任务：${counts.total || 0}`,
+      `- 今天任务：${counts.today || 0}`,
+      `- 运行中：${counts.running || 0}`,
+      `- 失败：${counts.failed || 0}`,
+      `- 可恢复：${counts.recoverable || 0}`,
+      summary.latest ? `- 最新任务：${summary.latest.id}（${summary.latest.status}）` : '- 最新任务：暂无',
+    ].join('\n');
+  }
+
+  if (route.action === 'task-center-today') {
+    return buildTaskCenterTodayReply(options);
+  }
+
+  if (route.action === 'task-center-failed') {
+    return buildTaskCenterFailedReply(options);
+  }
+
+  if (route.action === 'task-center-continue-yesterday') {
+    return buildTaskCenterContinueYesterdayReply(options);
   }
 
   if (route.action === 'multi-agent-lab') {

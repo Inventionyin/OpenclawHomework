@@ -24,21 +24,23 @@ const {
 test('buildCapabilityGuideReply explains practical agent playbook', () => {
   const reply = buildCapabilityGuideReply('OpenClaw');
   assert.match(reply, /OpenClaw/);
-  assert.match(reply, /日常玩法菜单/);
-  assert.match(reply, /让网页自己跑一遍/);
-  assert.match(reply, /看看你现在卡不卡/);
-  assert.match(reply, /互相照看/);
-  assert.match(reply, /每天收一封小结/);
+  assert.match(reply, /大神版玩法菜单/);
+  assert.match(reply, /日常体检/);
+  assert.match(reply, /你现在卡不卡/);
+  assert.match(reply, /UI 自动化/);
+  assert.match(reply, /邮箱\/日报/);
+  assert.match(reply, /token 工厂/);
+  assert.match(reply, /知识库/);
+  assert.match(reply, /互修/);
+  assert.match(reply, /测试资产/);
   assert.match(reply, /把报告和截图走文件通道/);
   assert.match(reply, /微信 Bridge 计划/);
   assert.match(reply, /画一张商品主图/);
-  assert.match(reply, /记到脑库里/);
-  assert.match(reply, /开一轮 token 训练场/);
-  assert.match(reply, /UI 自动化/);
-  assert.match(reply, /服务器状态和互修/);
-  assert.match(reply, /长期记忆和知识库/);
-  assert.match(reply, /邮箱调度/);
   assert.match(reply, /电商客服训练数据/);
+  assert.match(reply, /日常体检与互修/);
+  assert.match(reply, /知识库与长期记忆/);
+  assert.match(reply, /邮箱与日报/);
+  assert.match(reply, /测试资产工坊/);
 });
 
 test('buildBrainGuideReply explains Obsidian and GBrain memory upgrade', () => {
@@ -322,6 +324,50 @@ test('buildClerkAgentReply explains token factory full workflow naturally', () =
   assert.match(reply, /多 Agent 评审/);
   assert.match(reply, /邮箱归档/);
   assert.match(reply, /日报沉淀/);
+});
+
+test('buildClerkAgentReply summarizes token factory task center status', () => {
+  const reply = buildClerkAgentReply({ action: 'token-factory-status' }, {
+    summarizeTasks: () => ({
+      counts: { total: 6, today: 2, running: 1, failed: 1, recoverable: 2 },
+      latest: { id: 'tf-1', status: 'running' },
+    }),
+  });
+  assert.match(reply, /任务中枢/);
+  assert.match(reply, /总任务：6/);
+  assert.match(reply, /可恢复：2/);
+  assert.match(reply, /tf-1/);
+});
+
+test('buildClerkAgentReply supports today and failed task center views', () => {
+  const todayReply = buildClerkAgentReply({ action: 'task-center-today' }, {
+    listTodayTasks: () => [
+      { id: 'tf-a', status: 'queued', updatedAt: '2026-05-06T01:00:00.000Z' },
+    ],
+  });
+  assert.match(todayReply, /任务中枢（今天/);
+  assert.match(todayReply, /tf-a/);
+
+  const failedReply = buildClerkAgentReply({ action: 'task-center-failed' }, {
+    listFailedTasks: () => [
+      { id: 'tf-fail', updatedAt: '2026-05-06T02:00:00.000Z', error: 'quota exhausted' },
+    ],
+  });
+  assert.match(failedReply, /失败任务/);
+  assert.match(failedReply, /tf-fail/);
+  assert.match(failedReply, /quota exhausted/);
+});
+
+test('buildClerkAgentReply supports continue yesterday suggestion', () => {
+  const reply = buildClerkAgentReply({ action: 'task-center-continue-yesterday' }, {
+    summarizeTasks: () => ({
+      counts: { recoverable: 1, failed: 2 },
+      latest: { id: 'tf-z', status: 'interrupted' },
+    }),
+  });
+  assert.match(reply, /继续昨天任务建议/);
+  assert.match(reply, /可恢复任务：1/);
+  assert.match(reply, /tf-z/);
 });
 
 test('buildClerkAgentReply explains multi-agent lab before execution', () => {
