@@ -23,6 +23,11 @@ const {
   readUsageLedgerEntries,
 } = require('../usage-ledger');
 const {
+  buildMailLedgerSummaryReply,
+  filterMailLedgerEntriesForDay,
+  readMailLedgerEntries,
+} = require('../mail-ledger');
+const {
   resolveMailboxAction,
 } = require('../mailbox-action-router');
 const {
@@ -231,6 +236,10 @@ function defaultReadUsageLedger(env = process.env, limit = 200) {
   return readUsageLedgerEntries(env, limit);
 }
 
+function defaultReadMailLedger(env = process.env, limit = 80) {
+  return readMailLedgerEntries(env, limit);
+}
+
 function readJsonFileSafe(filePath) {
   if (!filePath || !existsSync(filePath)) {
     return null;
@@ -361,6 +370,7 @@ function buildClerkMailboxWorkbenchReply(env = process.env) {
     '- 文员，用 verify 邮箱设计一轮注册验证码测试',
     '- 文员，子邮箱可以拿去注册测试平台吗',
     '- 文员，今天邮箱里有哪些任务',
+    '- 文员，今天机器人发了哪些邮件',
     '- 文员，把失败样本归档到 archive',
     '- 文员，把今天日报发到邮箱',
     '- 文员，整理一批客服训练数据并归档',
@@ -468,6 +478,7 @@ function buildClerkMailboxTasksReply(env = process.env) {
     `- 待日报：把今日测试摘要发到 ${resolveMailboxAction('daily', env).mailbox || 'daily 邮箱'}`,
     '',
     '默认不自动发送。你明确说“发送日报到邮箱”或“把这次报告归档到 report”时，我再调用邮件发送。',
+    '要查历史发送记录，可以说：文员，今天机器人发了哪些邮件。',
     '其中 report / daily 可以优先走 evanshine 第二 SMTP；如果第二 SMTP 临时异常，会自动回退默认 SMTP。',
   ].join('\n');
 }
@@ -531,6 +542,7 @@ function buildClerkWorkbenchReply(options = {}) {
     '- 文员，邮箱平台怎么结合起来玩',
     '- 文员，帮我生成一批电商平台客服训练数据',
     '- 文员，发送今天日报到邮箱',
+    '- 文员，今天机器人发了哪些邮件',
   ].join('\n');
 }
 
@@ -570,6 +582,15 @@ function buildClerkAgentReply(route = {}, options = {}) {
 
   if (route.action === 'mailbox-tasks') {
     return buildClerkMailboxTasksReply(options.env || process.env);
+  }
+
+  if (route.action === 'mail-ledger') {
+    const entries = (options.readMailLedger || defaultReadMailLedger)(options.env || process.env);
+    const todayEntries = filterMailLedgerEntriesForDay(entries, {
+      timezoneOffsetMinutes: Number((options.env || process.env).MAIL_LEDGER_TIMEZONE_OFFSET_MINUTES || 480),
+      now: options.now,
+    });
+    return buildMailLedgerSummaryReply(todayEntries);
   }
 
   if (route.action === 'training-data') {

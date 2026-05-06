@@ -244,6 +244,11 @@ function routeClerkIntent(text) {
     return { agent: 'clerk-agent', action: 'mailbox-tasks', requiresAuth: true };
   }
 
+  if (/(邮件|邮箱).{0,18}(发了|发送了|发出去|发送记录|流水|账本|历史|记录|哪些|列表)/i.test(normalized)
+    || /(发了|发送了|发出去|发送记录|流水|账本|历史|记录|哪些|列表).{0,18}(邮件|邮箱)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'mail-ledger', requiresAuth: true };
+  }
+
   if (/(启动|开始|跑|执行|开).{0,12}(多\s*agent|多智能体|agent).{0,20}(训练场|实验室|lab|对打|评测|生成|归档)/i.test(normalized)
     || /(多\s*agent|多智能体|agent).{0,20}(训练场|实验室|lab|对打|评测|生成|归档)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'multi-agent-lab', requiresAuth: true };
@@ -380,6 +385,11 @@ function routeOfficeIntent(text) {
   if (/(今天|当前|现在).{0,12}(邮箱|邮件).{0,12}(任务|队列|待办|有什么|有哪些)/i.test(normalized)
     || /(邮箱|邮件).{0,12}(任务|队列|待办).{0,12}(今天|当前|现在|有哪些|有什么)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'mailbox-tasks', requiresAuth: true };
+  }
+
+  if (/(邮件|邮箱).{0,18}(发了|发送了|发出去|发送记录|流水|账本|历史|记录|哪些|列表)/i.test(normalized)
+    || /(发了|发送了|发出去|发送记录|流水|账本|历史|记录|哪些|列表).{0,18}(邮件|邮箱)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'mail-ledger', requiresAuth: true };
   }
 
   if (/(整理|列一下|看看|汇总).{0,12}(今天|当前|项目)?.{0,12}(待办|todo|清单|还没|未完成|下一步)/i.test(normalized)

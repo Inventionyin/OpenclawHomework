@@ -277,6 +277,28 @@ test('buildClerkAgentReply lists today mailbox tasks without sending mail', () =
   assert.match(reply, /agent4\.daily@claw\.163\.com/);
 });
 
+test('buildClerkAgentReply summarizes recent mail ledger entries', () => {
+  const reply = buildClerkAgentReply({ action: 'mail-ledger' }, {
+    readMailLedger: () => [
+      {
+        timestamp: '2026-05-06T00:02:03.000Z',
+        assistant: 'Hermes',
+        action: 'daily',
+        provider: 'evanshine',
+        sent: true,
+        subject: '[Daily Summary] 自动化测试日报',
+        externalTo: ['1693457391@qq.com'],
+        archiveTo: ['agent4.daily@claw.163.com'],
+      },
+    ],
+  });
+
+  assert.match(reply, /邮件发送账本/);
+  assert.match(reply, /Hermes/);
+  assert.match(reply, /daily/);
+  assert.match(reply, /1693457391@qq.com/);
+});
+
 test('buildClerkAgentReply turns training data into a clerk workflow', () => {
   const reply = buildClerkAgentReply({ action: 'training-data' });
   assert.match(reply, /电商客服训练数据/);

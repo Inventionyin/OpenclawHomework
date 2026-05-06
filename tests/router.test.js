@@ -249,6 +249,11 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'mailbox-tasks',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，今天机器人发了哪些邮件'), {
+    agent: 'clerk-agent',
+    action: 'mail-ledger',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，帮我生成一批电商平台客服训练数据'), {
     agent: 'clerk-agent',
     action: 'training-data',
@@ -332,6 +337,11 @@ test('routeAgentIntent routes office work without requiring clerk wake word', ()
   assert.deepEqual(routeAgentIntent('今天邮箱里有哪些任务'), {
     agent: 'clerk-agent',
     action: 'mailbox-tasks',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('今天发了哪些邮件'), {
+    agent: 'clerk-agent',
+    action: 'mail-ledger',
     requiresAuth: true,
   });
 });

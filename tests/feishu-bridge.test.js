@@ -39,6 +39,9 @@ const {
   uploadFeishuImage,
   buildRoutedAgentReply,
 } = require('../scripts/feishu-bridge');
+const {
+  readMailLedgerEntries,
+} = require('../scripts/mail-ledger');
 
 async function waitForCondition(checker, options = {}) {
   const timeoutMs = Number(options.timeoutMs || 2000);
@@ -1101,6 +1104,56 @@ test('sendDailySummaryNotification can use evanshine SMTP profile for daily acti
   assert.equal(transports[0].user, 'report@evanshine.me');
   assert.equal(transports[0].from, 'report@evanshine.me');
   assert.deepEqual(transports[0].to, ['agent4.daily@claw.163.com']);
+});
+
+test('sendDailySummaryNotification writes mail ledger for real smtp sender path', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'daily-mail-ledger-'));
+  const ledgerFile = join(tempDir, 'mail-ledger.jsonl');
+  const transports = [];
+
+  try {
+    await sendDailySummaryNotification(
+      [{ conclusion: 'success', runUrl: 'https://example.com/run' }],
+      {
+        FEISHU_ASSISTANT_NAME: 'Hermes',
+        EMAIL_NOTIFY_ENABLED: 'true',
+        DAILY_SUMMARY_EXTERNAL_TO: '1693457391@qq.com',
+        SMTP_HOST: 'smtp.default.example.com',
+        SMTP_PORT: '465',
+        SMTP_SECURE: 'true',
+        SMTP_USER: 'default@example.com',
+        SMTP_PASS: 'default-password',
+        EMAIL_FROM: 'default@example.com',
+        MAIL_LEDGER_ENABLED: 'true',
+        MAIL_LEDGER_PATH: ledgerFile,
+      },
+      {
+        createTransport: (config) => ({
+          sendMail: async (mail) => {
+            transports.push({
+              host: config.host,
+              user: config.auth.user,
+              to: mail.to,
+            });
+            return { messageId: 'daily-ledger-1' };
+          },
+        }),
+      },
+    );
+
+    assert.equal(transports.length, 1);
+    const entries = readMailLedgerEntries({ MAIL_LEDGER_PATH: ledgerFile });
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].assistant, 'Hermes');
+    assert.equal(entries[0].action, 'daily');
+    assert.equal(entries[0].provider, 'default');
+    assert.equal(entries[0].sent, true);
+    assert.deepEqual(entries[0].externalTo, ['1693457391@qq.com']);
+    assert.deepEqual(entries[0].archiveTo, ['agent4.daily@claw.163.com']);
+    assert.doesNotMatch(JSON.stringify(entries[0]), /default-password/);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('sendDailySummaryNotification builds a richer daily report from saved state and usage ledger', async () => {

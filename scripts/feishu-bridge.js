@@ -53,6 +53,9 @@ const {
   readUsageLedgerEntries,
 } = require('./usage-ledger');
 const {
+  appendMailLedgerEntry,
+} = require('./mail-ledger');
+const {
   editImage,
   generateImage,
 } = require('./image-client');
@@ -1901,11 +1904,23 @@ async function sendMailWithRouting(message, env = process.env, options = {}) {
   const providerName = resolveMailProviderForAction(message?.action, env);
   const selectedProfile = buildSmtpProfile(providerName, env);
   if (!hasSmtpProfileConfig(selectedProfile)) {
-    return { sent: false, reason: 'missing_smtp_config', action: message?.action || 'unknown', provider: selectedProfile.name };
+    const result = { sent: false, reason: 'missing_smtp_config', action: message?.action || 'unknown', provider: selectedProfile.name };
+    appendMailLedgerEntry(env, {
+      ...message,
+      ...result,
+      assistant: getAssistantName(env),
+    });
+    return result;
   }
 
   try {
-    return await sendSmtpMail(message, selectedProfile, options);
+    const result = await sendSmtpMail(message, selectedProfile, options);
+    appendMailLedgerEntry(env, {
+      ...message,
+      ...result,
+      assistant: getAssistantName(env),
+    });
+    return result;
   } catch (error) {
     if (selectedProfile.name === 'default') {
       throw error;
@@ -1920,10 +1935,16 @@ async function sendMailWithRouting(message, env = process.env, options = {}) {
     }
 
     const fallbackResult = await sendSmtpMail(message, fallbackProfile, options);
-    return {
+    const result = {
       ...fallbackResult,
       fallbackFrom: selectedProfile.name,
     };
+    appendMailLedgerEntry(env, {
+      ...message,
+      ...result,
+      assistant: getAssistantName(env),
+    });
+    return result;
   }
 }
 
