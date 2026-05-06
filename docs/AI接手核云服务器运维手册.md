@@ -155,12 +155,14 @@ Hermes 服务器：
 - Hermes 邮件网关 home email 为 1693457391@qq.com
 - 2026-05-04 已在 Hermes 侧执行 `mail-cli auth apikey set <key>`，mail-cli 管理 API 已认证
 - Hermes 侧 `mail-cli clawemail list` 当前返回 shine1@claw.163.com；master user 为 1693457391@qq.com
+- 2026-05-06 已增加 `hermes-clawemail-inbox-notifier.service`，通过 `mail-cli --json mail list --fid 1` 轮询 Hermes ClawEmail 收件箱，有新邮件时推送飞书通知
 ```
 
 重要区分：
 
 - `mail-cli` 是 ClawEmail 的命令行工具，OpenClaw 服务器已认证。
 - `hermes-gateway.service` 是 Hermes 官方原生消息网关，Hermes 服务器当前用它接入 ClawEmail。
+- `hermes-clawemail-inbox-notifier.service` 是本仓库新增的收信通知器，只负责“ClawEmail 新邮件 -> 飞书提醒”，不替代 Hermes 官方网关。
 - OpenClaw 和 Hermes 使用不同的 ClawEmail 地址：OpenClaw 为 `watchee@claw.163.com`，Hermes 为 `shine1@claw.163.com`。
 - Hermes 的 `mail-cli` 管理 API 已认证，可以执行 `mail-cli clawemail list/create` 一类管理命令；当前管理 API 和 `hermes-gateway.service` 邮件网关都对应 `shine1@claw.163.com`。
 - 不要尝试直接把 OpenClaw 的 `/root/.config/mail-cli` 复制到 Hermes。`secrets.enc` 与本机 keychain 绑定，跨机器复制会报 `KEYCHAIN_ERROR`。
@@ -181,6 +183,8 @@ Hermes 服务器检查命令：
 systemctl --user is-active hermes-gateway
 systemctl --user status hermes-gateway --no-pager -l
 tail -n 100 /root/.hermes/logs/gateway.log
+systemctl is-active hermes-clawemail-inbox-notifier
+journalctl -u hermes-clawemail-inbox-notifier -n 100 --no-pager
 systemctl is-active hermes-feishu-bridge
 curl -sS http://127.0.0.1:8788/health
 ```
@@ -198,6 +202,7 @@ Hermes 邮件网关的关键配置在：
 - 这里说的是 `hermes-gateway.service` 这条 Hermes 原生邮件网关链路，不是 `hermes-feishu-bridge` 飞书桥服务。
 - `hermes-gateway.service` 的官方适配器仍按 STARTTLS 语境排查；如果它循环重启，先看 `/root/.hermes/logs/gateway.log`。
 - `hermes-feishu-bridge` 的日报/报告发信已经在 2026-05-06 切到 ClawEmail SMTP：`claw.163.com:465` + `SMTP_SECURE=true`，发件人 `shine1@claw.163.com`。
+- `hermes-clawemail-inbox-notifier.service` 首次启动只记录已有邮件，不推送历史邮件；之后新邮件才推飞书，避免一次性刷屏。
 - 如果 `hermes-gateway.service` 循环重启，先看 `/root/.hermes/logs/gateway.log` 里的 IMAP/SMTP 错误，不要先怀疑模型。
 - 如果网关因为邮件连接失败反复重启，生产飞书桥梁服务通常不受影响；优先确认 `hermes-feishu-bridge` 和 `/health`。
 
@@ -517,6 +522,15 @@ SMTP_USER=shine1@claw.163.com
 SMTP_PASS=ClawEmail 邮箱密码或授权码
 EMAIL_FROM=shine1@claw.163.com
 EMAIL_TO=收件邮箱，多个用逗号分隔
+
+CLAWEMAIL_NOTIFY_ENABLED=true
+CLAWEMAIL_INBOX_FID=1
+CLAWEMAIL_INBOX_LIMIT=20
+CLAWEMAIL_INBOX_INTERVAL_MS=60000
+CLAWEMAIL_INBOX_READ_BODY=true
+CLAWEMAIL_INBOX_STATE_FILE=/var/lib/openclaw-homework/clawemail-inbox-state.json
+CLAWEMAIL_NOTIFY_RECEIVE_ID_TYPE=chat_id
+CLAWEMAIL_NOTIFY_RECEIVE_ID=飞书通知目标 chat_id 或 open_id
 
 REPORT_SMTP_HOST=mail.evanshine.me
 REPORT_SMTP_PORT=587

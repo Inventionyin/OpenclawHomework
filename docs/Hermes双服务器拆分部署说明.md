@@ -240,11 +240,27 @@ Home email：1693457391@qq.com
 收信 IMAP：claw.163.com:993
 hermes-gateway 发信 SMTP：按 /root/.hermes/config.yaml 排查
 Hermes 飞书桥服务发信 SMTP：claw.163.com:465 + SMTP_SSL，发件人 shine1@claw.163.com
+ClawEmail 收信通知器：hermes-clawemail-inbox-notifier.service
 ```
 
 2026-05-04 已使用官方推荐的 `hermes-email-setup.sh --auth-url ... --home-email 1693457391@qq.com` 重新配置，`hermes-gateway.service` 为 user 级服务，当前运行正常。
 
 注意：Hermes 服务器当前有两套 ClawEmail 能力。`hermes-gateway.service` 使用 `shine1@claw.163.com` 作为邮件网关账号，用于收发邮件；`mail-cli` 管理 API 已在 2026-05-04 单独认证，用于管理 ClawEmail 邮箱。不要从 OpenClaw 服务器直接复制 `/root/.config/mail-cli`，该目录里的 `secrets.enc` 与本机 keychain 绑定，跨机器复制会失效。
+
+2026-05-06 新增 `hermes-clawemail-inbox-notifier.service`。它不是 Hermes 官方原生网关，而是本仓库的轻量收信通知器：
+
+```text
+mail-cli --json mail list --fid 1 --desc --limit N -> scripts/clawemail-inbox-notifier.js -> 飞书通知
+```
+
+设计口径：
+
+- 只轮询当前 `mail-cli` 认证账号的收件箱，当前是 `shine1@claw.163.com`。
+- 第一次启动只记录已有最新邮件，不把历史邮件全部推到飞书，避免刷屏。
+- 后续发现新邮件才发飞书通知，状态文件默认是 `/var/lib/openclaw-homework/clawemail-inbox-state.json`。
+- 如设置 `CLAWEMAIL_INBOX_READ_BODY=true`，通知器会对新邮件额外执行 `mail-cli --json read body --id <id>`，把正文摘要放进飞书提醒；读取失败不会阻断通知。
+- 飞书目标优先读 `CLAWEMAIL_NOTIFY_RECEIVE_ID`，没有时回退 `FEISHU_NOTIFY_RECEIVE_ID` 或授权用户 open_id。
+- 这个服务只负责“收到邮件 -> 通知你”，不负责自动重启服务器、清理硬盘或执行 UI 自动化；真正动作仍交给飞书桥和邮箱动作注册表。
 
 2026-05-06：`hermes-feishu-bridge` 已切到 ClawEmail SMTP 465 发信。环境文件 `/etc/hermes-feishu-bridge.env` 里应看到：
 
@@ -419,6 +435,25 @@ systemctl --user status hermes-gateway --no-pager -l
 tail -n 100 /root/.hermes/logs/gateway.log
 ```
 
+检查 ClawEmail 收信通知器：
+
+```bash
+systemctl is-active hermes-clawemail-inbox-notifier
+systemctl status hermes-clawemail-inbox-notifier --no-pager -l
+journalctl -u hermes-clawemail-inbox-notifier -n 100 --no-pager
+cat /var/lib/openclaw-homework/clawemail-inbox-state.json
+```
+
+手动跑一次：
+
+```bash
+cd /opt/OpenclawHomework
+set -a
+. /etc/hermes-feishu-bridge.env
+set +a
+node scripts/clawemail-inbox-notifier.js --once --env-file /etc/hermes-feishu-bridge.env
+```
+
 如果要重启：
 
 ```bash
@@ -430,6 +465,7 @@ systemctl --user restart hermes-gateway
 关键排障点：
 
 - 分清两条链路：`hermes-gateway.service` 是 Hermes 原生邮件网关；`hermes-feishu-bridge` 是飞书桥服务。
+- 新增第三条轻量链路：`hermes-clawemail-inbox-notifier.service` 只做 ClawEmail 收件箱新邮件通知。
 - `hermes-feishu-bridge` 使用 Node/nodemailer，`SMTP_SECURE=true` 时可以走 `claw.163.com:465` 隐式 SSL；这条链路已经实测可用。
 - 如果 `hermes-gateway.service` 日志出现 `SMTP connection failed`，按它自己的 `/root/.hermes/config.yaml` 和官方适配器语境排查，不要反向改坏飞书桥服务。
 - 当前实测：Hermes 服务器到 `claw.163.com:465` TCP/EHLO/登录/发信可用；`25` 可能超时；`587` TCP 可连但 SMTP 握手可能超时。
