@@ -2859,6 +2859,9 @@ async function runIntentPlanner(text, env = process.env, options = {}) {
 
 async function resolveAgentRoute(text, env = process.env, options = {}) {
   const ruleRoute = routeAgentIntent(text);
+  if (ruleRoute.agent === 'chat-agent' && parseSmallTalkMessage(text, env)) {
+    return ruleRoute;
+  }
   if (isStrongRuleRoute(ruleRoute) || !isIntentPlannerEnabled(env, options)) {
     return ruleRoute;
   }

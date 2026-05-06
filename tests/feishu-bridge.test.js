@@ -519,6 +519,25 @@ test('resolveAgentRoute keeps explicit command routes ahead of model planner sug
   });
 });
 
+test('resolveAgentRoute keeps greetings on local fast path without model planner', async () => {
+  let plannerCalled = false;
+  const route = await resolveAgentRoute('你好', {
+    FEISHU_INTENT_PLANNER_ENABLED: 'true',
+  }, {
+    intentPlanner: async () => {
+      plannerCalled = true;
+      return '{"intent":"tool","agent":"clerk-agent","action":"command-center","confidence":"high"}';
+    },
+  });
+
+  assert.equal(plannerCalled, false);
+  assert.deepEqual(route, {
+    agent: 'chat-agent',
+    action: 'chat',
+    requiresAuth: false,
+  });
+});
+
 test('resolveAgentRoute can upgrade safe fuzzy chat through model planner', async () => {
   let promptText = '';
   const route = await resolveAgentRoute('我有点乱，先听你判断', {
