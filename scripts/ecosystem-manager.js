@@ -179,6 +179,7 @@ function buildInstallShellScript() {
     'cd /opt/gbrain',
     'bun install',
     'bun link || true',
+    'if [ -x "$BUN_INSTALL/bin/gbrain" ]; then ln -sfn "$BUN_INSTALL/bin/gbrain" /usr/local/bin/gbrain; fi',
     'command -v gbrain || true',
     'gbrain --help | head -n 40 || true',
   ].join('\n');

@@ -72,6 +72,7 @@ test('buildInstallShellScript keeps dirty external gbrain checkout instead of ov
 
   assert.match(script, /apt-get install -y unzip/);
   assert.match(script, /git -C \/opt\/gbrain diff --quiet/);
+  assert.match(script, /ln -sfn "\$BUN_INSTALL\/bin\/gbrain" \/usr\/local\/bin\/gbrain/);
   assert.match(script, /Skipping GBrain update because \/opt\/gbrain has local changes/);
   assert.doesNotMatch(script, /git reset --hard/);
 });
