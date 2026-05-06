@@ -2257,6 +2257,55 @@ test('sendFeishuTextMessage fetches tenant token and sends text message', async 
   assert.equal(calls[1].options.headers.Authorization, 'Bearer tenant-token');
 });
 
+test('sendFeishuTextMessage reuses cached tenant token for the same app', async () => {
+  const calls = [];
+  const env = {
+    FEISHU_APP_ID: `cli_cache_${Date.now()}`,
+    FEISHU_APP_SECRET: 'secret_xxx',
+  };
+  const message = {
+    receiveIdType: 'open_id',
+    receiveId: 'user-a',
+    msgType: 'text',
+    content: JSON.stringify({ text: 'hello' }),
+  };
+
+  await sendFeishuTextMessage(env, message, async (url, options) => {
+    calls.push({ url, options });
+    if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+      return {
+        ok: true,
+        json: async () => ({
+          code: 0,
+          tenant_access_token: 'cached-tenant-token',
+          expire: 7200,
+        }),
+      };
+    }
+
+    return {
+      ok: true,
+      json: async () => ({ code: 0 }),
+    };
+  });
+
+  await sendFeishuTextMessage(env, message, async (url, options) => {
+    calls.push({ url, options });
+    if (url.endsWith('/auth/v3/tenant_access_token/internal')) {
+      throw new Error('token endpoint should not be called when cached token is fresh');
+    }
+
+    return {
+      ok: true,
+      json: async () => ({ code: 0 }),
+    };
+  });
+
+  assert.equal(calls.filter((call) => call.url.endsWith('/auth/v3/tenant_access_token/internal')).length, 1);
+  assert.equal(calls.filter((call) => call.url.includes('/im/v1/messages?')).length, 2);
+  assert.equal(calls[2].options.headers.Authorization, 'Bearer cached-tenant-token');
+});
+
 test('sendFeishuMessageUpdate patches an existing Feishu message', async () => {
   const calls = [];
   await sendFeishuMessageUpdate(

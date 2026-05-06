@@ -96,6 +96,7 @@ let openClawCliQueue = Promise.resolve();
 const seenFeishuEventKeys = new Map();
 const scheduledFeishuNotificationKeys = new Map();
 const recentFeishuImages = new Map();
+const feishuTenantTokenCache = new Map();
 
 function parseJsonContent(content) {
   if (typeof content !== 'string') {
@@ -1441,6 +1442,12 @@ async function fetchFeishuTenantAccessToken(env = process.env, fetchImpl = fetch
     throw new Error('Missing Feishu app credentials. Set FEISHU_APP_ID and FEISHU_APP_SECRET.');
   }
 
+  const cacheKey = `${appId}:${appSecret}`;
+  const cached = feishuTenantTokenCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.token;
+  }
+
   const response = await fetchImpl('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
     method: 'POST',
     headers: {
@@ -1460,6 +1467,14 @@ async function fetchFeishuTenantAccessToken(env = process.env, fetchImpl = fetch
   const body = await response.json();
   if (body.code !== 0 || !body.tenant_access_token) {
     throw new Error(`Feishu tenant token request failed: ${body.msg || JSON.stringify(body)}`);
+  }
+
+  const expireSeconds = Number(body.expire);
+  if (Number.isFinite(expireSeconds) && expireSeconds > 0) {
+    feishuTenantTokenCache.set(cacheKey, {
+      token: body.tenant_access_token,
+      expiresAt: Date.now() + Math.max(60, expireSeconds - 300) * 1000,
+    });
   }
 
   return body.tenant_access_token;
