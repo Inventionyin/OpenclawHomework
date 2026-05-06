@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
-const { existsSync, mkdtempSync, readFileSync, rmSync } = require('node:fs');
+const { spawnSync } = require('node:child_process');
+const { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const test = require('node:test');
@@ -208,6 +209,39 @@ test('runTrendTokenFactory keeps running when usage ledger write fails', async (
     assert.equal(result.report.failedJobs, 0);
     assert.equal(result.warnings.length, 1);
     assert.match(result.warnings[0].message, /EISDIR|permission|illegal operation/i);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('trend token factory CLI email mode does not emit circular dependency warnings', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'trend-token-factory-cli-'));
+  const inputFile = join(tempDir, 'latest.json');
+  const outputDir = join(tempDir, 'out');
+
+  try {
+    writeFileSync(inputFile, JSON.stringify({
+      generatedAt: '2026-05-07T00:00:00.000Z',
+      items: [],
+    }), 'utf8');
+
+    const result = spawnSync(process.execPath, [
+      join(__dirname, '..', 'scripts', 'trend-token-factory.js'),
+      '--input', inputFile,
+      '--output-dir', outputDir,
+      '--email',
+    ], {
+      cwd: join(__dirname, '..'),
+      env: {
+        ...process.env,
+        EMAIL_NOTIFY_ENABLED: 'false',
+      },
+      encoding: 'utf8',
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stderr, /circular dependency|non-existent property/i);
+    assert.match(result.stdout, /"totalJobs": 0/);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

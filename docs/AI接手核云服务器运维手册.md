@@ -984,6 +984,64 @@ node scripts/scheduled-token-lab.js --dry-run --force --env-file /etc/hermes-fei
 - token lab 每个 job 默认 120 秒超时，单个模型卡住会记失败并继续整批，避免一条慢响应拖死定时任务。
 - UI 调度失败会写 `dispatch_failed`；GitHub 已触发但暂未定位到 run 会写 `run_lookup_not_found`，状态文件不会保存 GitHub token。
 
+趋势情报和趋势 token 工厂：
+
+```bash
+cd /opt/OpenclawHomework
+node scripts/trend-intel.js
+node scripts/trend-token-factory.js \
+  --batch-size 2 \
+  --input data/trend-intel/latest.json \
+  --output-dir /tmp/trend-token-factory-smoke \
+  --env-file /etc/openclaw-feishu-bridge.env \
+  --email
+```
+
+飞书自然语言入口：
+
+```text
+文员，今天开源热榜
+文员，烧 token 分析今天 GitHub 热门项目
+```
+
+OpenClaw 服务器当前已安装趋势定时任务：
+
+```bash
+systemctl status openclaw-trend-token-factory.timer --no-pager -l
+systemctl cat openclaw-trend-token-factory.service
+```
+
+配置：
+
+```text
+unit: openclaw-trend-token-factory
+env file: /etc/openclaw-feishu-bridge.env
+state: /var/lib/openclaw-homework/openclaw-trend-token-factory/latest-trend-intel.json
+output: /var/lib/openclaw-homework/openclaw-trend-token-factory/output
+batch size: 12
+schedule: UTC 02:10 / 北京时间 10:10
+```
+
+Hermes 服务器恢复 SSH 后补部署：
+
+```bash
+cd /opt/OpenclawHomework
+git fetch origin main
+git pull --ff-only origin main
+npm test
+systemctl restart hermes-feishu-bridge
+bash scripts/install-trend-token-factory.sh \
+  --unit-name hermes-trend-token-factory \
+  --env-file /etc/hermes-feishu-bridge.env \
+  --state-dir /var/lib/openclaw-homework/hermes-trend-token-factory \
+  --output-dir /var/lib/openclaw-homework/hermes-trend-token-factory/output \
+  --on-calendar "*-*-* 02:10:00" \
+  --batch-size 24
+systemctl list-timers '*trend-token-factory*' --no-pager
+```
+
+2026-05-07 现场状态：OpenClaw 已更新到 `785e876`，`npm test` 431 条通过，`openclaw-feishu-bridge` active，`trend-intel` 真实抓取 50 条。Hermes 公网 22 端口从本地超时，443/8788 拒绝连接，暂时无法 SSH 部署；等安全组/sshd/实例状态恢复后按上面的“补部署”命令执行。
+
 ## 8.1 官方 OpenClaw/Hermes 更新流程
 
 更新官方组件前，先记录当前版本和服务状态：

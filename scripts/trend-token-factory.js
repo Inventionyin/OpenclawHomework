@@ -498,6 +498,20 @@ function buildHelpText() {
   ].join('\n');
 }
 
+module.exports = {
+  buildHelpText,
+  buildTrendTokenEmailMessages,
+  buildTrendTokenPlan,
+  buildTrendTokenPrompt,
+  buildTrendTokenReport,
+  classifyTrendJobKind,
+  loadEnvFile,
+  parseArgs,
+  readTrendIntelInput,
+  runTrendTokenFactory,
+  withTimeout,
+};
+
 if (require.main === module) {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -535,17 +549,3 @@ if (require.main === module) {
     process.exitCode = 1;
   });
 }
-
-module.exports = {
-  buildHelpText,
-  buildTrendTokenEmailMessages,
-  buildTrendTokenPlan,
-  buildTrendTokenPrompt,
-  buildTrendTokenReport,
-  classifyTrendJobKind,
-  loadEnvFile,
-  parseArgs,
-  readTrendIntelInput,
-  runTrendTokenFactory,
-  withTimeout,
-};
