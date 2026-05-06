@@ -2037,6 +2037,132 @@ test('buildRoutedAgentReply sends token factory receipt before long execution', 
   assert.match(sent[0], /整套 token 工厂/);
 });
 
+test('buildRoutedAgentReply runs trend intel collection and writes report', async () => {
+  const sent = [];
+  const calls = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-clerk-trend-intel',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '文员，今天开源热榜和热点新闻' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      TREND_INTEL_OUTPUT_FILE: '/tmp/trend-intel/latest.json',
+    },
+    {
+      receiptSender: async (message) => {
+        sent.push(JSON.parse(message.content).text);
+        return { message_id: 'reply-trend-intel' };
+      },
+      trendIntelCollector: async ({ env }) => {
+        calls.push(['collector', env.TREND_INTEL_OUTPUT_FILE]);
+        return [{
+          id: 'github-trending:microsoft/playwright',
+          title: 'microsoft/playwright',
+          source: 'GitHub Trending',
+          kind: 'github-trending',
+          link: 'https://github.com/microsoft/playwright',
+          stars: 71000,
+        }];
+      },
+      trendIntelReportWriter: (file, report) => {
+        calls.push(['writer', file, report.total]);
+      },
+    },
+    { agent: 'clerk-agent', action: 'trend-intel', requiresAuth: true },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(sent[0], /收到/);
+  assert.match(sent[0], /热点/);
+  assert.deepEqual(calls, [
+    ['collector', '/tmp/trend-intel/latest.json'],
+    ['writer', '/tmp/trend-intel/latest.json', 1],
+  ]);
+  assert.match(reply.replyText, /趋势情报已完成/);
+  assert.match(reply.replyText, /1/);
+  assert.match(reply.replyText, /microsoft\/playwright/);
+  assert.match(reply.replyText, /latest\.json/);
+});
+
+test('buildRoutedAgentReply runs trend token factory and sends receipt before execution', async () => {
+  const sent = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-clerk-trend-token-factory',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '文员，烧 100 万 token 分析今天 GitHub 热门项目' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      TREND_TOKEN_FACTORY_BATCH_SIZE: '2',
+    },
+    {
+      receiptSender: async (message) => {
+        sent.push(JSON.parse(message.content).text);
+        return { message_id: 'reply-trend-token-factory' };
+      },
+      trendTokenFactoryRunner: async (runnerOptions) => {
+        assert.equal(runnerOptions.batchSize, '2');
+        await runnerOptions.emailSender({ action: 'report', mailbox: 'watchee.report@claw.163.com' });
+        sent.push('runner-called');
+        return {
+          report: {
+            totalJobs: 2,
+            failedJobs: 0,
+            totalTokens: 1200,
+            estimatedTotalTokens: 1800,
+            followUpProjects: ['microsoft/playwright'],
+          },
+          files: {
+            report: '/tmp/trend-token-factory/report.md',
+            items: '/tmp/trend-token-factory/items.json',
+            summary: '/tmp/trend-token-factory/summary.json',
+          },
+          emailMessages: [
+            { action: 'report', mailbox: 'watchee.report@claw.163.com' },
+          ],
+        };
+      },
+      emailSender: async (message) => {
+        sent.push(message.action);
+        return { sent: true };
+      },
+    },
+    { agent: 'clerk-agent', action: 'trend-token-factory', requiresAuth: true },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(sent[0], /收到/);
+  assert.match(sent[0], /趋势 Token 工厂/);
+  assert.deepEqual(sent.slice(1), ['report', 'runner-called']);
+  assert.match(reply.replyText, /趋势 Token 工厂已完成/);
+  assert.match(reply.replyText, /2/);
+  assert.match(reply.replyText, /1200/);
+  assert.match(reply.replyText, /1800/);
+  assert.match(reply.replyText, /microsoft\/playwright/);
+  assert.match(reply.replyText, /report\.md/);
+});
+
 test('buildRoutedAgentReply can query latest token factory task status', async () => {
   const reply = await buildRoutedAgentReply(
     {

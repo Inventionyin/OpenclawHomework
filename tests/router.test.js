@@ -294,6 +294,16 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'token-lab',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，今天开源热榜'), {
+    agent: 'clerk-agent',
+    action: 'trend-intel',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，烧 100 万 token 分析今天 GitHub 热门项目'), {
+    agent: 'clerk-agent',
+    action: 'trend-token-factory',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，把 token 跑起来'), {
     agent: 'clerk-agent',
     action: 'token-factory',

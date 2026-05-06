@@ -272,6 +272,16 @@ function routeClerkIntent(text) {
     };
   }
 
+  if (/(烧|消耗|花完|用掉).{0,12}(token|额度).{0,30}(git(?:hub)?|开源|热门|热榜|热点|新闻|项目|趋势)/i.test(normalized)
+    || /(git(?:hub)?|开源|热门|热榜|热点|新闻|项目|趋势).{0,30}(烧|消耗|花完|用掉).{0,12}(token|额度)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'trend-token-factory', requiresAuth: true };
+  }
+
+  if (/(开源|github|热门项目|热榜|热点新闻|热点|新闻|趋势).{0,24}(热榜|热点|新闻|日报|看看|分析|今天|每日|推荐)/i.test(normalized)
+    || /(今天|每日).{0,12}(开源|github|热门项目|热榜|热点新闻|热点|新闻|趋势)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'trend-intel', requiresAuth: true };
+  }
+
   if (/(飞书|消息|聊天|群里|里面|卡片).{0,16}(嵌入|打开|查看|显示|发).{0,16}(控制台|看板|dashboard|console)/i.test(normalized)
     || /(控制台|看板|dashboard|console).{0,16}(飞书|消息|聊天|群里|里面|卡片|打开|查看|显示)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'dashboard-card', requiresAuth: true };
@@ -453,6 +463,16 @@ function routeOfficeIntent(text) {
   if (/(邮件|邮箱).{0,18}(发了|发送了|发出去|发送记录|流水|账本|历史|记录|哪些|列表)/i.test(normalized)
     || /(发了|发送了|发出去|发送记录|流水|账本|历史|记录|哪些|列表).{0,18}(邮件|邮箱)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'mail-ledger', requiresAuth: true };
+  }
+
+  if (/(烧|消耗|花完|用掉).{0,12}(token|额度).{0,30}(git(?:hub)?|开源|热门|热榜|热点|新闻|项目|趋势)/i.test(normalized)
+    || /(git(?:hub)?|开源|热门|热榜|热点|新闻|项目|趋势).{0,30}(烧|消耗|花完|用掉).{0,12}(token|额度)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'trend-token-factory', requiresAuth: true };
+  }
+
+  if (/(开源|github|热门项目|热榜|热点新闻|热点|新闻|趋势).{0,24}(热榜|热点|新闻|日报|看看|分析|今天|每日|推荐)/i.test(normalized)
+    || /(今天|每日).{0,12}(开源|github|热门项目|热榜|热点新闻|热点|新闻|趋势)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'trend-intel', requiresAuth: true };
   }
 
   if (/(飞书|消息|聊天|群里|里面|卡片).{0,16}(嵌入|打开|查看|显示|发).{0,16}(控制台|看板|dashboard|console)/i.test(normalized)

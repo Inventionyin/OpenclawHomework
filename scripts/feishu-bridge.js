@@ -94,6 +94,14 @@ const {
   buildDashboardHtml,
   buildDashboardState,
 } = require('./dashboard');
+const {
+  buildTrendIntelReport,
+  collectTrendIntel,
+  writeTrendIntelReport,
+} = require('./trend-intel');
+const {
+  runTrendTokenFactory,
+} = require('./trend-token-factory');
 
 const VALID_RUN_MODES = new Set(['contracts', 'smoke', 'all']);
 let openClawCliQueue = Promise.resolve();
@@ -1923,6 +1931,49 @@ function buildTokenFactoryBackgroundReply(task) {
   ].join('\n');
 }
 
+function buildTrendIntelReply(report, outputFile) {
+  const items = Array.isArray(report?.items) ? report.items : [];
+  const topLines = items.slice(0, 5).map((item, index) => {
+    const stars = item.stars ? `（${item.stars} stars）` : '';
+    return `${index + 1}. ${item.title}${stars} - ${item.source}`;
+  });
+  const errors = Array.isArray(report?.errors) && report.errors.length
+    ? `\n- 降级源：${report.errors.map((item) => `${item.source}`).join('，')}`
+    : '';
+  return [
+    '趋势情报已完成。',
+    `- 条目数：${report?.total || 0}`,
+    outputFile ? `- 文件：${outputFile}` : null,
+    errors || null,
+    topLines.length ? '' : null,
+    ...topLines,
+    '',
+    '下一步可以说：文员，烧 100 万 token 分析今天 GitHub 热门项目。',
+  ].filter((line) => line !== null).join('\n');
+}
+
+function buildTrendTokenFactoryReply(result = {}) {
+  const report = result.report || {};
+  const files = result.files || {};
+  const followUp = Array.isArray(report.followUpProjects) && report.followUpProjects.length
+    ? report.followUpProjects.slice(0, 6).join('，')
+    : '暂无';
+  return [
+    '趋势 Token 工厂已完成。',
+    `- 任务数：${report.totalJobs || 0}`,
+    `- 失败任务：${report.failedJobs || 0}`,
+    `- 真实 token：${report.totalTokens || 0}`,
+    report.estimatedTotalTokens ? `- 字符估算 token：${report.estimatedTotalTokens}` : null,
+    `- 推荐关注：${followUp}`,
+    files.report ? `- 报告：${files.report}` : null,
+    files.items ? `- 产物：${files.items}` : null,
+    files.summary ? `- 摘要：${files.summary}` : null,
+    Array.isArray(result.warnings) && result.warnings.length ? `- 警告：${result.warnings.length} 条，详见日志/产物。` : null,
+    '',
+    '报告已按 report 邮箱动作归档；这条链路会写 token/耗时账本，用来统计谁更费 token。',
+  ].filter(Boolean).join('\n');
+}
+
 function mergeEmailRecipients(...groups) {
   const merged = [];
   const seen = new Set();
@@ -3589,6 +3640,68 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
       return {
         handled: true,
         replyText: buildTokenFactoryBackgroundReply(started.task),
+      };
+    }
+
+    if (route.action === 'trend-intel') {
+      if (options.receiptSender) {
+        await sendTimedFeishuMessage(
+          options.receiptSender,
+          buildFeishuTextMessage(payload, '收到，开始抓今天的 GitHub 热榜、Hacker News 和 RSS 热点。完成后我会给你摘要和产物路径。', env, {
+            status: '运行中',
+            elapsedMs: elapsedMs(options.timingContext?.startedAt),
+          }),
+          env,
+          options.timingContext,
+          'trend-intel-receipt',
+        ).catch((error) => {
+          console.error(`Feishu trend intel receipt failed: ${error.message}`);
+        });
+      }
+      const collector = options.trendIntelCollector || ((collectorOptions) => collectTrendIntel(collectorOptions.env, collectorOptions.fetchImpl || fetch, collectorOptions));
+      const reportBuilder = options.trendIntelReportBuilder || buildTrendIntelReport;
+      const writer = options.trendIntelReportWriter || writeTrendIntelReport;
+      const outputFile = env.TREND_INTEL_OUTPUT_FILE || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'trend-intel', 'latest.json');
+      const items = await collector({
+        env,
+        fetchImpl: options.fetchImpl,
+      });
+      const report = reportBuilder(items);
+      writer(outputFile, report);
+      return {
+        handled: true,
+        replyText: buildTrendIntelReply(report, outputFile),
+      };
+    }
+
+    if (route.action === 'trend-token-factory') {
+      if (options.receiptSender) {
+        await sendTimedFeishuMessage(
+          options.receiptSender,
+          buildFeishuTextMessage(payload, '收到，开始跑趋势 Token 工厂：读取今日热点，批量调用模型分析开源项目、新闻和训练数据价值。完成后我会发报告。', env, {
+            status: '运行中',
+            elapsedMs: elapsedMs(options.timingContext?.startedAt),
+          }),
+          env,
+          options.timingContext,
+          'trend-token-factory-receipt',
+        ).catch((error) => {
+          console.error(`Feishu trend token factory receipt failed: ${error.message}`);
+        });
+      }
+      const emailSender = options.emailSender
+        ? (message, senderEnv) => options.emailSender(message, senderEnv)
+        : (message, senderEnv) => sendMailboxActionEmail(message, senderEnv, options);
+      const runner = options.trendTokenFactoryRunner || ((runnerOptions) => runTrendTokenFactory(runnerOptions));
+      const result = await runner({
+        env,
+        batchSize: env.TREND_TOKEN_FACTORY_BATCH_SIZE,
+        outputDir: env.TREND_TOKEN_FACTORY_OUTPUT_DIR,
+        emailSender,
+      });
+      return {
+        handled: true,
+        replyText: buildTrendTokenFactoryReply(result),
       };
     }
 

@@ -397,6 +397,19 @@ test('buildClerkAgentReply explains token lab before execution', () => {
   assert.match(reply, /eval/);
 });
 
+test('buildClerkAgentReply explains trend intel and token factory', () => {
+  const intelReply = buildClerkAgentReply({ action: 'trend-intel' });
+  assert.match(intelReply, /开源热榜/);
+  assert.match(intelReply, /GitHub/);
+  assert.match(intelReply, /Hacker News/);
+
+  const factoryReply = buildClerkAgentReply({ action: 'trend-token-factory' });
+  assert.match(factoryReply, /趋势 token 工厂/);
+  assert.match(factoryReply, /热门项目/);
+  assert.match(factoryReply, /UI 自动化/);
+  assert.match(factoryReply, /客服训练数据/);
+});
+
 test('buildClerkAgentReply explains token factory full workflow naturally', () => {
   const reply = buildClerkAgentReply({ action: 'token-factory' });
   assert.match(reply, /token/);

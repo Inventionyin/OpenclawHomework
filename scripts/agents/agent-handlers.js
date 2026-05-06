@@ -796,6 +796,31 @@ function buildClerkAgentReply(route = {}, options = {}) {
     ].join('\n');
   }
 
+  if (route.action === 'trend-intel') {
+    return [
+      '文员开源热榜与热点新闻：',
+      '- 抓取 GitHub Trending、GitHub Search 热门仓库、Hacker News 和 RSS 技术源。',
+      '- 默认关注 AI Agent、LLM、Playwright、软件测试、电商、浏览器自动化。',
+      '- 产物会写到 data/trend-intel，并进入每日热点日报。',
+      '- 后续可以继续接趋势 token 工厂，把热门项目转成学习计划、UI 自动化借鉴点和客服训练数据。',
+      '',
+      '启动口令：文员，今天开源热榜。高消耗口令：文员，烧 token 分析今天 GitHub 热门项目。',
+    ].join('\n');
+  }
+
+  if (route.action === 'trend-token-factory') {
+    return [
+      '文员趋势 token 工厂：',
+      '- 先收集 GitHub 热门项目、Hacker News 热点和 RSS 技术新闻。',
+      '- 再批量调用模型分析每个热门项目的学习价值、UI 自动化可借鉴点、测试风险和行动建议。',
+      '- 会把热点新闻转成电商客服训练数据、QA 评测样本和项目跟进清单。',
+      '- 每次模型调用都会写入 token/耗时账本，产物归档到 data/trend-token-factory。',
+      '- 适合消耗 LongCat 额度，但输出会变成可复盘的学习资产。',
+      '',
+      '启动口令：文员，烧 token 分析今天 GitHub 热门项目。',
+    ].join('\n');
+  }
+
   if (route.action === 'daily-pipeline') {
     return buildDailyPipelineReply(route, options);
   }
