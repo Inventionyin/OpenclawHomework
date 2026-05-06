@@ -13,6 +13,7 @@ const {
 } = require('../daily-summary-snapshot');
 const {
   summarizeDailyPlan,
+  summarizeTaskCenterDigest,
   summarizeTasks,
 } = require('../task-center');
 
@@ -93,6 +94,55 @@ function summarizeMail(entries = [], options = {}) {
   };
 }
 
+function formatDigestBlockers(digest = {}) {
+  const failed = Array.isArray(digest.failedItems) ? digest.failedItems : [];
+  const recoverable = Array.isArray(digest.recoverableItems) ? digest.recoverableItems : [];
+  return [
+    ...failed.slice(0, 3).map((task) => {
+      const type = task.type === 'news-digest'
+        ? '新闻摘要'
+        : task.type === 'ui-automation'
+          ? 'UI 自动化'
+          : task.type === 'daily-digest'
+            ? '主动日报'
+            : task.type === 'token-factory'
+              ? 'token 工厂'
+              : task.type || '任务';
+      const error = task.error ? `：${task.error}` : '：失败待复盘';
+      return `${type} ${task.id || 'unknown'}${error}`;
+    }),
+    ...recoverable.slice(0, 3).map((task) => {
+      const type = task.type === 'token-factory'
+        ? 'token 工厂'
+        : task.type === 'ui-automation'
+          ? 'UI 自动化'
+          : task.type || '任务';
+      return `${type} ${task.id || 'unknown'}：可恢复`;
+    }),
+  ];
+}
+
+function mergeTaskDigest(taskSummary = {}, digest = {}) {
+  if (!digest || typeof digest !== 'object') {
+    return taskSummary;
+  }
+  const merged = { ...taskSummary };
+  if (digest.todaySummary) {
+    merged.todaySummaryText = digest.todaySummary;
+  }
+  if (Array.isArray(digest.tomorrowPlan) && digest.tomorrowPlan.length) {
+    merged.tomorrowPlanText = digest.tomorrowPlan;
+  }
+  const blockers = formatDigestBlockers(digest);
+  if (blockers.length) {
+    merged.blockers = blockers;
+  }
+  if (Array.isArray(digest.nextSuggestedActions) && digest.nextSuggestedActions.length) {
+    merged.quickCommands = digest.nextSuggestedActions;
+  }
+  return merged;
+}
+
 function loadMultiAgentSummary(env = process.env, options = {}) {
   return readJsonFileSafe(
     join(env.MULTI_AGENT_LAB_OUTPUT_DIR || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'multi-agent-lab'), 'summary.json'),
@@ -123,6 +173,13 @@ function buildClerkCommandCenterState(options = {}) {
     recoverableTasks: [],
     todayTasks: [],
   }, 'task_center_unavailable', warnings);
+  const digestReader = options.summarizeTaskCenterDigest || (!options.summarizeTasks ? summarizeTaskCenterDigest : null);
+  const taskDigest = digestReader
+    ? safeReadObject(() => digestReader({
+      env,
+      now,
+    }), {}, 'task_center_digest_unavailable', warnings)
+    : {};
   const usageEntries = safeReadList(
     () => (options.readUsageLedger || defaultReadUsageLedger)(env, 200),
     [],
@@ -152,7 +209,7 @@ function buildClerkCommandCenterState(options = {}) {
       counts: plan.counts || {},
     },
     tasks: {
-      ...tasks,
+      ...mergeTaskDigest(tasks, taskDigest),
       byType: Array.isArray(tasks.byType) ? tasks.byType : [],
       counts: tasks.counts || {},
     },
@@ -185,20 +242,39 @@ function formatLatestRun(run) {
 
 function buildClerkCommandCenterReply(options = {}) {
   const state = buildClerkCommandCenterState(options);
-  const nextActions = [
+  const defaultNextActions = [
     '文员，发送今天日报到邮箱',
     '文员，查看失败任务',
     '文员，今天机器人发了哪些邮件',
     '文员，启动多 Agent 训练场',
   ];
+  const enhancedSummaryText = state.tasks.todaySummaryText || state.tasks.todaySummary || '';
+  const todaySummaryText = enhancedSummaryText || state.plan.todaySummaryText || '今天还没有可用任务摘要。';
+  const enhancedTomorrowPlan = Array.isArray(state.tasks.tomorrowPlanText)
+    ? state.tasks.tomorrowPlanText
+    : (Array.isArray(state.tasks.tomorrowPlan) ? state.tasks.tomorrowPlan : []);
+  const tomorrowPlanItems = enhancedTomorrowPlan.length
+    ? enhancedTomorrowPlan
+    : (state.plan.tomorrowPlan.length
+      ? state.plan.tomorrowPlan
+      : ['先查看任务中枢，确认今天要推进的主线。']);
+  const blockers = Array.isArray(state.tasks.blockers) ? state.tasks.blockers : [];
+  const nextActions = (Array.isArray(state.tasks.quickCommands) && state.tasks.quickCommands.length)
+    ? state.tasks.quickCommands
+    : defaultNextActions;
 
   return [
     '文员总控：今天一屏看懂。',
-    state.plan.todaySummaryText || '今天还没有可用任务摘要。',
+    '',
+    '今日总结：',
+    todaySummaryText,
     formatTypeHighlights(state.tasks.byType),
     '',
-    '当前重点：',
-    ...(state.plan.tomorrowPlan.length ? state.plan.tomorrowPlan : ['先查看任务中枢，确认今天要推进的主线。']).map((item) => `- ${item}`),
+    '明日计划：',
+    ...tomorrowPlanItems.map((item) => `- ${item}`),
+    '',
+    '当前卡点：',
+    ...(blockers.length ? blockers.map((item) => `- ${item}`) : ['- 暂无明确卡点，按计划推进。']),
     '',
     '运行信号：',
     `- ${state.snapshot.latestRun ? formatLatestRun(state.snapshot.latestRun) : '日报快照：暂无最近 run'}`,
@@ -206,7 +282,7 @@ function buildClerkCommandCenterReply(options = {}) {
     `- 邮件流水：${state.mail.todayEntries.length ? `今天 ${state.mail.todayEntries.length} 条` : '暂无可用记录'}`,
     ...(state.warnings.length ? [`- 降级提示：${state.warnings.join('、')}`] : []),
     '',
-    '可直接继续说：',
+    '可复制指令：',
     ...nextActions.map((item) => `- ${item}`),
   ].join('\n');
 }

@@ -113,6 +113,47 @@ test('buildClerkCommandCenterState gathers injected task, ledger, mail, and snap
   assert.deepEqual(calls.map((call) => call[0]), ['plan', 'tasks', 'usage', 'mail', 'snapshot']);
 });
 
+test('buildClerkCommandCenterState enriches task summary from task-center digest when available', () => {
+  const state = buildClerkCommandCenterState({
+    summarizeDailyPlan: () => samplePlan(),
+    summarizeTasks: () => sampleTaskSummary(),
+    summarizeTaskCenterDigest: () => ({
+      todaySummary: '主动任务总结：UI、新闻、日报都已接入任务中枢。',
+      tomorrowPlan: [
+        '先复盘 news-digest 失败项。',
+        '再跑一轮 UI contracts。',
+      ],
+      failedItems: [
+        { id: 'news-fail', type: 'news-digest', error: 'rss timeout' },
+      ],
+      recoverableItems: [
+        { id: 'token-stale', type: 'token-factory' },
+      ],
+      nextSuggestedActions: [
+        '文员，查看失败任务',
+        '文员，恢复 token-stale',
+      ],
+    }),
+    readUsageLedger: () => [],
+    readMailLedger: () => [],
+    readDailySummarySnapshot: () => ({ runs: [] }),
+  });
+
+  assert.equal(state.tasks.todaySummaryText, '主动任务总结：UI、新闻、日报都已接入任务中枢。');
+  assert.deepEqual(state.tasks.tomorrowPlanText, [
+    '先复盘 news-digest 失败项。',
+    '再跑一轮 UI contracts。',
+  ]);
+  assert.deepEqual(state.tasks.blockers, [
+    '新闻摘要 news-fail：rss timeout',
+    'token 工厂 token-stale：可恢复',
+  ]);
+  assert.deepEqual(state.tasks.quickCommands, [
+    '文员，查看失败任务',
+    '文员，恢复 token-stale',
+  ]);
+});
+
 test('buildClerkCommandCenterReply renders a one-screen overview with next actions', () => {
   const reply = buildClerkCommandCenterReply({
     now: new Date('2026-05-06T04:00:00.000Z'),
@@ -138,6 +179,10 @@ test('buildClerkCommandCenterReply renders a one-screen overview with next actio
   });
 
   assert.match(reply, /文员总控：今天一屏看懂/);
+  assert.match(reply, /今日总结：/);
+  assert.match(reply, /明日计划：/);
+  assert.match(reply, /当前卡点：/);
+  assert.match(reply, /可复制指令：/);
   assert.match(reply, /今天任务 4 个/);
   assert.match(reply, /UI 自动化：今天 2 个/);
   assert.match(reply, /模型账本：2 条/);
@@ -145,6 +190,37 @@ test('buildClerkCommandCenterReply renders a one-screen overview with next actio
   assert.match(reply, /actions\/runs\/42/);
   assert.match(reply, /文员，发送今天日报到邮箱/);
   assert.match(reply, /文员，查看失败任务/);
+});
+
+test('buildClerkCommandCenterReply uses enhanced task-center sections when provided', () => {
+  const reply = buildClerkCommandCenterReply({
+    now: new Date('2026-05-06T04:00:00.000Z'),
+    summarizeDailyPlan: () => samplePlan(),
+    summarizeTasks: () => ({
+      ...sampleTaskSummary(),
+      todaySummaryText: '增强版今日总结：总计 6，失败 1，运行中 1。',
+      tomorrowPlanText: [
+        '优先清理 ui-stale 并重试 ui-fail。',
+        '补一轮 contracts 回归并记录产物链接。',
+      ],
+      blockers: [
+        'ui-fail 仍缺少最新截图。',
+        'ui-stale 超时未回收。',
+      ],
+      quickCommands: [
+        '文员，查看失败任务',
+        '文员，恢复任务 ui-stale',
+      ],
+    }),
+    readUsageLedger: () => [],
+    readMailLedger: () => [],
+    readDailySummarySnapshot: () => ({ runs: [] }),
+  });
+
+  assert.match(reply, /今日总结：[\s\S]*增强版今日总结：总计 6，失败 1，运行中 1。/);
+  assert.match(reply, /明日计划：[\s\S]*优先清理 ui-stale 并重试 ui-fail。/);
+  assert.match(reply, /当前卡点：[\s\S]*ui-fail 仍缺少最新截图。/);
+  assert.match(reply, /可复制指令：[\s\S]*文员，恢复任务 ui-stale/);
 });
 
 test('buildClerkCommandCenterState degrades bad ledgers and broken snapshots', () => {

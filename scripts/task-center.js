@@ -210,12 +210,108 @@ function summarizeDailyPlan(options = {}) {
   };
 }
 
+const PROACTIVE_TYPE_MAP = {
+  proactive: ['token-factory', 'ui-automation', 'daily-digest', 'news-digest', 'token-lab'],
+  news: ['news-digest'],
+  ui: ['ui-automation'],
+  token: ['token-factory', 'token-lab'],
+  daily: ['daily-digest'],
+};
+
+function resolveProactiveTypes(input) {
+  const seeds = Array.isArray(input) ? input : [];
+  const resolved = new Set();
+  for (const item of seeds) {
+    const key = normalizeTaskType(item);
+    if (!key) continue;
+    if (PROACTIVE_TYPE_MAP[key]) {
+      for (const type of PROACTIVE_TYPE_MAP[key]) {
+        resolved.add(type);
+      }
+      continue;
+    }
+    resolved.add(key);
+  }
+  if (!resolved.size) {
+    for (const type of PROACTIVE_TYPE_MAP.proactive) {
+      resolved.add(type);
+    }
+  }
+  return Array.from(resolved);
+}
+
+function normalizeTaskShape(task = {}) {
+  const safeTask = task && typeof task === 'object' ? task : {};
+  return {
+    ...safeTask,
+    id: String(safeTask.id || '').trim() || 'unknown-task',
+    type: normalizeTaskType(safeTask.type) || 'unknown',
+    status: String(safeTask.status || '').trim() || 'unknown',
+    error: String(safeTask.error || ''),
+  };
+}
+
+function summarizeTaskCenterDigest(options = {}) {
+  const proactiveTypes = resolveProactiveTypes(options.proactiveTypes);
+  const summary = summarizeTasks({ ...options, type: proactiveTypes });
+  const todayTasks = (summary.todayTasks || []).map(normalizeTaskShape);
+  const failedItems = todayTasks.filter((task) => task.status === 'failed');
+  const recoverableItems = (summary.recoverableTasks || [])
+    .map(normalizeTaskShape)
+    .filter((task) => proactiveTypes.includes(task.type));
+  const activeTypes = Array.from(new Set(
+    todayTasks
+      .filter((task) => proactiveTypes.includes(task.type))
+      .map((task) => task.type),
+  ));
+  const todaySummary = summarizeDailyPlan({ ...options, type: proactiveTypes }).todaySummaryText;
+
+  const tomorrowPlan = [];
+  if (failedItems.length) {
+    tomorrowPlan.push(`复盘失败任务 ${failedItems.slice(0, 2).map((task) => `${formatTaskType(task.type)} ${task.id}`).join('、')}。`);
+  }
+  if (recoverableItems.length) {
+    tomorrowPlan.push(`优先恢复可续跑任务 ${recoverableItems.slice(0, 2).map((task) => `${formatTaskType(task.type)} ${task.id}`).join('、')}。`);
+  }
+  if (!activeTypes.includes('daily-digest')) {
+    tomorrowPlan.push('补齐今日总结生成链路，确保日报稳定产出。');
+  }
+  if (!activeTypes.includes('news-digest')) {
+    tomorrowPlan.push('安排一轮新闻摘要主动任务，验证数据源与重试机制。');
+  }
+  if (!tomorrowPlan.length) {
+    tomorrowPlan.push('延续当前主动任务节奏，按类型轮询并记录复盘结论。');
+  }
+
+  const nextSuggestedActions = [];
+  if (failedItems.length) {
+    nextSuggestedActions.push('先处理 failedItems，优先修复可快速重试的问题。');
+  }
+  if (recoverableItems.length) {
+    nextSuggestedActions.push('拉起 recoverableItems，补写中断原因和恢复结果。');
+  }
+  if (!nextSuggestedActions.length) {
+    nextSuggestedActions.push('暂无阻塞项，按 tomorrowPlan 执行并保持任务类型覆盖。');
+  }
+
+  return {
+    todaySummary,
+    tomorrowPlan,
+    activeTypes,
+    failedItems,
+    recoverableItems,
+    nextSuggestedActions,
+    summary,
+  };
+}
+
 module.exports = {
   formatTaskType,
   listFailedTasks,
   listTodayTasks,
   recordTaskEvent,
   summarizeDailyPlan,
+  summarizeTaskCenterDigest,
   summarizeTasks,
   toLocalDayKey,
 };

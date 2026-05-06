@@ -1,5 +1,8 @@
 const { writeFileSync, mkdirSync } = require('node:fs');
 const { dirname, join } = require('node:path');
+const {
+  recordTaskEvent,
+} = require('./task-center');
 
 function splitList(value) {
   return String(value || '')
@@ -218,13 +221,58 @@ async function collectNewsDigest(env = process.env, fetchImpl = fetch, options =
   return buildNewsReport([...rssItems, ...githubItems]);
 }
 
+function getDayKey(now = new Date(), offsetMinutes = 480) {
+  return new Date(now.getTime() + Number(offsetMinutes || 0) * 60 * 1000).toISOString().slice(0, 10);
+}
+
+async function runNewsDigest(options = {}) {
+  const env = { ...process.env, ...(options.env || {}) };
+  const day = options.day || getDayKey(new Date(), env.PROACTIVE_DIGEST_TZ_OFFSET_MINUTES || 480);
+  const now = new Date().toISOString();
+  const task = recordTaskEvent({
+    taskId: `news-digest-${day}`,
+    type: 'news-digest',
+    event: 'scheduled',
+    status: 'running',
+    now,
+    summaryPatch: { day },
+  }, { env, now });
+
+  try {
+    const report = await collectNewsDigest(env, options.fetchImpl || fetch, options);
+    recordTaskEvent({
+      taskId: task.id,
+      type: 'news-digest',
+      event: 'completed',
+      status: 'completed',
+      now: new Date().toISOString(),
+      summaryPatch: {
+        day,
+        totalItems: Number(report.total || 0),
+      },
+    }, { env });
+    return { report, day, env };
+  } catch (error) {
+    recordTaskEvent({
+      taskId: task.id,
+      type: 'news-digest',
+      event: 'failed',
+      status: 'failed',
+      now: new Date().toISOString(),
+      error: String(error?.message || error || 'news digest failed').slice(0, 1000),
+      summaryPatch: { day },
+    }, { env });
+    throw error;
+  }
+}
+
 function writeNewsReport(file, report) {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 }
 
 async function main() {
-  const report = await collectNewsDigest(process.env, fetch);
+  const { report } = await runNewsDigest({ env: process.env, fetchImpl: fetch });
   const output = process.env.PROACTIVE_DIGEST_NEWS_OUTPUT || join(process.cwd(), 'data', 'news-digest', 'latest.json');
   writeNewsReport(output, report);
   console.log(JSON.stringify({ total: report.total, output }, null, 2));
@@ -244,8 +292,10 @@ module.exports = {
   daysAgoIso,
   fetchGitHubTrending,
   fetchRssItems,
+  getDayKey,
   normalizeNewsItems,
   parseFeedConfig,
   parseFeedItems,
   parseGitHubTopics,
+  runNewsDigest,
 };

@@ -1,4 +1,7 @@
 const assert = require('node:assert/strict');
+const { mkdtempSync, rmSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const { join } = require('node:path');
 const test = require('node:test');
 
 const {
@@ -11,7 +14,11 @@ const {
   parseFeedConfig,
   parseFeedItems,
   parseGitHubTopics,
+  runNewsDigest,
 } = require('../scripts/news-digest');
+const {
+  listTasks,
+} = require('../scripts/background-task-store');
 
 test('parseFeedItems supports rss and atom entries', () => {
   const rss = `
@@ -99,4 +106,33 @@ test('collectNewsDigest deduplicates and builds report text', async () => {
   assert.match(report.text, /Same/);
   assert.equal(normalizeNewsItems([{ title: '<b>A</b>' }])[0].title, 'A');
   assert.equal(buildNewsReport([]).text, '暂无新闻条目。');
+});
+
+test('runNewsDigest records lifecycle into task center with safe summary', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'news-digest-task-'));
+  try {
+    const result = await runNewsDigest({
+      day: '2026-05-06',
+      env: {
+        TOKEN_FACTORY_TASK_DIR: join(tempDir, 'tasks'),
+      },
+      fetchImpl: async (url) => ({
+        ok: true,
+        text: async () => (url.includes('api.github.com')
+          ? JSON.stringify({ items: [] })
+          : '<rss><channel><item><title>Daily News</title><link>https://example.com/daily</link></item></channel></rss>'),
+      }),
+    });
+
+    assert.equal(result.report.total, 1);
+    const tasks = listTasks(result.env);
+    assert.equal(tasks.length, 1);
+    assert.equal(tasks[0].type, 'news-digest');
+    assert.equal(tasks[0].status, 'completed');
+    assert.equal(tasks[0].summary.totalItems, 1);
+    assert(tasks[0].events.some((event) => event.event === 'scheduled'));
+    assert(tasks[0].events.some((event) => event.event === 'completed'));
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 });
