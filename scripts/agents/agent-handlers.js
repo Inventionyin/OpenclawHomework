@@ -52,6 +52,9 @@ const {
   summarizeDailyPlan,
   summarizeTasks,
 } = require('../task-center');
+const {
+  readDailySummarySnapshot,
+} = require('../daily-summary-snapshot');
 
 const OPS_SECRET_PATTERNS = [
   /\bauthorization\s*:\s*\S+/i,
@@ -264,20 +267,22 @@ function readJsonFileSafe(filePath) {
   }
 }
 
-function getDailySummaryStateFile(env = process.env) {
-  return env.DAILY_SUMMARY_STATE_FILE || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'memory', 'daily-summary-state.json');
-}
-
 function loadDailySummaryArtifacts(env = process.env, options = {}) {
   const readUsage = options.readUsageLedger || defaultReadUsageLedger;
   const usageEntries = readUsage(env);
-  const state = (options.readJsonFile || readJsonFileSafe)(getDailySummaryStateFile(env)) || {};
+  const snapshotReader = options.readDailySummarySnapshot || readDailySummarySnapshot;
+  let snapshot = null;
+  try {
+    snapshot = typeof snapshotReader === 'function' ? snapshotReader(env) : null;
+  } catch {
+    snapshot = null;
+  }
   const multiAgentSummary = (options.readJsonFile || readJsonFileSafe)(
     join(env.MULTI_AGENT_LAB_OUTPUT_DIR || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'multi-agent-lab'), 'summary.json'),
   );
 
   return {
-    runs: Array.isArray(state.runs) ? state.runs : [],
+    runs: Array.isArray(snapshot?.runs) ? snapshot.runs : [],
     usageEntries,
     multiAgentSummary,
   };

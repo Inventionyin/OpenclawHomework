@@ -39,6 +39,14 @@ const {
   rememberFeishuImage,
   uploadFeishuImage,
   buildRoutedAgentReply,
+  getDailySummarySnapshotFile,
+  readDailySummarySnapshot,
+  writeDailySummarySnapshot,
+  appendDailySummaryRunSnapshot,
+  getDailySummaryStateFile,
+  readDailySummaryState,
+  writeDailySummaryState,
+  appendDailySummaryRun,
 } = require('../scripts/feishu-bridge');
 const {
   readMailLedgerEntries,
@@ -556,6 +564,90 @@ test('buildRunArtifactsUrl creates GitHub artifacts shortcut', () => {
     buildRunArtifactsUrl('https://github.com/Inventionyin/OpenclawHomework/actions/runs/123'),
     'https://github.com/Inventionyin/OpenclawHomework/actions/runs/123#artifacts',
   );
+});
+
+test('daily summary snapshot helpers keep compatibility and append artifactsUrl with trim', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'daily-summary-snapshot-'));
+  const stateFile = join(tempDir, 'daily-summary-state.json');
+  const env = {
+    DAILY_SUMMARY_STATE_FILE: stateFile,
+  };
+
+  try {
+    assert.equal(getDailySummarySnapshotFile(env), stateFile);
+    assert.equal(getDailySummaryStateFile(env), stateFile);
+
+    writeDailySummarySnapshot(env, {
+      runs: Array.from({ length: 19 }, (_, index) => ({
+        id: index + 1,
+        conclusion: 'success',
+        runUrl: `https://github.com/example/repo/actions/runs/${index + 1}`,
+        artifactsUrl: `https://github.com/example/repo/actions/runs/${index + 1}#artifacts`,
+        targetRef: 'main',
+        runMode: 'smoke',
+      })),
+    });
+    assert.equal(readDailySummarySnapshot(env).runs.length, 19);
+
+    const nextRuns = appendDailySummaryRunSnapshot(
+      env,
+      {
+        targetRef: 'develop',
+        runMode: 'contracts',
+        actionsUrl: 'https://github.com/example/repo/actions/runs/999',
+      },
+      {
+        id: 999,
+        conclusion: 'failure',
+      },
+    );
+
+    assert.equal(nextRuns.length, 20);
+    assert.equal(nextRuns[0].id, 1);
+    assert.equal(nextRuns[19].id, 999);
+    assert.equal(nextRuns[19].runUrl, 'https://github.com/example/repo/actions/runs/999');
+    assert.equal(nextRuns[19].artifactsUrl, 'https://github.com/example/repo/actions/runs/999#artifacts');
+    assert.equal(nextRuns[19].targetRef, 'develop');
+    assert.equal(nextRuns[19].runMode, 'contracts');
+
+    appendDailySummaryRunSnapshot(
+      env,
+      {
+        targetRef: 'release',
+        runMode: 'all',
+      },
+      {
+        id: 1000,
+        conclusion: 'success',
+        html_url: 'https://github.com/example/repo/actions/runs/1000',
+      },
+    );
+    const snapshot = readDailySummarySnapshot(env);
+    assert.equal(snapshot.runs.length, 20);
+    assert.equal(snapshot.runs[0].id, 2);
+    assert.equal(snapshot.runs[19].id, 1000);
+    assert.equal(snapshot.runs[19].artifactsUrl, 'https://github.com/example/repo/actions/runs/1000#artifacts');
+
+    writeDailySummaryState(env, { runs: [] });
+    assert.deepEqual(readDailySummaryState(env), { runs: [] });
+
+    const legacyRuns = appendDailySummaryRun(
+      env,
+      {
+        targetRef: 'main',
+        runMode: 'smoke',
+      },
+      {
+        id: 2000,
+        conclusion: 'queued',
+        html_url: 'https://github.com/example/repo/actions/runs/2000',
+      },
+    );
+    assert.equal(legacyRuns.length, 1);
+    assert.equal(legacyRuns[0].artifactsUrl, 'https://github.com/example/repo/actions/runs/2000#artifacts');
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('buildFeishuResultCard includes run and Allure report links', () => {

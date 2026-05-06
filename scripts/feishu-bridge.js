@@ -45,6 +45,16 @@ const {
   buildDailySummary,
 } = require('./daily-summary');
 const {
+  readDailySummarySnapshot: readDailySummarySnapshotHelper,
+  writeDailySummarySnapshot: writeDailySummarySnapshotHelper,
+  appendDailySummaryRunSnapshot: appendDailySummaryRunSnapshotHelper,
+  getDailySummarySnapshotFile: getDailySummarySnapshotFileHelper,
+  readDailySummaryState: readDailySummaryStateHelper,
+  writeDailySummaryState: writeDailySummaryStateHelper,
+  appendDailySummaryRun: appendDailySummaryRunHelper,
+  getDailySummaryStateFile: getDailySummaryStateFileHelper,
+} = require('./daily-summary-snapshot');
+const {
   buildStreamingChatConfig,
   streamModelText,
 } = require('./streaming-client');
@@ -591,39 +601,61 @@ function readJsonFileSafe(filePath) {
   }
 }
 
+function getDailySummarySnapshotFile(env = process.env) {
+  return (getDailySummarySnapshotFileHelper || getDailySummaryStateFileHelper)(env);
+}
+
+function readDailySummarySnapshot(env = process.env) {
+  if (readDailySummarySnapshotHelper) {
+    return readDailySummarySnapshotHelper(env);
+  }
+  return (readDailySummaryStateHelper || (() => ({ runs: [] })))(env);
+}
+
+function writeDailySummarySnapshot(env = process.env, state = {}) {
+  if (writeDailySummarySnapshotHelper) {
+    return writeDailySummarySnapshotHelper(env, state);
+  }
+  return (writeDailySummaryStateHelper || (() => ({ runs: [] })))(env, state);
+}
+
+function appendDailySummaryRunSnapshot(env = process.env, job = {}, run = {}) {
+  const runUrl = run.html_url || job.actionsUrl || '';
+  const artifactsUrl = buildRunArtifactsUrl(runUrl);
+  const snapshotRun = {
+    id: run.id || null,
+    conclusion: run.conclusion || run.status || 'unknown',
+    runUrl,
+    artifactsUrl,
+    targetRef: job.targetRef || job.config?.inputs?.target_ref || '',
+    runMode: job.runMode || job.config?.inputs?.run_mode || '',
+    updatedAt: run.updated_at || new Date().toISOString(),
+  };
+  const appendImpl = appendDailySummaryRunSnapshotHelper || appendDailySummaryRunHelper;
+  const appended = appendImpl ? appendImpl(env, snapshotRun) : { runs: [snapshotRun] };
+  if (Array.isArray(appended)) {
+    return appended;
+  }
+  if (appended && Array.isArray(appended.runs)) {
+    return appended.runs;
+  }
+  return readDailySummarySnapshot(env).runs || [];
+}
+
 function getDailySummaryStateFile(env = process.env) {
-  return env.DAILY_SUMMARY_STATE_FILE || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'memory', 'daily-summary-state.json');
+  return getDailySummarySnapshotFile(env);
 }
 
 function readDailySummaryState(env = process.env) {
-  return readJsonFileSafe(getDailySummaryStateFile(env)) || { runs: [] };
+  return readDailySummarySnapshot(env);
 }
 
 function writeDailySummaryState(env = process.env, state = {}) {
-  const filePath = getDailySummaryStateFile(env);
-  mkdirSync(dirname(filePath), { recursive: true });
-  writeFileSync(filePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+  return writeDailySummarySnapshot(env, state);
 }
 
 function appendDailySummaryRun(env = process.env, job = {}, run = {}) {
-  const state = readDailySummaryState(env);
-  const runs = Array.isArray(state.runs) ? state.runs : [];
-  const runUrl = run.html_url || job.actionsUrl || '';
-  const artifactsUrl = buildRunArtifactsUrl(runUrl);
-  const next = [
-    ...runs,
-    {
-      id: run.id || null,
-      conclusion: run.conclusion || run.status || 'unknown',
-      runUrl,
-      artifactsUrl,
-      targetRef: job.targetRef || job.config?.inputs?.target_ref || '',
-      runMode: job.runMode || job.config?.inputs?.run_mode || '',
-      updatedAt: run.updated_at || new Date().toISOString(),
-    },
-  ].slice(-20);
-  writeDailySummaryState(env, { runs: next });
-  return next;
+  return appendDailySummaryRunSnapshot(env, job, run);
 }
 
 function parseDuSummary(output) {
@@ -3753,6 +3785,14 @@ module.exports = {
   buildFeishuResultCard,
   buildRoutedAgentReply,
   buildRunArtifactsUrl,
+  getDailySummarySnapshotFile,
+  readDailySummarySnapshot,
+  writeDailySummarySnapshot,
+  appendDailySummaryRunSnapshot,
+  getDailySummaryStateFile,
+  readDailySummaryState,
+  writeDailySummaryState,
+  appendDailySummaryRun,
   buildFeishuCardMessage,
   buildFeishuTextMessage,
   buildRouteEnv,

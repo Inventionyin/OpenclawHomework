@@ -126,6 +126,12 @@ bash scripts/sync-gbrain-knowledge.sh
 - `daily-email`：只有明确说“发送日报到邮箱”时，才调用邮件发送，把日报发到 `daily` 邮箱动作。
 - `knowledge-summary`：给出知识沉淀边界，强调不保存密钥。
 
+## 日报边界补充
+
+- `task-center`：任务主数据源，负责今日任务、失败任务、明日计划。
+- `data/memory/daily-summary-state.json`：日报展示缓存，主要保存最近 `runs`。
+- 文员 Agent / 主动日报优先读 `task-center`，只在展示补充时读取日报快照。
+
 新增自然语言示例：
 
 - 文员，今天可以帮我干嘛

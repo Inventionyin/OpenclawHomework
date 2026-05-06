@@ -197,6 +197,17 @@ test('buildClerkAgentReply previews a richer daily report from local artifacts',
         DAILY_SUMMARY_STATE_FILE: stateFile,
         MULTI_AGENT_LAB_OUTPUT_DIR: multiAgentDir,
       },
+      readDailySummarySnapshot: () => ({
+        runs: [
+          {
+            conclusion: 'success',
+            runUrl: 'https://example.com/run-1',
+            artifactsUrl: 'https://example.com/run-1#artifacts',
+            targetRef: 'main',
+            runMode: 'smoke',
+          },
+        ],
+      }),
     });
 
     assert.match(reportReply, /文员日报预览/);
@@ -207,6 +218,26 @@ test('buildClerkAgentReply previews a richer daily report from local artifacts',
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+test('buildClerkAgentReply still returns task summary when snapshot is broken', () => {
+  const reportReply = buildClerkAgentReply({ action: 'daily-report' }, {
+    readDailySummarySnapshot: () => {
+      throw new Error('broken snapshot');
+    },
+    summarizeDailyPlan: () => ({
+      todaySummaryText: '今天任务 3 个，完成 1 个，失败 1 个，运行中 1 个。',
+      tomorrowPlan: [
+        '优先复盘失败任务：token 工厂 tf-x。',
+      ],
+    }),
+    readUsageLedger: () => [],
+  });
+
+  assert.match(reportReply, /文员日报预览/);
+  assert.match(reportReply, /今天任务 3 个/);
+  assert.match(reportReply, /优先复盘失败任务/);
+  assert.match(reportReply, /服务器部分仍建议只引用状态摘要/);
 });
 
 test('buildClerkAgentReply shows practical workbench with mailbox and qa assets', () => {
