@@ -7,6 +7,7 @@ const test = require('node:test');
 const {
   buildChatAgentPrompt,
   buildClerkAgentReply,
+  buildClerkFileChannelReply,
   buildImageChannelReply,
   buildModelChannelReply,
   buildCapabilityGuideReply,
@@ -23,11 +24,20 @@ const {
 test('buildCapabilityGuideReply explains practical agent playbook', () => {
   const reply = buildCapabilityGuideReply('OpenClaw');
   assert.match(reply, /OpenClaw/);
+  assert.match(reply, /日常玩法菜单/);
+  assert.match(reply, /让网页自己跑一遍/);
+  assert.match(reply, /看看你现在卡不卡/);
+  assert.match(reply, /互相照看/);
+  assert.match(reply, /每天收一封小结/);
+  assert.match(reply, /把报告和截图走文件通道/);
+  assert.match(reply, /微信 Bridge 计划/);
+  assert.match(reply, /画一张商品主图/);
+  assert.match(reply, /记到脑库里/);
+  assert.match(reply, /开一轮 token 训练场/);
   assert.match(reply, /UI 自动化/);
-  assert.match(reply, /服务器/);
-  assert.match(reply, /记忆/);
-  assert.match(reply, /邮箱/);
-  assert.match(reply, /GBrain|Obsidian/);
+  assert.match(reply, /服务器状态和互修/);
+  assert.match(reply, /长期记忆和知识库/);
+  assert.match(reply, /邮箱调度/);
   assert.match(reply, /电商客服训练数据/);
 });
 
@@ -200,6 +210,34 @@ test('buildClerkAgentReply explains real mailbox workbench bindings', () => {
   assert.match(reply, /agent3\.archive@claw\.163\.com/);
   assert.match(reply, /子邮箱/);
   assert.match(reply, /注册验证码测试/);
+});
+
+test('buildClerkAgentReply explains file channel workbench', () => {
+  const reply = buildClerkAgentReply({ action: 'file-channel-workbench' }, {
+    env: { FILE_CHANNEL_ROOT: '/tmp/file-channel' },
+    listFiles: () => [
+      {
+        id: 'file-1',
+        name: 'allure.zip',
+        relativePath: 'reports/allure.zip',
+        source: 'wechat-bridge',
+      },
+    ],
+  });
+
+  assert.match(reply, /文件通道工作台/);
+  assert.match(reply, /\/tmp\/file-channel/);
+  assert.match(reply, /微信 Bridge/);
+  assert.match(reply, /allure\.zip/);
+});
+
+test('buildClerkFileChannelReply handles empty file channel', () => {
+  const reply = buildClerkFileChannelReply({ FILE_CHANNEL_ROOT: '/tmp/file-channel' }, {
+    listFiles: () => [],
+  });
+
+  assert.match(reply, /文件通道工作台/);
+  assert.match(reply, /暂无登记/);
 });
 
 test('buildClerkAgentReply explains safe submailbox registration playbook', () => {

@@ -254,6 +254,14 @@ function routeClerkIntent(text) {
     return { agent: 'clerk-agent', action: 'mailbox-workbench', requiresAuth: true };
   }
 
+  if (/(文件通道|附件通道|文件收件|上传文件|报告附件|截图|trace).{0,24}(怎么玩|玩法|工作台|结合|归档|收到|有哪些|最近|查看|整理)/i.test(normalized)
+    || /(怎么玩|玩法|工作台|结合|归档|收到|有哪些|最近|查看|整理).{0,24}(文件通道|附件通道|文件收件|上传文件|报告附件|截图|trace)/i.test(normalized)) {
+    const action = /(最近|收到|有哪些|查看|列表)/i.test(normalized)
+      ? 'recent-files'
+      : 'file-channel-workbench';
+    return { agent: 'clerk-agent', action, requiresAuth: true };
+  }
+
   if (/(客服|客户|售后|support).{0,20}(训练|语料|数据|案例|用例|评测|评分)/i.test(normalized)
     || /(训练|生成|整理).{0,20}(电商|商城|购物).{0,20}(客服|售后)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'training-data', requiresAuth: true };

@@ -26,6 +26,10 @@ const {
   resolveMailboxAction,
 } = require('../mailbox-action-router');
 const {
+  buildFileChannelNotice,
+  listRecentFiles,
+} = require('../file-channel');
+const {
   buildDailySummary,
 } = require('../daily-summary');
 const {
@@ -105,41 +109,41 @@ function buildDocAgentReply(text, memoryContext = buildMemoryContext()) {
 function buildCapabilityGuideReply(assistantName = 'OpenClaw') {
   const capabilities = listCapabilities();
   return [
-    `${assistantName} 当前适合这样玩：`,
+    `${assistantName} 日常玩法菜单：你不用记命令，直接按想做的事说就行。`,
     '',
-    'UI 自动化：',
-    '- 帮我跑一下 main 分支的 UI 自动化冒烟测试',
-    '- 如何使用 /run-ui-test main smoke',
+    '跑网页和看报告：',
+    '- 让网页自己跑一遍：帮我跑一下 main 分支的 UI 自动化冒烟测试',
+    '- 想复盘结果：把这次 Allure 报告整理成一句话',
+    '- 想补用例：整理一下 UI 自动化测试矩阵',
     '',
-    '服务器运维：',
-    '- 看我自己：你现在内存多少 / 你硬盘还剩多少 / 你现在卡不卡',
-    '- 你现在内存多少',
+    '看机器和互相照看：',
+    '- 看我自己：你现在内存多少 / 你硬盘还剩多少',
+    '- 看看你现在卡不卡',
     '- 你硬盘还剩多少',
     '- 硬盘清理：看看哪些东西占硬盘 / khoj 可以清理吗 / 确认清理第 1 个',
     '- 看对方：看看 Hermes 的服务器状态 / OpenClaw 硬盘还剩多少',
-    '- 重启修复：修复你自己 / 修复 Hermes / 修复 OpenClaw',
+    '- 互相照看：修复 Hermes / 修复 OpenClaw',
     '',
-    '记忆和接手：',
-    '- /memory',
-    '- /memory search session lock',
-    '- /memory remember 今天修复了某个非敏感问题',
-    '- Obsidian 存储和 GBrain 工作流怎么结合',
-    '- 把这段经验沉淀到知识库：UI 自动化失败先看 Allure',
-    '- 老师任务还差哪些',
+    '日报、邮箱和文件通道：',
+    '- 每天收一封小结：文员，发送今天日报到邮箱',
+    '- 把报告和截图走文件通道：文员，把失败样本归档到 files',
+    '- 邮箱平台可以怎么玩',
+    '- 文员，今天邮箱里有哪些任务',
     '',
-    'QA 数据资产：',
-    '- 帮我生成一批电商平台客服训练数据',
-    '- 生成电商客服训练数据',
+    '资料、训练和评测：',
+    '- 帮我生成一批电商客服训练数据',
     '- 帮我做一轮 OpenClaw 和 Hermes 的能力评测',
-    '- 整理一下 UI 自动化测试矩阵',
+    '- 开一轮 token 训练场：文员，今天按 token-factory 跑一轮',
     '',
-    '邮箱和报告：',
-    '- UI 自动化完成后发报告到飞书和邮箱',
-    '- 查看 ClawEmail/SMTP 是否正常时先问状态，不要发密钥；如果是 report/daily，顺手区分默认 SMTP 还是 evanshine 第二 SMTP 异常',
+    '记忆和脑库：',
+    '- 记到脑库里：把这段经验沉淀到知识库：UI 自动化失败先看 Allure',
+    '- 查一下以前怎么处理：问脑库 UI 自动化报告怎么发邮箱',
+    '- Obsidian 存储和 GBrain 工作流怎么结合',
     '',
-    '图片生成：',
-    '- 生成一张图片：赛博风电商客服机器人海报',
-    '- /image 极简科技风商品主图',
+    '图片和后续桥接：',
+    '- 画一张商品主图：生成一张图片：极简科技风商品主图',
+    '- 修一张图：把刚才那张旧照片修复清晰',
+    '- 微信 Bridge 计划：帮我整理微信 Bridge 的第一版入口',
     '',
     `已注册能力：${capabilities.map((capability) => capability.name).join('、')}`,
   ].join('\n');
@@ -365,6 +369,48 @@ function buildClerkMailboxWorkbenchReply(env = process.env) {
   ].join('\n');
 }
 
+function buildClerkFileChannelReply(env = process.env, options = {}) {
+  const files = (options.listFiles || listRecentFiles)({ limit: 5 }, env);
+  const root = env.FILE_CHANNEL_ROOT || 'data/file-channel';
+  const lines = [
+    '文件通道工作台：',
+    `- 根目录：${root}`,
+    '- 用途：收 UI 自动化报告、失败截图、trace、训练样本、微信 Bridge 转来的附件。',
+    '- 文字消息仍走飞书/OpenClaw；文件只登记安全路径，再通知我读取。',
+    '',
+    '可以这样说：',
+    '- 文员，最近文件通道收到哪些文件',
+    '- 文员，把失败截图归档到 files',
+    '- 文员，帮我整理文件通道里的最新报告',
+  ];
+
+  if (!files.length) {
+    lines.push('', '最近文件：暂无登记。');
+    return lines.join('\n');
+  }
+
+  lines.push('', '最近文件：');
+  files.forEach((file, index) => {
+    lines.push(`${index + 1}. ${file.name || file.id} - ${file.relativePath || 'unknown'} (${file.source || 'unknown'})`);
+  });
+  return lines.join('\n');
+}
+
+function buildClerkRecentFilesReply(env = process.env, options = {}) {
+  const files = (options.listFiles || listRecentFiles)({ limit: 8 }, env);
+  if (!files.length) {
+    return [
+      '文件通道最近还没有登记文件。',
+      '后续微信 Bridge 或外部上传器把文件保存到 FILE_CHANNEL_ROOT 后，会在这里出现。',
+    ].join('\n');
+  }
+
+  return [
+    '文件通道最近文件：',
+    ...files.map((file, index) => `${index + 1}. ${buildFileChannelNotice(file).replace(/\n/g, '\n   ')}`),
+  ].join('\n');
+}
+
 function buildClerkMailboxRegistrationReply(env = process.env) {
   const verify = resolveMailboxAction('verify', env);
   const account = resolveMailboxAction('account', env);
@@ -500,6 +546,14 @@ function buildClerkAgentReply(route = {}, options = {}) {
 
   if (route.action === 'mailbox-workbench') {
     return buildClerkMailboxWorkbenchReply(options.env || process.env);
+  }
+
+  if (route.action === 'file-channel-workbench') {
+    return buildClerkFileChannelReply(options.env || process.env, options);
+  }
+
+  if (route.action === 'recent-files') {
+    return buildClerkRecentFilesReply(options.env || process.env, options);
   }
 
   if (route.action === 'mailbox-registration-playbook') {
@@ -960,6 +1014,7 @@ module.exports = {
   buildBrainGuideReply,
   buildChatAgentPrompt,
   buildClerkAgentReply,
+  buildClerkFileChannelReply,
   buildClerkMailboxWorkbenchReply,
   buildClerkMailboxRegistrationReply,
   buildClerkMailboxTasksReply,

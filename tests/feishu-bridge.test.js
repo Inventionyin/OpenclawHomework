@@ -113,6 +113,8 @@ test('parseSmallTalkMessage help includes categorized natural-language examples'
   assert.match(reply, /硬盘清理/);
   assert.match(reply, /看对方/);
   assert.match(reply, /修复 OpenClaw/);
+  assert.match(reply, /文件通道/);
+  assert.match(reply, /微信 Bridge 计划/);
 });
 
 test('parseSmallTalkMessage supports capability discovery phrases', () => {

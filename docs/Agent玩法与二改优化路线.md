@@ -154,6 +154,33 @@ decisions.md
 
 OpenClaw 继续做主入口，Hermes 做邮箱和备份入口。
 
+### C2. 文件通道和微信 Bridge
+
+文件不要直接塞给 OpenClaw/Hermes。推荐独立通道：
+
+```text
+文字 -> 飞书/OpenClaw/Hermes webhook
+文件 -> FILE_CHANNEL_ROOT -> incoming-files.json -> 文员 agent 读取路径
+```
+
+现在已新增：
+
+```text
+scripts/file-channel.js
+scripts/wechat-web-bridge.js
+docs/微信WebBridge接入说明.md
+```
+
+玩法：
+
+```text
+文员，文件通道怎么玩
+文员，最近文件通道收到哪些文件
+微信 Bridge 计划怎么接
+```
+
+当前微信 Bridge 是 dry-run 脚手架，不会真实登录微信。后续启用 Playwright 后，再做扫码、session 持久化、消息轮询和文件收发。
+
 ### D. 夜间总结
 
 定时每天凌晨：

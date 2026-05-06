@@ -63,6 +63,30 @@ const CAPABILITIES = [
     requiresAuth: true,
   },
   {
+    id: 'files.channel',
+    agent: 'clerk-agent',
+    name: '文件通道',
+    description: '把 UI 自动化报告、失败截图、trace、训练样本和日报附件归档到约定邮箱或文件收件口。',
+    examples: [
+      '把报告和截图走文件通道',
+      '文员，把失败样本归档到 files',
+    ],
+    riskLevel: 'medium',
+    requiresAuth: true,
+  },
+  {
+    id: 'wechat.bridge.plan',
+    agent: 'planner-agent',
+    name: '微信 Bridge 计划',
+    description: '把飞书桥里的自然语言玩法整理成后续可迁移到微信 Bridge 的计划、入口和安全边界。',
+    examples: [
+      '微信 Bridge 计划怎么接',
+      '帮我整理微信 Bridge 的第一版入口',
+    ],
+    riskLevel: 'low',
+    requiresAuth: false,
+  },
+  {
     id: 'clerk.office',
     agent: 'clerk-agent',
     name: '文员整理和日报',
@@ -85,6 +109,18 @@ const CAPABILITIES = [
       '把刚才那张旧照片修复清晰',
     ],
     riskLevel: 'low',
+    requiresAuth: true,
+  },
+  {
+    id: 'token.training',
+    agent: 'clerk-agent',
+    name: 'token 训练场',
+    description: '批量生成训练数据、跑模型评审、记录 token/耗时，并把结果整理成日报和邮箱归档。',
+    examples: [
+      '文员，开一轮 token 训练场',
+      '文员，今天按 token-factory 跑一轮',
+    ],
+    riskLevel: 'medium',
     requiresAuth: true,
   },
   {
