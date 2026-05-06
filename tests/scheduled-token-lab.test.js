@@ -79,6 +79,7 @@ test('runScheduledTokenLab writes state and skips same-day runs', async () => {
     assert.equal(result.state.totalJobs, 12);
     assert.equal(result.state.failedJobs, 1);
     assert.equal(result.state.totalTokens, 1200);
+    assert.equal(result.state.jobTimeoutMs, 120000);
     assert.equal(existsSync(stateFile), true);
     assert.match(readFileSync(stateFile, 'utf8'), /2026-05-06/);
 

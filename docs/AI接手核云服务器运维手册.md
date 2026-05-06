@@ -409,6 +409,7 @@ PROACTIVE_DIGEST_TZ_OFFSET_MINUTES=480
 PROACTIVE_DIGEST_STATE_FILE=/var/lib/openclaw-homework/proactive-daily-digest-state.json
 SCHEDULED_UI_STATE_FILE=/var/lib/openclaw-homework/scheduled-ui-runner-state.json
 SCHEDULED_TOKEN_LAB_STATE_FILE=/var/lib/openclaw-homework/scheduled-token-lab-state.json
+SCHEDULED_TOKEN_LAB_JOB_TIMEOUT_MS=120000
 MAIL_LEDGER_ENABLED=true
 MAIL_LEDGER_PATH=/var/log/openclaw-homework/mail-ledger.jsonl
 FEISHU_USAGE_LEDGER_ENABLED=true
@@ -943,7 +944,8 @@ bash scripts/install-scheduled-token-lab.sh \
   --unit-name hermes-scheduled-token-lab \
   --env-file /etc/hermes-feishu-bridge.env \
   --on-calendar "*-*-* 01:20:00" \
-  --batch-size 16
+  --batch-size 16 \
+  --job-timeout-ms 120000
 ```
 
 验证：
@@ -959,6 +961,7 @@ node scripts/scheduled-token-lab.js --dry-run --force --env-file /etc/hermes-fei
 - 两个脚本都用 state file 做“当天只跑一次”；需要手动重跑时加 `--force`。
 - UI 状态默认写到 `/var/lib/openclaw-homework/scheduled-ui-runner-state.json`，日报会读取 `SCHEDULED_UI_STATE_FILE`。
 - token lab 状态默认写到 `/var/lib/openclaw-homework/scheduled-token-lab-state.json`，日报会读取 `SCHEDULED_TOKEN_LAB_STATE_FILE`。
+- token lab 每个 job 默认 120 秒超时，单个模型卡住会记失败并继续整批，避免一条慢响应拖死定时任务。
 - UI 调度失败会写 `dispatch_failed`；GitHub 已触发但暂未定位到 run 会写 `run_lookup_not_found`，状态文件不会保存 GitHub token。
 
 ## 8.1 官方 OpenClaw/Hermes 更新流程

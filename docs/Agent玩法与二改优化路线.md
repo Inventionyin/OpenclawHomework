@@ -210,6 +210,8 @@ scripts/install-proactive-daily-digest.sh
 每天 08:35 Hermes 发邮箱/文员日报
 ```
 
+token lab 每个模型 job 默认 120 秒超时；如果 LongCat 或其它模型某次响应卡住，会把该条记成失败样本并继续下一条，避免整晚定时任务被单个请求拖死。
+
 日报包含：
 
 - 邮件收发信统计

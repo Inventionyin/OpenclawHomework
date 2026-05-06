@@ -27,6 +27,9 @@ function parseArgs(argv = process.argv.slice(2)) {
     } else if (arg === '--output-dir') {
       args.outputDir = argv[index + 1];
       index += 1;
+    } else if (arg === '--job-timeout-ms') {
+      args.jobTimeoutMs = argv[index + 1];
+      index += 1;
     } else if (arg === '--day') {
       args.day = argv[index + 1];
       index += 1;
@@ -82,13 +85,15 @@ async function runScheduledTokenLab(options = {}) {
   }
 
   const batchSize = Number(options.batchSize || env.SCHEDULED_TOKEN_LAB_BATCH_SIZE || env.QA_TOKEN_LAB_BATCH_SIZE || 12);
+  const jobTimeoutMs = Number(options.jobTimeoutMs || env.SCHEDULED_TOKEN_LAB_JOB_TIMEOUT_MS || env.QA_TOKEN_LAB_JOB_TIMEOUT_MS || 120000);
   const outputDir = options.outputDir || env.SCHEDULED_TOKEN_LAB_OUTPUT_DIR || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'qa-token-lab', day);
   if (options.dryRun) {
-    return { ran: false, reason: 'dry_run', day, batchSize, outputDir };
+    return { ran: false, reason: 'dry_run', day, batchSize, jobTimeoutMs, outputDir };
   }
 
   const result = await (options.runner || runTokenLab)({
     batchSize,
+    jobTimeoutMs,
     outputDir,
     env,
     assistant: env.PROACTIVE_DIGEST_ASSISTANT_NAME || env.FEISHU_ASSISTANT_NAME || 'Hermes',
@@ -99,6 +104,7 @@ async function runScheduledTokenLab(options = {}) {
     lastRunDay: day,
     lastRunAt: new Date().toISOString(),
     batchSize,
+    jobTimeoutMs,
     totalJobs: result.report.totalJobs,
     failedJobs: result.report.failedJobs,
     totalTokens: result.report.totalTokens,

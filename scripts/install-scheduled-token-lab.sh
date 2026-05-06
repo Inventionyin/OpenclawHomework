@@ -8,6 +8,7 @@ ENV_FILE="/etc/hermes-feishu-bridge.env"
 STATE_FILE="/var/lib/openclaw-homework/scheduled-token-lab-state.json"
 ON_CALENDAR="*-*-* 01:20:00"
 BATCH_SIZE="16"
+JOB_TIMEOUT_MS="120000"
 OUTPUT_DIR="/opt/OpenclawHomework/data/qa-token-lab/scheduled"
 
 while [[ $# -gt 0 ]]; do
@@ -19,6 +20,7 @@ while [[ $# -gt 0 ]]; do
     --state-file) STATE_FILE="$2"; shift 2 ;;
     --on-calendar) ON_CALENDAR="$2"; shift 2 ;;
     --batch-size) BATCH_SIZE="$2"; shift 2 ;;
+    --job-timeout-ms) JOB_TIMEOUT_MS="$2"; shift 2 ;;
     --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
@@ -46,7 +48,7 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory=${PROJECT_DIR}
 EnvironmentFile=-${ENV_FILE}
-ExecStart=${NODE_BIN} ${PROJECT_DIR}/scripts/scheduled-token-lab.js --env-file ${ENV_FILE} --state-file ${STATE_FILE} --batch-size ${BATCH_SIZE} --output-dir ${OUTPUT_DIR}
+ExecStart=${NODE_BIN} ${PROJECT_DIR}/scripts/scheduled-token-lab.js --env-file ${ENV_FILE} --state-file ${STATE_FILE} --batch-size ${BATCH_SIZE} --job-timeout-ms ${JOB_TIMEOUT_MS} --output-dir ${OUTPUT_DIR}
 EOF
 
 cat > "/etc/systemd/system/${UNIT_NAME}.timer" <<EOF

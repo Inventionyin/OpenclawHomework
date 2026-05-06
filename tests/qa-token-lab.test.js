@@ -113,6 +113,36 @@ test('runTokenLab keeps producing a report when one model call fails', async () 
   }
 });
 
+test('runTokenLab times out one slow model call and continues the batch', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'qa-token-lab-timeout-'));
+  try {
+    const result = await runTokenLab({
+      batchSize: 2,
+      outputDir: tempDir,
+      jobTimeoutMs: 10,
+      env: {},
+      modelRunner: async (prompt, job) => {
+        if (job.id.endsWith('001')) {
+          return new Promise(() => {});
+        }
+        return {
+          text: JSON.stringify({ id: job.id, score: 92, risk: 'low', labels: [job.kind] }),
+          model: 'LongCat-Flash-Lite',
+          tier: job.modelTier,
+          usage: { total_tokens: 30 },
+        };
+      },
+    });
+
+    assert.equal(result.items.length, 2);
+    assert.equal(result.report.failedJobs, 1);
+    assert.match(result.items[0].parsed.error, /timed out after 10ms/);
+    assert.equal(result.items[1].parsed.score, 92);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('buildTokenLabReport summarizes estimated tokens when provider usage is missing', () => {
   const report = buildTokenLabReport([
     {

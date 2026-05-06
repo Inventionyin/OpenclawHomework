@@ -202,6 +202,24 @@ function buildTokenLabReport(items = []) {
   };
 }
 
+function withTimeout(promise, timeoutMs, label) {
+  const ms = Number(timeoutMs || 0);
+  if (!Number.isFinite(ms) || ms <= 0) {
+    return promise;
+  }
+
+  let timer;
+  const timeout = new Promise((resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${ms}ms`));
+    }, ms);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    clearTimeout(timer);
+  });
+}
+
 function buildTokenLabEmailMessages(report, files, plan, env = process.env) {
   const actions = plan.mailboxActions || getMailboxActions(env);
   const wanted = ['archive', 'eval', 'report'].filter((actionName) => {
@@ -241,6 +259,7 @@ async function runTokenLab(options = {}) {
   const outputDir = options.outputDir || join(process.cwd(), 'data', 'qa-token-lab');
   const plan = options.plan || buildTokenLabPlan({ ...options, env });
   const modelRunner = options.modelRunner || defaultModelRunner;
+  const jobTimeoutMs = numberOrDefault(options.jobTimeoutMs || env.QA_TOKEN_LAB_JOB_TIMEOUT_MS, 120000);
   const items = [];
 
   mkdirSync(outputDir, { recursive: true });
@@ -250,7 +269,11 @@ async function runTokenLab(options = {}) {
     let modelResult;
     let error = null;
     try {
-      modelResult = await modelRunner(prompt, job, { env, modelOptions: options.modelOptions });
+      modelResult = await withTimeout(
+        modelRunner(prompt, job, { env, modelOptions: options.modelOptions }),
+        jobTimeoutMs,
+        `QA token lab job ${job.id}`,
+      );
     } catch (caughtError) {
       error = caughtError;
       modelResult = {
@@ -352,4 +375,5 @@ module.exports = {
   buildTokenLabPrompt,
   buildTokenLabReport,
   runTokenLab,
+  withTimeout,
 };
