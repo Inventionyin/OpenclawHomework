@@ -10,6 +10,9 @@
     "register:platform": "node scripts/browser-registration-runner.js",
     "qa:token-lab": "node scripts/qa-token-lab.js",
     "qa:multi-agent-lab": "node scripts/multi-agent-lab.js",
+    "ecosystem:status": "node scripts/ecosystem-manager.js --status",
+    "ecosystem:install": "node scripts/ecosystem-manager.js --install-safe",
+    "ecosystem:maintenance": "node scripts/ecosystem-manager.js --maintenance",
     "worker:token-factory": "node scripts/token-factory-worker.js",
     "trigger:ui": "node scripts/trigger-ui-tests.js",
     "watchdog": "node scripts/server-watchdog.js"

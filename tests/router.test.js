@@ -367,6 +367,30 @@ test('routeAgentIntent routes natural-language control brain and memory discover
   });
 });
 
+test('routeAgentIntent routes ecosystem plugin and skill management requests', () => {
+  assert.deepEqual(routeAgentIntent('给 Hermes 安装 GBrain、Hermes WebUI 和自检更新技能'), {
+    agent: 'ecosystem-agent',
+    action: 'install-safe',
+    target: 'hermes',
+    confidence: 'high',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('查看生态插件状态'), {
+    agent: 'ecosystem-agent',
+    action: 'status',
+    target: 'self',
+    confidence: 'high',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('开启记忆自我净化和后台自检'), {
+    agent: 'ecosystem-agent',
+    action: 'enable-maintenance',
+    target: 'self',
+    confidence: 'high',
+    requiresAuth: true,
+  });
+});
+
 test('routeAgentIntent asks for clarification on broad natural-language work requests', () => {
   assert.deepEqual(routeAgentIntent('帮我把项目优化一下'), {
     agent: 'planner-agent',

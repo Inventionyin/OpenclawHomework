@@ -29,6 +29,11 @@ const {
   buildDailySummary,
 } = require('../daily-summary');
 const {
+  buildEcosystemStatusReply,
+  createEcosystemInstallPlan,
+  readEcosystemState,
+} = require('../ecosystem-manager');
+const {
   buildRegistrationPlan,
   parseRegistrationTaskRequest,
 } = require('../browser-registration-runner');
@@ -154,6 +159,53 @@ function buildBrainGuideReply(assistantName = 'OpenClaw') {
     '',
     '你可以直接说：把这段经验沉淀到知识库：xxx',
   ].join('\n');
+}
+
+function buildEcosystemAgentReply(route = {}, options = {}) {
+  const target = route.target === 'hermes'
+    ? 'Hermes'
+    : route.target === 'openclaw'
+      ? 'OpenClaw'
+      : (options.assistantName || '当前机器人');
+  const env = options.env || process.env;
+  const state = (options.readState || readEcosystemState)(env.ECOSYSTEM_STATE_FILE) || {};
+  const plan = createEcosystemInstallPlan({ target: route.target || 'self' });
+  const baseState = {
+    target,
+    installed: state.installed || [],
+    skipped: state.skipped || plan.plugins
+      .filter((plugin) => !plan.autoInstallIds.includes(plugin.id))
+      .map((plugin) => ({
+        id: plugin.id,
+        name: plugin.name,
+        reason: `${plugin.installMode}：${plugin.notes}`,
+      })),
+  };
+
+  if (route.action === 'install-safe') {
+    return [
+      `${target} 生态技能安装策略已就绪。`,
+      '',
+      buildEcosystemStatusReply(baseState),
+      '',
+      '会自动落地的：GBrain 旁路脑库、项目文档/记忆/QA 资产同步、生态状态文件。',
+      '先登记不强装的：G Stack 概念、Hermes WebUI 候选、awesome 目录、自进化实验项目。',
+      '服务器侧会用 ecosystem-manager 执行可信项安装，并用 systemd timer 做自检巡检。',
+    ].join('\n');
+  }
+
+  if (route.action === 'enable-maintenance') {
+    return [
+      `${target} 后台自检方案：`,
+      '- 每天检查 GBrain/生态状态、桥服务健康、token worker、watchdog。',
+      '- 发现缺插件时先写候选建议，不直接跑陌生安装脚本。',
+      '- 记忆自我净化只整理重复、过期、非敏感经验，不保存密钥。',
+      '',
+      buildEcosystemStatusReply(baseState),
+    ].join('\n');
+  }
+
+  return buildEcosystemStatusReply(baseState);
 }
 
 function buildPlannerClarifyReply(text = '') {
@@ -918,6 +970,7 @@ module.exports = {
   buildImageChannelReply,
   buildModelChannelReply,
   buildDocAgentReply,
+  buildEcosystemAgentReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,
   buildPlannerClarifyReply,

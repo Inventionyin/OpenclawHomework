@@ -21,6 +21,7 @@ const {
   buildChatAgentPrompt,
   buildClerkAgentReply,
   buildDocAgentReply,
+  buildEcosystemAgentReply,
   buildImageChannelReply,
   buildModelChannelReply,
   buildMemoryAgentReply,
@@ -61,6 +62,12 @@ const {
 const {
   runMultiAgentLab,
 } = require('./multi-agent-lab');
+const {
+  buildEcosystemStatusReply,
+  installSupportedEcosystem,
+  readEcosystemState,
+  runMaintenance,
+} = require('./ecosystem-manager');
 const {
   formatTokenFactoryTask,
   getTokenFactoryTaskStatus,
@@ -2948,6 +2955,70 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
       replyText: await buildMemoryAgentReply(route, undefined, {
         assistantName: getAssistantName(env),
         env,
+      }),
+    };
+  }
+
+  if (route.agent === 'ecosystem-agent') {
+    if (route.requiresAuth && !isAuthorized(payload, env)) {
+      return {
+        handled: true,
+        replyText: getUnauthorizedMessage(env),
+      };
+    }
+
+    if (route.action === 'install-safe') {
+      const installer = options.ecosystemInstaller || installSupportedEcosystem;
+      let state;
+      try {
+        state = await Promise.resolve(installer({
+          env,
+          target: route.target,
+          stateFile: env.ECOSYSTEM_STATE_FILE,
+        }));
+      } catch (error) {
+        return {
+          handled: true,
+          replyText: [
+            buildEcosystemAgentReply(route, {
+              env,
+              assistantName: getAssistantName(env),
+            }),
+            '',
+            `服务器安装执行失败：${redactPeerOutput(error.message || error)}`,
+          ].join('\n'),
+        };
+      }
+      return {
+        handled: true,
+        replyText: buildEcosystemStatusReply({
+          target: route.target === 'hermes' ? 'Hermes' : route.target === 'openclaw' ? 'OpenClaw' : getAssistantName(env),
+          ...state,
+        }),
+      };
+    }
+
+    if (route.action === 'enable-maintenance') {
+      const maintainer = options.ecosystemMaintainer || runMaintenance;
+      const state = await Promise.resolve(maintainer({
+        env,
+        stateFile: env.ECOSYSTEM_STATE_FILE,
+      }));
+      return {
+        handled: true,
+        replyText: [
+          '生态后台自检已执行一次，并会交给服务器 timer 长期巡检。',
+          buildEcosystemStatusReply(state),
+        ].join('\n'),
+      };
+    }
+
+    return {
+      handled: true,
+      replyText: buildEcosystemStatusReply(readEcosystemState(env.ECOSYSTEM_STATE_FILE) || {
+        target: getAssistantName(env),
+        installed: [],
+        skipped: [],
       }),
     };
   }

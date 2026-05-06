@@ -86,6 +86,22 @@ https://hermes.evanshine.me/webhook/feishu
 - 飞书事件建议只保留 `接收消息 im.message.receive_v1`，不要订阅 `消息已读 im.message.message_read_v1`。
 - 机器人收到自动化指令后，先回复“收到了，正在运行 UI 自动化测试。报告生成后我会发给你。”，最终只发一次报告卡片。
 - 飞书消息先经过轻量 Agent Router，再决定是聊天、触发 UI 测试、查看运维状态、回答文档问题，还是读取/写入安全记忆。
+- 生态插件和 skill 现在通过 `scripts/ecosystem-manager.js` 管理。可信项自动安装，候选项只登记和提示，不把第三方脚本直接接管生产服务。
+
+生态技能检查：
+
+```bash
+cd /opt/OpenclawHomework
+npm run ecosystem:status
+npm run ecosystem:maintenance
+systemctl list-timers '*ecosystem-maintenance*' --no-pager
+```
+
+当前生态策略见：
+
+```text
+docs/Hermes生态技能与高级玩家路线.md
+```
 
 ## 2.1 2026-05-02 官方组件版本记录
 

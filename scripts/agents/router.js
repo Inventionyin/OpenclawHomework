@@ -424,6 +424,69 @@ function routeBrainMemoryIntent(text) {
   return null;
 }
 
+function routeEcosystemIntent(text) {
+  const normalized = normalizeNaturalLanguageOpsText(stripMention(String(text ?? '').trim()));
+  const mentionsEcosystem = /(gbrain|g\s*brain|g\s*stack|hermes\s*webui|awesome\s*hermes|self\s*evolution|自进化|自我进化|生态插件|生态导航|技能|skill|插件|web\s*ui|网页\s*ui|后台自检|自检更新|自动更新|自我净化)/i.test(normalized);
+  if (!mentionsEcosystem) {
+    return null;
+  }
+
+  const target = detectOpsTarget(normalized);
+  if (/(状态|查看|检查|有没有|装了没|安装了吗|当前)/.test(normalized)) {
+    return {
+      agent: 'ecosystem-agent',
+      action: 'status',
+      target,
+      confidence: 'high',
+      requiresAuth: true,
+    };
+  }
+
+  const hasInstallVerb = /(安装|下载|配置|激活|接入|补装|升级|安排)/.test(normalized);
+  const hasMaintenanceVerb = /(后台自检|自检更新|自动更新|长期最优|自我净化|记忆净化|维护|巡检|持续|开启)/.test(normalized);
+  if (!hasInstallVerb && !hasMaintenanceVerb) {
+    return null;
+  }
+
+  if (!hasInstallVerb && hasMaintenanceVerb) {
+    return {
+      agent: 'ecosystem-agent',
+      action: 'enable-maintenance',
+      target,
+      confidence: 'high',
+      requiresAuth: true,
+    };
+  }
+
+  if (/(安装|下载|配置|激活|接入|开启|补装|更新|升级|安排)/.test(normalized)) {
+    return {
+      agent: 'ecosystem-agent',
+      action: 'install-safe',
+      target,
+      confidence: 'high',
+      requiresAuth: true,
+    };
+  }
+
+  if (/(后台自检|自检更新|自动更新|长期最优|自我净化|记忆净化|维护|巡检|持续)/.test(normalized)) {
+    return {
+      agent: 'ecosystem-agent',
+      action: 'enable-maintenance',
+      target,
+      confidence: 'high',
+      requiresAuth: true,
+    };
+  }
+
+  return {
+    agent: 'ecosystem-agent',
+    action: 'guide',
+    target,
+    confidence: 'medium',
+    requiresAuth: true,
+  };
+}
+
 function routeBroadPlannerIntent(text) {
   const normalized = String(text ?? '').trim().toLowerCase();
   if (/(帮我|给我|把|将|来).{0,12}(项目|机器人|openclaw|hermes|龙虾|系统).{0,18}(优化|升级|完善|搞好|弄好|改好|二改|重构|增强)/i.test(normalized)
@@ -503,6 +566,10 @@ function routeAgentIntent(text) {
       requiresAuth: true,
     };
   }
+  const earlyEcosystemRoute = routeEcosystemIntent(original);
+  if (earlyEcosystemRoute) {
+    return earlyEcosystemRoute;
+  }
   if (/^\/memory\b/i.test(normalized) || /(记忆|项目状态)/.test(normalized)) {
     return { agent: 'memory-agent', action: 'show', requiresAuth: true };
   }
@@ -514,7 +581,16 @@ function routeAgentIntent(text) {
 
   const brainMemoryRoute = routeBrainMemoryIntent(original);
   if (brainMemoryRoute) {
+    const ecosystemRoute = routeEcosystemIntent(original);
+    if (ecosystemRoute && /(后台自检|自检更新|自动更新|自我净化|记忆净化|生态插件|插件|skill|技能)/i.test(original)) {
+      return ecosystemRoute;
+    }
     return brainMemoryRoute;
+  }
+
+  const ecosystemRoute = routeEcosystemIntent(original);
+  if (ecosystemRoute) {
+    return ecosystemRoute;
   }
 
   const modelChannel = parseModelChannelConfig(original);
@@ -633,6 +709,7 @@ module.exports = {
   routeBrainMemoryIntent,
   routeBroadPlannerIntent,
   routeCapabilityIntent,
+  routeEcosystemIntent,
   routeClerkIntent,
   routeOfficeIntent,
   routeQaAssetIntent,

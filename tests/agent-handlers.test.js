@@ -12,6 +12,7 @@ const {
   buildCapabilityGuideReply,
   buildBrainGuideReply,
   buildDocAgentReply,
+  buildEcosystemAgentReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,
   buildPlannerClarifyReply,
@@ -36,6 +37,19 @@ test('buildBrainGuideReply explains Obsidian and GBrain memory upgrade', () => {
   assert.match(reply, /Obsidian/);
   assert.match(reply, /GBrain/);
   assert.match(reply, /知识库/);
+});
+
+test('buildEcosystemAgentReply explains safe plugin installation status', () => {
+  const reply = buildEcosystemAgentReply({
+    action: 'install-safe',
+    target: 'hermes',
+  });
+
+  assert.match(reply, /Hermes/);
+  assert.match(reply, /GBrain/);
+  assert.match(reply, /Hermes WebUI/);
+  assert.match(reply, /自检/);
+  assert.match(reply, /不会自动执行来路不明脚本/);
 });
 
 test('buildPlannerClarifyReply turns vague requests into natural choices', () => {
