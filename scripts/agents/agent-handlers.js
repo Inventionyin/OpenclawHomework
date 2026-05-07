@@ -279,6 +279,15 @@ function readJsonFileSafe(filePath) {
   }
 }
 
+function getTrendIntelReportPath(env = process.env) {
+  return env.TREND_INTEL_OUTPUT_FILE
+    || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'trend-intel', 'latest.json');
+}
+
+function defaultReadTrendIntelReport(env = process.env) {
+  return readJsonFileSafe(getTrendIntelReportPath(env));
+}
+
 function loadDailySummaryArtifacts(env = process.env, options = {}) {
   const readUsage = options.readUsageLedger || defaultReadUsageLedger;
   const usageEntries = readUsage(env);
@@ -620,6 +629,60 @@ function buildTaskCenterContinueYesterdayReply(options = {}) {
   ].join('\n');
 }
 
+function buildClerkContinueContextReply(options = {}) {
+  const env = options.env || process.env;
+  const brain = (options.summarizeTaskCenterBrain || summarizeTaskCenterBrain)({
+    env,
+    now: options.now || new Date(),
+  }) || {};
+  const today = brain.today || {};
+  const failureReview = brain.failureReview || {};
+  const nextPlan = brain.nextPlan || {};
+  const trendReport = (options.readTrendIntelReport || defaultReadTrendIntelReport)(env) || {};
+  const radarItems = Array.isArray(trendReport.learningRadar?.items)
+    ? trendReport.learningRadar.items
+    : [];
+  const nextItems = Array.isArray(nextPlan.items) ? nextPlan.items : [];
+  const quickCommands = Array.isArray(nextPlan.quickCommands) ? nextPlan.quickCommands : [];
+  const lines = [
+    '我按最近上下文继续，先给你一个可执行顺序。',
+    `- 当前主线：${today.summaryText || '任务中枢暂时没有今日摘要。'}`,
+    `- 失败复盘：${failureReview.summaryText || '最近没有明确失败项。'}`,
+  ];
+
+  if (radarItems.length) {
+    const first = radarItems[0] || {};
+    const projectName = sanitizeReplyField(first.projectName || first.title || '未命名项目', 160);
+    const usefulFor = first.usefulFor ? `，对你有用：${sanitizeReplyField(first.usefulFor, 160)}` : '';
+    const nextStep = first.nextStep ? `，下一步：${sanitizeReplyField(first.nextStep, 220)}` : '';
+    lines.push(`- 最近热点：${projectName}${usefulFor}${nextStep}`);
+  } else {
+    lines.push('- 最近热点：还没有可用趋势雷达，建议先说“文员，今天开源热榜”。');
+  }
+
+  lines.push('接下来建议：');
+  if (nextItems.length) {
+    nextItems.slice(0, 4).forEach((item, index) => {
+      lines.push(`${index + 1}. ${sanitizeReplyField(item, 220)}`);
+    });
+  } else {
+    lines.push('1. 先查看任务中枢，再按失败项、UI 自动化、日报归档的顺序推进。');
+  }
+
+  lines.push('你可以直接发：');
+  if (quickCommands.length) {
+    quickCommands.slice(0, 3).forEach((command) => {
+      lines.push(`- ${sanitizeReplyField(command, 160)}`);
+    });
+  } else {
+    lines.push('- 文员，查看任务中枢主控脑');
+    lines.push('- 文员，启动今天的自动流水线');
+    lines.push('- 文员，烧 token 分析今天 GitHub 热门项目');
+  }
+
+  return lines.join('\n');
+}
+
 function buildClerkTodoSummaryReply(options = {}) {
   const plan = (options.summarizeDailyPlan || summarizeDailyPlan)({
     env: options.env || process.env,
@@ -887,26 +950,26 @@ function buildClerkAgentReply(route = {}, options = {}) {
 
   if (route.action === 'trend-intel') {
     return [
-      '文员开源热榜与热点新闻：',
-      '- 抓取 GitHub Trending、GitHub Search 热门仓库、Hacker News 和 RSS 技术源。',
-      '- 默认关注 AI Agent、LLM、Playwright、软件测试、电商、浏览器自动化。',
-      '- 产物会写到 data/trend-intel，并进入每日热点日报。',
-      '- 后续可以继续接趋势 token 工厂，把热门项目转成学习计划、UI 自动化借鉴点和客服训练数据。',
+      '我来给你盯今天的开源热榜，重点还是你现在最需要的方向。',
+      '- 我会抓 GitHub Trending、GitHub Search、Hacker News 和 RSS 技术源。',
+      '- 结果会优先筛 AI Agent、Playwright、软件测试、电商自动化这几类。',
+      '- 抓到的内容会写进 data/trend-intel，也会喂给每日热点日报。',
+      '- 你要继续深挖的话，我可以直接接趋势 token 工厂，把热点拆成学习计划、UI 自动化借鉴点和客服训练数据。',
       '',
-      '启动口令：文员，今天开源热榜。高消耗口令：文员，烧 token 分析今天 GitHub 热门项目。',
+      '你可以直接说：文员，今天开源热榜。要高消耗版就说：文员，烧 token 分析今天 GitHub 热门项目。',
     ].join('\n');
   }
 
   if (route.action === 'trend-token-factory') {
     return [
-      '文员趋势 token 工厂：',
-      '- 先收集 GitHub 热门项目、Hacker News 热点和 RSS 技术新闻。',
-      '- 再批量调用模型分析每个热门项目的学习价值、UI 自动化可借鉴点、测试风险和行动建议。',
-      '- 会把热点新闻转成电商客服训练数据、QA 评测样本和项目跟进清单。',
-      '- 每次模型调用都会写入 token/耗时账本，产物归档到 data/trend-token-factory。',
-      '- 适合消耗 LongCat 额度，但输出会变成可复盘的学习资产。',
+      '趋势 token 工厂这块我可以当你的研究助理来跑。',
+      '- 我先收集今天的 GitHub 热门项目、Hacker News 热点和 RSS 技术新闻。',
+      '- 然后批量让模型分析学习价值、UI 自动化借鉴点、测试风险和下一步动作。',
+      '- 最后把结果转成电商客服训练数据、QA 评测样本和可跟进清单。',
+      '- 每次调用都会写 token/耗时账本，产物归档到 data/trend-token-factory，后面复盘直接可用。',
+      '- 这条线很适合用来消耗 LongCat 额度，但不会只烧 token，都会沉淀成能复用的资产。',
       '',
-      '启动口令：文员，烧 token 分析今天 GitHub 热门项目。',
+      '要开始就说：文员，烧 token 分析今天 GitHub 热门项目。',
     ].join('\n');
   }
 
@@ -959,6 +1022,10 @@ function buildClerkAgentReply(route = {}, options = {}) {
 
   if (route.action === 'task-center-continue-yesterday') {
     return buildTaskCenterContinueYesterdayReply(options);
+  }
+
+  if (route.action === 'continue-context') {
+    return buildClerkContinueContextReply(options);
   }
 
   if (route.action === 'task-center-brain') {
@@ -1018,13 +1085,13 @@ function buildClerkAgentReply(route = {}, options = {}) {
   }
 
   return [
-    '我是文员 agent，适合做这些低风险整理工作：',
-    '- 统计 Hermes/OpenClaw token 和耗时',
-    '- 整理待办、日报、周报',
-    '- 摘要 UI 自动化和 Allure 结果',
-    '- 归档邮箱报告和知识库经验',
+    '我这边按文员模式工作，适合帮你做整理和跟进，不会乱动高风险操作。',
+    '- 我可以统计 Hermes/OpenClaw 的 token 和耗时',
+    '- 我可以整理待办、日报、周报',
+    '- 我可以汇总 UI 自动化和 Allure 结果',
+    '- 我可以做邮箱报告归档和知识库沉淀',
     '',
-    '我默认不执行重启、清理硬盘、互修服务器。',
+    '默认我不执行重启、清理硬盘、互修服务器这类高风险动作。',
   ].join('\n');
 }
 

@@ -490,12 +490,14 @@ test('buildClerkAgentReply explains trend intel and token factory', () => {
   assert.match(intelReply, /开源热榜/);
   assert.match(intelReply, /GitHub/);
   assert.match(intelReply, /Hacker News/);
+  assert.match(intelReply, /我来给你盯今天的开源热榜/);
 
   const factoryReply = buildClerkAgentReply({ action: 'trend-token-factory' });
   assert.match(factoryReply, /趋势 token 工厂/);
   assert.match(factoryReply, /热门项目/);
   assert.match(factoryReply, /UI 自动化/);
   assert.match(factoryReply, /客服训练数据/);
+  assert.match(factoryReply, /研究助理/);
 });
 
 test('buildClerkAgentReply explains token factory full workflow naturally', () => {
@@ -642,6 +644,62 @@ test('buildClerkAgentReply supports continue yesterday suggestion', () => {
   assert.match(reply, /继续昨天任务建议/);
   assert.match(reply, /可恢复任务：1/);
   assert.match(reply, /tf-z/);
+});
+
+test('buildClerkAgentReply continues from task center context and trend radar', () => {
+  const reply = buildClerkAgentReply({ action: 'continue-context', rawText: '文员，继续吧' }, {
+    summarizeTaskCenterBrain: () => ({
+      today: { summaryText: '今天任务 4 个，完成 2 个，失败 1 个。' },
+      failureReview: { summaryText: '最近失败任务 1 个：scheduled-ui。' },
+      nextPlan: {
+        items: ['先修 scheduled-ui', '再跑趋势 token 工厂'],
+        quickCommands: ['文员，查看失败任务', '文员，烧 token 分析今天 GitHub 热门项目'],
+      },
+    }),
+    readTrendIntelReport: () => ({
+      learningRadar: {
+        items: [
+          {
+            projectName: 'microsoft/playwright',
+            usefulFor: 'UI 自动化',
+            nextStep: '看 README / 跑 demo / 借鉴测试用例',
+          },
+        ],
+      },
+    }),
+  });
+
+  assert.match(reply, /我按最近上下文继续/);
+  assert.match(reply, /今天任务 4 个/);
+  assert.match(reply, /scheduled-ui/);
+  assert.match(reply, /microsoft\/playwright/);
+  assert.match(reply, /先修 scheduled-ui/);
+  assert.match(reply, /文员，查看失败任务/);
+});
+
+test('buildClerkAgentReply redacts secret-like trend radar fields while continuing context', () => {
+  const reply = buildClerkAgentReply({ action: 'continue-context' }, {
+    summarizeTaskCenterBrain: () => ({
+      today: { summaryText: '今天任务 1 个。' },
+      failureReview: { summaryText: '暂无失败任务。' },
+      nextPlan: { items: [], quickCommands: [] },
+    }),
+    readTrendIntelReport: () => ({
+      learningRadar: {
+        items: [
+          {
+            projectName: 'sk-proj-secret123456789',
+            usefulFor: 'UI 自动化',
+            nextStep: '把 Authorization: Bearer abc.def.secret 写进报告',
+          },
+        ],
+      },
+    }),
+  });
+
+  assert.match(reply, /\[redacted secret-like output\]/);
+  assert.doesNotMatch(reply, /sk-proj-secret123456789/);
+  assert.doesNotMatch(reply, /abc\.def\.secret/);
 });
 
 test('buildClerkAgentReply renders task center brain summary', () => {

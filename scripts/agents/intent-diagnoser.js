@@ -9,6 +9,9 @@ function inferIntentLabel(route = {}) {
     if (route.action === 'todo-summary') {
       return '整理项目待办与失败复盘';
     }
+    if (route.action === 'continue-context') {
+      return '继续最近项目上下文';
+    }
     if (route.action === 'token-factory') {
       return '推进 token 工厂流水线';
     }
@@ -121,6 +124,12 @@ function buildIntentDiagnosis(text = '', route = {}) {
   if (route.agent === 'clerk-agent' && route.action === 'todo-summary') {
     diagnosis.reason = '我识别到你在问今天/昨天的任务和失败情况，会先整理待办与失败复盘视角。';
     diagnosis.nextStep = '我会先给出已完成、未完成和失败项清单，再建议下一步优先级。';
+    return diagnosis;
+  }
+
+  if (route.agent === 'clerk-agent' && route.action === 'continue-context') {
+    diagnosis.reason = '我识别到你要沿着最近上下文继续，会先看任务中枢、失败复盘和趋势雷达，而不是重新给通用菜单。';
+    diagnosis.nextStep = '我会按任务中枢优先级、失败项和趋势雷达给出下一条可执行动作。';
     return diagnosis;
   }
 

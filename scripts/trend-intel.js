@@ -15,6 +15,16 @@ const DEFAULT_RSS_FEEDS = [
   { source: 'Playwright Releases', url: 'https://github.com/microsoft/playwright/releases.atom' },
   { source: 'Cypress Releases', url: 'https://github.com/cypress-io/cypress/releases.atom' },
 ];
+const REDACTED_SECRET_OUTPUT = '[redacted secret-like output]';
+const SECRET_LIKE_PATTERNS = [
+  /\bauthorization\s*:\s*\S+/i,
+  /\bbearer\s+[A-Za-z0-9._~+/=-]{10,}/i,
+  /\b(?:token|secret|password|api[_-]?key|apikey|key)\s*[:=]\s*[A-Za-z0-9._~+/=-]{4,}/i,
+  /\bgithub_pat_[A-Za-z0-9_]{8,}/i,
+  /\b(?:ghp|gho|ghu|ghs|ghr|sk|ak|ck_live)_[A-Za-z0-9_-]{8,}/i,
+  /\bsk-(?:proj-)?[A-Za-z0-9_-]{8,}/i,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/i,
+];
 
 function parseListEnv(value, defaults = []) {
   const items = String(value || '')
@@ -58,6 +68,18 @@ function cleanText(value) {
   return decodeEntities(stripTags(value));
 }
 
+function looksSecretLike(value) {
+  const text = String(value ?? '');
+  return SECRET_LIKE_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function sanitizeTrendField(value, limit = 300) {
+  const text = cleanText(value || '');
+  if (!text) return '';
+  if (looksSecretLike(text)) return REDACTED_SECRET_OUTPUT;
+  return text.slice(0, limit);
+}
+
 function getTag(block, tagNames) {
   const names = Array.isArray(tagNames) ? tagNames : [tagNames];
   for (const name of names) {
@@ -76,6 +98,17 @@ function getXmlLink(block) {
 function parseInteger(value) {
   const text = String(value || '').replace(/[^\d]/g, '');
   return text ? Number(text) : undefined;
+}
+
+function formatStars(value) {
+  return Number.isFinite(Number(value)) ? String(Number(value)) : '未提供';
+}
+
+function buildHeatMetric(item = {}) {
+  const source = sanitizeTrendField(item.source || item.kind || 'Trend Intel', 120) || 'Trend Intel';
+  const isTrending = item.kind === 'github-trending' || /trending/i.test(source);
+  const sourceMetric = isTrending ? 'GitHub Trending daily' : source;
+  return `${sourceMetric} / 今日新增 stars ${formatStars(item.starsToday)} / 总 stars ${formatStars(item.stars)}`;
 }
 
 function daysAgoIso(days, now = new Date()) {
@@ -119,7 +152,10 @@ function parseGitHubTrendingHtml(html) {
     const fullName = repo.includes('/') ? repo : slug.split('/').slice(0, 2).join('/');
     const languageMatch = article.match(/itemprop=["']programmingLanguage["'][^>]*>([\s\S]*?)<\/span>/i);
     const starsMatch = article.match(/href=["']\/[^"']+\/stargazers["'][^>]*>([\s\S]*?)<\/a>/i);
-    return {
+    const starsTodayMatch = article.match(/([\d,]+)\s+stars?\s+today/i);
+    const stars = starsMatch ? parseInteger(cleanText(starsMatch[1])) : undefined;
+    const starsToday = starsTodayMatch ? parseInteger(starsTodayMatch[1]) : undefined;
+    const item = {
       id: `github-trending:${fullName}`,
       title: fullName,
       source: 'GitHub Trending',
@@ -127,8 +163,13 @@ function parseGitHubTrendingHtml(html) {
       link: `https://github.com/${fullName}`,
       summary: getTag(article, 'p'),
       language: languageMatch ? cleanText(languageMatch[1]) : '',
-      stars: starsMatch ? parseInteger(cleanText(starsMatch[1])) : undefined,
+      stars,
+      starsToday,
       publishedAt: '',
+    };
+    item.heatMetric = buildHeatMetric(item);
+    return {
+      ...item,
     };
   }).filter(Boolean);
 }
@@ -249,23 +290,31 @@ function normalizeTrendItems(items = [], limit = 50) {
   const seen = new Set();
   const normalized = [];
   for (const item of Array.isArray(items) ? items : []) {
-    const title = cleanText(item.title || '');
+    const title = sanitizeTrendField(item.title || '', 180);
     if (!title) continue;
-    const link = String(item.link || '').trim();
+    const link = sanitizeTrendField(item.link || '', 500);
     const key = (link || `${item.source || ''}|${title}`).toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
+    const source = sanitizeTrendField(item.source || 'Trend Intel', 120) || 'Trend Intel';
+    const kind = sanitizeTrendField(item.kind || 'trend', 80) || 'trend';
+    const summary = sanitizeTrendField(item.summary || '', 300);
+    const language = sanitizeTrendField(item.language || '', 80);
+    const topic = sanitizeTrendField(item.topic || '', 120);
+    const publishedAt = sanitizeTrendField(item.publishedAt || '', 80);
     normalized.push({
-      id: item.id || `${item.kind || 'trend'}:${key}`,
+      id: sanitizeTrendField(item.id || `${kind}:${key}`, 260),
       title,
-      source: item.source || 'Trend Intel',
-      kind: item.kind || 'trend',
+      source,
+      kind,
       link,
-      summary: cleanText(item.summary || '').slice(0, 300),
+      summary,
       stars: item.stars,
-      language: item.language || '',
-      topic: item.topic || '',
-      publishedAt: item.publishedAt || '',
+      starsToday: item.starsToday,
+      heatMetric: sanitizeTrendField(item.heatMetric || buildHeatMetric({ ...item, source, kind }), 220),
+      language,
+      topic,
+      publishedAt,
     });
     if (normalized.length >= limit) break;
   }
@@ -300,20 +349,126 @@ async function collectTrendIntel(env = process.env, fetchImpl = fetch, options =
   return normalized;
 }
 
+function inferUsefulFor(item = {}) {
+  const text = [
+    item.title,
+    item.summary,
+    item.topic,
+    item.language,
+  ].join(' ').toLowerCase();
+  const useful = [];
+  if (/playwright|cypress|selenium|test|testing|qa|browser|automation|e2e/.test(text)) {
+    useful.push('UI 自动化');
+  }
+  if (/agent|llm|ai|browserbase|stagehand|mcp|workflow|automation/.test(text)) {
+    useful.push('AI Agent');
+  }
+  if (/shop|commerce|ecommerce|order|payment|cart|retail/.test(text)) {
+    useful.push('电商测试');
+  }
+  if (/mail|email|smtp|imap|inbox|notification/.test(text)) {
+    useful.push('邮箱平台');
+  }
+  if (/support|customer|客服|chat|conversation|dataset|training/.test(text)) {
+    useful.push('客服数据');
+  }
+  if (!useful.length) {
+    useful.push('AI Agent', 'UI 自动化');
+  }
+  return [...new Set(useful)].join(' / ');
+}
+
+function buildLearningReason(item = {}) {
+  const summary = cleanText(item.summary || '');
+  if (summary) {
+    return summary.length > 80 ? `${summary.slice(0, 77)}...` : summary;
+  }
+  if (item.kind === 'github-trending') {
+    return '进入 GitHub 今日趋势，适合快速观察近期开发者关注的实现方向。';
+  }
+  if (item.kind === 'github-search') {
+    return '近期仍有更新且总 stars 较高，适合作为工程实现和测试设计参考。';
+  }
+  return '可作为测试、Agent 或业务自动化方向的补充观察材料。';
+}
+
+function inferNextStep(item = {}) {
+  if (item.kind === 'github-trending' || item.kind === 'github-search' || String(item.link || '').includes('github.com/')) {
+    const useful = inferUsefulFor(item);
+    if (useful.includes('UI 自动化')) return '看 README / 跑 demo / 借鉴测试用例 / 加到 token 工厂分析';
+    if (useful.includes('AI Agent')) return '看 README / 跑 demo / 分析 Agent 工作流 / 加到 token 工厂分析';
+    return '看 README / 跑 demo / 提炼可复用模块 / 加到 token 工厂分析';
+  }
+  return '阅读原文 / 提炼测试观点 / 加到 token 工厂分析';
+}
+
+function buildRadarOpening(items = []) {
+  if (!items.length) return '今天暂时没有抓到稳定的热点数据，我建议晚点再拉一轮。';
+  const picks = items.slice(0, 3).map((item) => item.projectName).join('、');
+  return `我先给你挑了 ${items.length} 个今天最值得看的开源项目：${picks}。优先都和 UI 自动化、AI Agent 或测试流程有关。`;
+}
+
+function toNaturalRadarItemText(item, index) {
+  const lines = [];
+  lines.push(`${index + 1}. ${item.projectName}`);
+  lines.push(`   热度看法：${item.heatMetric}。`);
+  lines.push(`   值得学的原因：${item.whyLearn}`);
+  lines.push(`   对你现在项目最有用：${item.usefulFor}。`);
+  lines.push(`   我建议你下一步：${item.nextStep}。`);
+  if (item.link) {
+    lines.push(`   项目地址：${item.link}`);
+  }
+  return lines.join('\n');
+}
+
+function buildRadarClosing(items = []) {
+  if (!items.length) return '';
+  return '要我继续的话，我可以下一条直接给你“先看哪个、先抄哪段测试思路、今天怎么烧 token 最值”的执行顺序。';
+}
+
+function buildOpenSourceLearningRadar(items = [], options = {}) {
+  const normalized = normalizeTrendItems(items, Number(options.limit || 10));
+  const radarItems = normalized.map((item) => ({
+    projectName: item.title,
+    link: item.link,
+    heatMetric: item.heatMetric || buildHeatMetric(item),
+    whyLearn: buildLearningReason(item),
+    usefulFor: inferUsefulFor(item),
+    nextStep: inferNextStep(item),
+    source: item.source,
+    kind: item.kind,
+  }));
+
+  const text = radarItems.length
+    ? [
+      '今日开源学习雷达',
+      buildRadarOpening(radarItems),
+      ...radarItems.map((item, index) => toNaturalRadarItemText(item, index)),
+      buildRadarClosing(radarItems),
+    ].filter(Boolean).join('\n\n')
+    : '今日开源学习雷达\n暂无值得展示的开源项目。';
+
+  return {
+    total: radarItems.length,
+    items: radarItems,
+    text,
+  };
+}
+
 function buildTrendIntelReport(items = [], options = {}) {
   const normalized = normalizeTrendItems(items, Number(options.limit || 50));
   const errors = Array.isArray(items?.errors) ? items.errors : (Array.isArray(options.errors) ? options.errors : []);
+  const learningRadar = buildOpenSourceLearningRadar(normalized, {
+    limit: options.radarLimit || options.limit || 10,
+  });
   return {
     generatedAt: options.generatedAt || new Date().toISOString(),
     total: normalized.length,
     items: normalized,
+    learningRadar,
     errors,
     summary: normalized.length
-      ? normalized.map((item, index) => {
-        const stars = item.stars ? ` (${item.stars} stars)` : '';
-        const topic = item.topic ? ` [${item.topic}]` : '';
-        return `${index + 1}. ${item.title}${stars} - ${item.source}${topic}${item.link ? `\n   ${item.link}` : ''}`;
-      }).join('\n')
+      ? learningRadar.text
       : '暂无热点条目。',
   };
 }
@@ -344,6 +499,8 @@ module.exports = {
   DEFAULT_RSS_FEEDS,
   buildGitHubSearchUrl,
   buildHackerNewsUrl,
+  buildHeatMetric,
+  buildOpenSourceLearningRadar,
   buildTrendIntelReport,
   collectTrendIntel,
   daysAgoIso,

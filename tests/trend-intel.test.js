@@ -6,6 +6,7 @@ const test = require('node:test');
 
 const {
   buildGitHubSearchUrl,
+  buildOpenSourceLearningRadar,
   buildTrendIntelReport,
   collectTrendIntel,
   normalizeTrendItems,
@@ -52,12 +53,14 @@ test('parseGitHubTrendingHtml extracts repository fields from fixture html', () 
       <p>Reliable end-to-end testing for modern web apps</p>
       <span itemprop="programmingLanguage">TypeScript</span>
       <a href="/microsoft/playwright/stargazers">71,234</a>
+      <span class="float-sm-right"> 123 stars today </span>
     </article>
     <article class="Box-row">
       <h2><a href="/browserbase/stagehand"> browserbase / stagehand </a></h2>
       <p>AI browser automation</p>
       <span itemprop="programmingLanguage">Python</span>
       <a href="/browserbase/stagehand/stargazers">9,876</a>
+      <span> 45 stars today </span>
     </article>`;
 
   const items = parseGitHubTrendingHtml(html);
@@ -68,6 +71,8 @@ test('parseGitHubTrendingHtml extracts repository fields from fixture html', () 
   assert.equal(items[0].summary, 'Reliable end-to-end testing for modern web apps');
   assert.equal(items[0].language, 'TypeScript');
   assert.equal(items[0].stars, 71234);
+  assert.equal(items[0].starsToday, 123);
+  assert.equal(items[0].heatMetric, 'GitHub Trending daily / 今日新增 stars 123 / 总 stars 71234');
   assert.equal(items[0].link, 'https://github.com/microsoft/playwright');
 });
 
@@ -192,7 +197,111 @@ test('normalizeTrendItems deduplicates by link and buildTrendIntelReport summari
   assert.equal(report.total, 2);
   assert.equal(report.generatedAt, '2026-05-07T00:00:00Z');
   assert.match(report.summary, /Same/);
-  assert.match(report.summary, /10 stars/);
+  assert.match(report.summary, /总 stars 10/);
+});
+
+test('buildOpenSourceLearningRadar formats project learning radar with heat, value, usefulness and next step', () => {
+  const radar = buildOpenSourceLearningRadar([
+    {
+      title: 'microsoft/playwright',
+      link: 'https://github.com/microsoft/playwright',
+      source: 'GitHub Trending',
+      kind: 'github-trending',
+      summary: 'Reliable end-to-end testing for modern web apps',
+      stars: 71000,
+      starsToday: 321,
+      language: 'TypeScript',
+    },
+    {
+      title: 'browserbase/stagehand',
+      link: 'https://github.com/browserbase/stagehand',
+      source: 'GitHub Search: ai-agent',
+      kind: 'github-search',
+      summary: 'AI browser automation',
+      stars: 9900,
+      topic: 'ai-agent',
+    },
+  ], { limit: 2 });
+
+  assert.equal(radar.items.length, 2);
+  assert.equal(radar.items[0].projectName, 'microsoft/playwright');
+  assert.equal(radar.items[0].heatMetric, 'GitHub Trending daily / 今日新增 stars 321 / 总 stars 71000');
+  assert.match(radar.items[0].usefulFor, /UI 自动化/);
+  assert.match(radar.items[0].nextStep, /看 README/);
+  assert.match(radar.text, /^今日开源学习雷达/);
+  assert.match(radar.text, /我先给你挑了/);
+  assert.match(radar.text, /1\. microsoft\/playwright/);
+  assert.match(radar.text, /热度看法：GitHub Trending daily \/ 今日新增 stars 321 \/ 总 stars 71000/);
+  assert.match(radar.text, /值得学的原因：/);
+  assert.match(radar.text, /对你现在项目最有用：/);
+  assert.match(radar.text, /我建议你下一步：/);
+  assert.match(radar.text, /要我继续的话/);
+});
+
+test('buildTrendIntelReport includes open source learning radar text and structured items', () => {
+  const report = buildTrendIntelReport([
+    {
+      title: 'microsoft/playwright',
+      link: 'https://github.com/microsoft/playwright',
+      source: 'GitHub Trending',
+      kind: 'github-trending',
+      summary: 'Reliable end-to-end testing for modern web apps',
+      stars: 71000,
+      starsToday: 321,
+    },
+  ], { generatedAt: '2026-05-07T00:00:00Z' });
+
+  assert.equal(report.learningRadar.items[0].projectName, 'microsoft/playwright');
+  assert.match(report.summary, /今日开源学习雷达/);
+  assert.match(report.summary, /我先给你挑了/);
+  assert.match(report.summary, /GitHub Trending daily \/ 今日新增 stars 321 \/ 总 stars 71000/);
+});
+
+test('buildTrendIntelReport redacts secret-like dynamic fields', () => {
+  const report = buildTrendIntelReport([
+    {
+      title: 'Repo token=sk-secret-value-123456789',
+      link: 'https://example.com/repo?token=sk-secret-value-123456789',
+      source: 'RSS secret: hidden-value',
+      kind: 'rss',
+      summary: 'Authorization: Bearer abc.def.secret-token',
+      topic: 'api_key: hidden-value',
+    },
+    {
+      title: 'GitHub leaked github_pat_1234567890abcdef',
+      link: 'https://example.com/gho_1234567890abcdef',
+      source: 'GitHub Search',
+      kind: 'github-search',
+      summary: 'temporary token ghs_1234567890abcdef should not print',
+    },
+  ], { generatedAt: '2026-05-07T00:00:00Z' });
+  const serialized = JSON.stringify(report);
+
+  assert.doesNotMatch(serialized, /sk-secret-value/);
+  assert.doesNotMatch(serialized, /abc\.def\.secret-token/);
+  assert.doesNotMatch(serialized, /hidden-value/);
+  assert.doesNotMatch(serialized, /github_pat_1234567890abcdef/);
+  assert.doesNotMatch(serialized, /gho_1234567890abcdef/);
+  assert.doesNotMatch(serialized, /ghs_1234567890abcdef/);
+  assert.match(serialized, /\[redacted secret-like output\]/);
+});
+
+test('buildTrendIntelReport keeps normal GitHub and RSS fields readable', () => {
+  const report = buildTrendIntelReport([
+    {
+      title: 'github/actions-runner',
+      link: 'https://github.com/actions/runner',
+      source: 'GitHub Search: testing',
+      kind: 'github-search',
+      summary: 'API testing helper with OAuth examples but no credentials.',
+      stars: 12000,
+    },
+  ], { generatedAt: '2026-05-07T00:00:00Z' });
+  const serialized = JSON.stringify(report);
+
+  assert.match(serialized, /github\/actions-runner/);
+  assert.match(serialized, /API testing helper/);
+  assert.doesNotMatch(serialized, /\[redacted secret-like output\]/);
 });
 
 test('writeTrendIntelReport writes formatted json and creates parent directory', () => {

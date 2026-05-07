@@ -426,6 +426,26 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'task-center-continue-yesterday',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，继续吧'), {
+    agent: 'clerk-agent',
+    action: 'continue-context',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，下一步'), {
+    agent: 'clerk-agent',
+    action: 'continue-context',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('clerk, 下一步'), {
+    agent: 'clerk-agent',
+    action: 'continue-context',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('office. 继续吧'), {
+    agent: 'clerk-agent',
+    action: 'continue-context',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，启动多 Agent 训练场，用邮箱归档结果'), {
     agent: 'clerk-agent',
     action: 'multi-agent-lab',
@@ -829,5 +849,20 @@ test('routeAgentIntent handles boss-style natural-language control phrases', () 
     agent: 'clerk-agent',
     action: 'todo-summary',
     requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('继续'), {
+    agent: 'chat-agent',
+    action: 'chat',
+    requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('接着做'), {
+    agent: 'chat-agent',
+    action: 'chat',
+    requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('下一步'), {
+    agent: 'chat-agent',
+    action: 'chat',
+    requiresAuth: false,
   });
 });

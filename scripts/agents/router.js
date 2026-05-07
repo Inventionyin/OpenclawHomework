@@ -224,6 +224,17 @@ function routeQaAssetIntent(text) {
   return null;
 }
 
+function looksLikeShortContinuationIntent(text) {
+  const withoutWakeWord = stripMention(String(text ?? '').trim())
+    .replace(/^(?:文员|秘书|助理|clerk|office)[，,.\s:：。]*/i, '')
+    .trim();
+  return /^(?:继续|继续吧|接着|接着做|下一步|下步|下一条|往下)[。.!！?？~～\s]*$/i.test(withoutWakeWord);
+}
+
+function hasClerkWakeWord(text) {
+  return /^(?:@\S+\s*)?(?:文员|秘书|助理|clerk|office)(?:[，,.\s:：。]+|$)/i.test(String(text ?? '').trim());
+}
+
 function routeClerkIntent(text) {
   const original = stripMention(String(text ?? '').trim());
   const normalized = original.toLowerCase();
@@ -398,6 +409,10 @@ function routeClerkIntent(text) {
     return { agent: 'clerk-agent', action: 'token-factory', requiresAuth: true };
   }
 
+  if (looksLikeShortContinuationIntent(original)) {
+    return { agent: 'clerk-agent', action: 'continue-context', requiresAuth: true };
+  }
+
   if (/(启动|开始|跑|执行|开).{0,12}(高\s*token|token).{0,20}(训练场|实验室|lab|额度|数据|训练|烧|消耗)/i.test(normalized)
     || /(高\s*token|token).{0,20}(训练场|实验室|lab|额度|烧|消耗)/i.test(normalized)
     || /(烧|消耗|花完).{0,12}(token|额度).{0,20}(训练|数据|训练场)/i.test(normalized)) {
@@ -491,6 +506,10 @@ function routeOfficeIntent(text) {
   if (/(继续|接着|延续).{0,12}(昨天|昨晚|昨日).{0,12}(没跑完|没做完|没完成).{0,12}(token|token\s*工厂|token-factory)/i.test(normalized)
     || /(token|token\s*工厂|token-factory).{0,18}(继续|接着).{0,12}(昨天|昨晚|昨日)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'token-factory', requiresAuth: true };
+  }
+
+  if (looksLikeShortContinuationIntent(original)) {
+    return { agent: 'clerk-agent', action: 'continue-context', requiresAuth: true };
   }
 
   if (/(耗时|用量|账本|谁更费|谁更省|统计|对比|token\s*(用量|消耗|统计|账本|对比)).{0,30}(hermes|openclaw|模型|调用|今天|最近)?/i.test(normalized)) {
@@ -715,6 +734,10 @@ function routeBroadPlannerIntent(text) {
 
 function routeAgentIntent(text) {
   const original = stripMention(text);
+  if (looksLikeShortContinuationIntent(original) && !hasClerkWakeWord(text)) {
+    return { agent: 'chat-agent', action: 'chat', requiresAuth: false };
+  }
+
   if (looksLikeTestHowToQuestion(original)) {
     return { agent: 'doc-agent', action: 'answer', requiresAuth: true };
   }
@@ -921,6 +944,8 @@ module.exports = {
   routeBroadPlannerIntent,
   routeCapabilityIntent,
   routeEcosystemIntent,
+  looksLikeShortContinuationIntent,
+  hasClerkWakeWord,
   routeClerkIntent,
   routeOfficeIntent,
   routeQaAssetIntent,

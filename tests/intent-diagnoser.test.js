@@ -72,6 +72,22 @@ test('buildIntentDiagnosis explains todo-summary for today/failed-yesterday styl
   assert.match(diagnosis.nextStep, /未完成|失败项/);
 });
 
+test('buildIntentDiagnosis explains short continuation context requests', () => {
+  const diagnosis = buildIntentDiagnosis(
+    '继续',
+    {
+      agent: 'clerk-agent',
+      action: 'continue-context',
+      requiresAuth: true,
+    },
+  );
+
+  assert.equal(diagnosis.intentLabel, '继续最近项目上下文');
+  assert.equal(diagnosis.canExecute, true);
+  assert.match(diagnosis.reason, /最近上下文/);
+  assert.match(diagnosis.nextStep, /任务中枢|趋势雷达/);
+});
+
 test('buildIntentDiagnosis explains token-factory resume intent', () => {
   const diagnosis = buildIntentDiagnosis(
     '继续昨天没跑完的 token 工厂',
