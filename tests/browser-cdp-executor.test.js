@@ -187,11 +187,31 @@ test("live execution without injected browser support stays not implemented", as
   const result = await runBrowserAutomationTask({
     text: "Inspect https://localhost:3000/dashboard in live mode.",
     dryRun: false,
+    playwrightAdapter: {
+      chromium: {
+        launch: async () => {
+          throw new Error("Executable doesn't exist at /tmp/chromium-headless-shell");
+        },
+      },
+    },
   });
 
   assert.equal(result.executed, false);
   assert.equal(result.mode, "not-implemented");
   assert.match(result.reason, /not implemented/i);
+});
+
+test("live execution surfaces injected browser factory launch errors", async () => {
+  await assert.rejects(
+    () => runBrowserAutomationTask({
+      text: "Inspect https://localhost:3000/dashboard in live mode.",
+      dryRun: false,
+      browserFactory: async () => {
+        throw new Error("custom browser factory failed");
+      },
+    }),
+    /custom browser factory failed/,
+  );
 });
 
 test("unsafe live request is blocked before browser factory runs", async () => {

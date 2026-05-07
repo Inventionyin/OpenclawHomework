@@ -134,11 +134,28 @@ async function runBrowserAutomationTask(options) {
   let screenshotPath = resolveScreenshotPath(input, request);
 
   try {
-    browser = await launcher({
-      request,
-      plan,
-      options: input,
-    });
+    try {
+      browser = await launcher({
+        request,
+        plan,
+        options: input,
+      });
+    } catch (error) {
+      if (!input.browserFactory && isBrowserLaunchUnavailableError(error)) {
+        return {
+          executed: false,
+          mode: "not-implemented",
+          request,
+          plan,
+          reason:
+            "Live browser/CDP execution is not implemented or browser binaries are not installed.",
+          steps: plan.steps,
+          summary: `Live browser execution is not available for ${summaryBase}.`,
+          changedFiles: [],
+        };
+      }
+      throw error;
+    }
 
     const resolvedBrowser = normalizeBrowserLike(browser);
     const pageResult = await openAutomationPage(resolvedBrowser);
@@ -213,6 +230,11 @@ async function runBrowserAutomationTask(options) {
     reason: "Live browser/CDP execution is not implemented in this foundation yet.",
     steps: plan.steps,
   };
+}
+
+function isBrowserLaunchUnavailableError(error) {
+  const message = String(error?.message || error || "");
+  return /executable doesn't exist|please run.*playwright install|browserType\.launch/i.test(message);
 }
 
 async function saveCapturedProtocolAssets(protocolAssets, protocolAssetSaver) {
