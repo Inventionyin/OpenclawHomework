@@ -14,7 +14,9 @@ test('production timer consolidation script exists and supports hermes/openclaw 
   const script = readScript();
 
   assert.match(script, /ROLE=""/);
+  assert.match(script, /MODE="leader"/);
   assert.match(script, /--role\)/);
+  assert.match(script, /--mode\)/);
   assert.match(script, /hermes\|openclaw/);
   assert.match(script, /DAILY_TIMER="\$\{ROLE\}-daily-agent-pipeline\.timer"/);
   assert.match(script, /WATCHDOG_TIMER="\$\{ROLE\}-homework-watchdog\.timer"/);
@@ -43,6 +45,14 @@ test('production timer consolidation enables only daily pipeline and watchdog by
   assert.match(script, /systemctl enable --now "\$\{unit\}"/);
   assert.match(script, /systemctl daemon-reload/);
   assert.match(script, /systemctl list-timers --all \| grep -E/);
+});
+
+test('production timer consolidation supports standby mode for OpenClaw interaction-only host', () => {
+  const script = readScript();
+
+  assert.match(script, /if \[\[ "\$\{MODE\}" == "standby" \]\]/);
+  assert.match(script, /ENABLE_UNITS=\("\$\{WATCHDOG_TIMER\}"\)/);
+  assert.match(script, /DISABLE_UNITS\+=\("\$\{DAILY_TIMER\}"\)/);
 });
 
 test('production timer consolidation has dry-run and does not embed secrets', () => {

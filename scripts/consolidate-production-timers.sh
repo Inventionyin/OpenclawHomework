@@ -2,18 +2,21 @@
 set -euo pipefail
 
 ROLE=""
+MODE="leader"
 DRY_RUN="false"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --role) ROLE="$2"; shift 2 ;;
+    --mode) MODE="$2"; shift 2 ;;
     --dry-run) DRY_RUN="true"; shift ;;
     -h|--help)
       cat <<'EOF'
-Usage: bash scripts/consolidate-production-timers.sh --role hermes|openclaw [--dry-run]
+Usage: bash scripts/consolidate-production-timers.sh --role hermes|openclaw [--mode leader|standby] [--dry-run]
 
 Keeps the production schedule simple:
-- enabled:  <role>-daily-agent-pipeline.timer, <role>-homework-watchdog.timer
+- leader:  enable <role>-daily-agent-pipeline.timer and <role>-homework-watchdog.timer
+- standby: enable <role>-homework-watchdog.timer only
 - disabled: duplicate digest/token/ui standalone timers
 
 This script only changes systemd timer enablement. It does not edit env files or secrets.
@@ -28,6 +31,14 @@ case "${ROLE}" in
   hermes|openclaw) ;;
   *)
     echo "Missing or invalid --role. Use hermes or openclaw." >&2
+    exit 2
+    ;;
+esac
+
+case "${MODE}" in
+  leader|standby) ;;
+  *)
+    echo "Missing or invalid --mode. Use leader or standby." >&2
     exit 2
     ;;
 esac
@@ -48,6 +59,11 @@ DISABLE_UNITS=(
   "${ROLE}-scheduled-ui-runner.timer"
   "${ROLE}-token-factory-worker.timer"
 )
+
+if [[ "${MODE}" == "standby" ]]; then
+  ENABLE_UNITS=("${WATCHDOG_TIMER}")
+  DISABLE_UNITS+=("${DAILY_TIMER}")
+fi
 
 if [[ "${ROLE}" == "openclaw" ]]; then
   DISABLE_UNITS+=("openclaw-hermes-watchdog.timer")
