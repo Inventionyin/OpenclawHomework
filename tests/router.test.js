@@ -58,6 +58,20 @@ test('routeAgentIntent routes natural-language self server queries', () => {
     confidence: 'medium',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('你现在内存多少，硬盘还剩多少'), {
+    agent: 'ops-agent',
+    action: 'load-summary',
+    target: 'self',
+    confidence: 'high',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('你现在内存、硬盘、CPU 都怎么样'), {
+    agent: 'ops-agent',
+    action: 'load-summary',
+    target: 'self',
+    confidence: 'high',
+    requiresAuth: true,
+  });
 });
 
 test('routeAgentIntent routes natural-language disk audit and cleanup confirmations', () => {
@@ -106,6 +120,13 @@ test('routeAgentIntent routes natural-language peer server queries', () => {
     agent: 'ops-agent',
     action: 'peer-disk-summary',
     target: 'openclaw',
+    confidence: 'high',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('Hermes 内存和硬盘还剩多少'), {
+    agent: 'ops-agent',
+    action: 'peer-load-summary',
+    target: 'hermes',
     confidence: 'high',
     requiresAuth: true,
   });

@@ -926,6 +926,34 @@ test('buildOpsAgentReply renders friendly summary replies', async () => {
   assert.match(reply, /内存：8G 总量/);
 });
 
+test('buildOpsAgentReply renders combined resource summary replies', async () => {
+  let receivedAction;
+  const reply = await buildOpsAgentReply({
+    action: 'load-summary',
+    target: 'self',
+    confidence: 'high',
+  }, {
+    runOpsCheck: async (action) => {
+      receivedAction = action;
+      return {
+        service: 'openclaw-feishu-bridge',
+        active: 'active',
+        health: '{"ok":true}',
+        watchdog: 'active',
+        commit: 'abc1234',
+        memory: { total: '8G', used: '3.1G', free: '4.9G' },
+        disk: { size: '40G', used: '22G', available: '18G', usePercent: '55%' },
+        load: { loadAverage: '0.12, 0.10, 0.09', cpu: '2 cores' },
+      };
+    },
+  });
+
+  assert.equal(receivedAction, 'load-summary');
+  assert.match(reply, /内存：8G 总量/);
+  assert.match(reply, /硬盘：40G 总量/);
+  assert.match(reply, /负载：0\.12, 0\.10, 0\.09/);
+});
+
 test('buildOpsAgentReply asks for clarification on medium-confidence dangerous ops', async () => {
   const reply = await buildOpsAgentReply({
     action: 'restart',

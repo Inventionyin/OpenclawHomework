@@ -175,20 +175,29 @@ function routeNaturalLanguageOps(text) {
     }
   }
 
+  const wantsMemorySummary = /(内存|memory|ram)/i.test(normalized);
+  const wantsDiskSummary = /(硬盘|磁盘|存储|空间|disk|df)/i.test(normalized);
+  const wantsLoadSummary = /(卡不卡|卡吗|负载|cpu|CPU|load|压力|慢不慢)/i.test(normalized);
+  const resourceSummaryCount = [wantsMemorySummary, wantsDiskSummary, wantsLoadSummary]
+    .filter(Boolean).length;
+  if (resourceSummaryCount >= 2) {
+    return toOpsRoute('load-summary', target, 'high');
+  }
+
   if (/(服务器状态|自己.{0,8}状态|你这台.{0,8}状态|本机.{0,8}状态)/.test(normalized)
     || (hasExplicitPeer && /(状态|正常吗|运行)/.test(normalized))) {
     return toOpsRoute('status', target, hasExplicitPeer ? 'high' : 'medium');
   }
 
-  if (/(内存|memory|ram)/i.test(normalized) && /(多少|剩|占用|使用|状态|够不够|高不高)?/.test(normalized)) {
+  if (wantsMemorySummary && /(多少|剩|占用|使用|状态|够不够|高不高)?/.test(normalized)) {
     return toOpsRoute('memory-summary', target, 'high');
   }
 
-  if (/(硬盘|磁盘|存储|空间|disk|df)/i.test(normalized) && /(多少|剩|占用|使用|状态|够不够)?/.test(normalized)) {
+  if (wantsDiskSummary && /(多少|剩|占用|使用|状态|够不够)?/.test(normalized)) {
     return toOpsRoute('disk-summary', target, 'high');
   }
 
-  if (/(卡不卡|卡吗|负载|cpu|CPU|load|压力|慢不慢)/i.test(normalized)) {
+  if (wantsLoadSummary) {
     return toOpsRoute('load-summary', target, hasExplicitPeer ? 'high' : 'medium');
   }
 
