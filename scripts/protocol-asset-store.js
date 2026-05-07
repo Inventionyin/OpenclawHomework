@@ -249,7 +249,42 @@ function buildProtocolAssetReport(query = {}, options = {}) {
   };
 }
 
+function mergeTags(tags = []) {
+  return Array.from(new Set([
+    ...tags.map((tag) => String(tag)).filter(Boolean),
+    'contract',
+  ]));
+}
+
+function buildProtocolTestCases(query = {}, options = {}) {
+  const limit = Number.isFinite(Number(options.limit)) ? Number(options.limit) : 10;
+  const assets = findProtocolAssets(query, options).slice(0, Math.max(0, limit));
+  const cases = assets.map((asset, index) => {
+    const summary = summarizeProtocolAsset(asset);
+    const expectedStatus = summary.status || 200;
+    return {
+      id: `protocol-case-${String(index + 1).padStart(3, '0')}`,
+      name: `${summary.method} ${summary.normalizedPath} should return ${expectedStatus}`,
+      method: summary.method,
+      path: summary.normalizedPath,
+      expectedStatus,
+      contentType: summary.contentType,
+      sourceAssetId: asset.id || '',
+      tags: mergeTags(summary.tags),
+      assertions: [
+        { field: 'status', op: 'equals', value: expectedStatus },
+      ],
+    };
+  });
+
+  return {
+    totalAssets: assets.length,
+    cases,
+  };
+}
+
 module.exports = {
+  buildProtocolTestCases,
   buildProtocolAssetReport,
   findProtocolAssets,
   normalizeProtocolAssetInput,

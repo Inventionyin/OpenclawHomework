@@ -60,6 +60,7 @@ const {
   runBrowserAutomationTask,
 } = require('../browser-cdp-executor');
 const {
+  buildProtocolTestCases,
   listProtocolAssets,
 } = require('../protocol-asset-store');
 const {
@@ -289,6 +290,31 @@ function buildMultiIntentPlanReply(route = {}) {
 }
 
 async function buildBrowserAgentReply(route = {}, options = {}) {
+  if (route.action === 'protocol-assets-to-tests') {
+    const builder = options.protocolTestCaseBuilder || ((request = {}) => buildProtocolTestCases(
+      { text: request.query || '' },
+      { env: request.env || process.env },
+    ));
+    const result = await builder({
+      query: route.rawText || options.text || '',
+      env: options.env || process.env,
+    });
+    const cases = Array.isArray(result?.cases) ? result.cases : [];
+    const preview = cases.slice(0, 5).map((item, index) => {
+      const method = sanitizeReplyField(item.method || 'GET', 20);
+      const path = sanitizeReplyField(item.path || '/', 120);
+      const status = sanitizeReplyField(item.expectedStatus || '-', 20);
+      const source = item.sourceAssetId ? ` 来源 ${sanitizeReplyField(item.sourceAssetId, 80)}` : '';
+      return `${index + 1}. ${method} ${path} -> ${status}${source}`;
+    });
+    return [
+      '协议资产已整理成测试用例：',
+      `- 共生成 ${cases.length} 条，来源资产 ${Number(result?.totalAssets || cases.length)} 条`,
+      ...(result?.savedFile ? [`- 保存：${sanitizeReplyField(result.savedFile, 240)}`] : []),
+      ...(preview.length ? ['', ...preview] : ['', '暂无可用协议资产。先说：真实执行 URL 并抓接口']),
+    ].join('\n');
+  }
+
   if (route.action === 'protocol-assets-report') {
     const reporter = options.protocolAssetReporter || ((request = {}) => {
       const assets = listProtocolAssets({ env: request.env || process.env });

@@ -224,6 +224,42 @@ test('buildBrowserAgentReply renders protocol asset report with injected reporte
   assert.match(reply, /POST \/api\/login 200/);
 });
 
+test('buildBrowserAgentReply renders protocol assets as reusable test cases', async () => {
+  const reply = await buildBrowserAgentReply({
+    action: 'protocol-assets-to-tests',
+    rawText: '把最近抓到的接口整理成测试用例',
+  }, {
+    protocolTestCaseBuilder: async (request) => {
+      assert.equal(request.query, '把最近抓到的接口整理成测试用例');
+      return {
+        totalAssets: 2,
+        cases: [
+          {
+            name: 'POST /api/login should return 200',
+            method: 'POST',
+            path: '/api/login',
+            expectedStatus: 200,
+            sourceAssetId: 'pa-login',
+          },
+          {
+            name: 'GET /api/session should return 200',
+            method: 'GET',
+            path: '/api/session',
+            expectedStatus: 200,
+            sourceAssetId: 'pa-session',
+          },
+        ],
+        savedFile: '/tmp/protocol-test-cases.json',
+      };
+    },
+  });
+
+  assert.match(reply, /协议资产已整理成测试用例/);
+  assert.match(reply, /共生成 2 条/);
+  assert.match(reply, /POST \/api\/login -> 200/);
+  assert.match(reply, /保存：\/tmp\/protocol-test-cases\.json/);
+});
+
 test('buildClerkAgentReply summarizes token usage from ledger lines', () => {
   const reply = buildClerkAgentReply({
     action: 'token-summary',

@@ -1653,6 +1653,50 @@ test('buildRoutedAgentReply passes browser-agent protocol asset reporter through
   assert.match(reply.replyText, /POST \/api\/login 200 pa-login/);
 });
 
+test('buildRoutedAgentReply can turn captured protocol assets into test cases', async () => {
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-browser-protocol-tests',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '把最近抓到的接口整理成测试用例' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {
+      protocolTestCaseBuilder: async (request) => {
+        assert.equal(request.query, '把最近抓到的接口整理成测试用例');
+        return {
+          totalAssets: 1,
+          cases: [
+            {
+              name: 'POST /api/login should return 200',
+              method: 'POST',
+              path: '/api/login',
+              expectedStatus: 200,
+              sourceAssetId: 'pa-login',
+            },
+          ],
+          savedFile: '/tmp/protocol-test-cases.json',
+        };
+      },
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /协议资产已整理成测试用例/);
+  assert.match(reply.replyText, /POST \/api\/login -> 200/);
+});
+
 test('buildRoutedAgentReply can send clerk daily summary email to explicit user recipient', async () => {
   const sent = [];
   const reply = await buildRoutedAgentReply(

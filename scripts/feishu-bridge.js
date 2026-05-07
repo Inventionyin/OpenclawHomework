@@ -88,6 +88,7 @@ const {
   runMaintenance,
 } = require('./ecosystem-manager');
 const {
+  buildProtocolTestCases,
   buildProtocolAssetReport,
   saveProtocolAsset,
 } = require('./protocol-asset-store');
@@ -3596,6 +3597,10 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
             lines: (report.recent || []).map((item, index) => `${index + 1}. ${item.method} ${item.path} ${item.status} ${item.id}`),
           };
         }),
+        protocolTestCaseBuilder: options.protocolTestCaseBuilder || ((request = {}) => buildProtocolTestCases(
+          { text: request.query || text },
+          { env, limit: 10 },
+        )),
         screenshotPath: options.screenshotPath,
       }),
     };

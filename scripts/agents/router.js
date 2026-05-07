@@ -768,10 +768,21 @@ function routeBrowserAutomationIntent(text) {
   const wantsBrowser = /(打开|看看|检查|定位|调试|截图|验证码|登录页|注册页|console|控制台|页面)/i.test(normalized);
   const wantsProtocolAssets = /(最近|查看|看看|里有什么|有哪些|资产库|协议资产|接口资产).{0,20}(协议|接口|资产)/i.test(normalized)
     || /(协议|接口).{0,20}(资产库|资产)/i.test(normalized);
+  const wantsProtocolTestCases = /(整理|生成|转换|变成|变为|产出).{0,20}(测试用例|接口用例|contract|契约用例)/i.test(normalized)
+    || /(接口|协议|资产).{0,20}(测试用例|接口用例|contract|契约用例)/i.test(normalized);
+  const hasUrl = /https?:\/\//i.test(normalized);
   const wantsLiveRun = /(真实执行|真的打开浏览器|跑一遍页面检查)/i.test(normalized);
 
   if (!mentionsBrowser || (!wantsProtocol && !wantsBrowser)) {
     return null;
+  }
+
+  if (wantsProtocolTestCases && !hasUrl) {
+    return {
+      agent: 'browser-agent',
+      action: 'protocol-assets-to-tests',
+      requiresAuth: true,
+    };
   }
 
   if (wantsProtocolAssets) {

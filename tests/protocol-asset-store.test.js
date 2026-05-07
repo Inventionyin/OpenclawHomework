@@ -5,6 +5,7 @@ const { join } = require('node:path');
 const test = require('node:test');
 
 const {
+  buildProtocolTestCases,
   buildProtocolAssetReport,
   findProtocolAssets,
   listProtocolAssets,
@@ -224,4 +225,42 @@ test('normalizeProtocolAssetInput returns stable normalized query structure', ()
     statusMax: 499,
     text: 'session',
   });
+});
+
+test('buildProtocolTestCases turns captured assets into reusable contract cases', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'protocol-assets-cases-'));
+  try {
+    const session = saveProtocolAsset({
+      method: 'POST',
+      url: 'https://api.example.com/api/session?token=secret',
+      status: 201,
+      tags: ['auth', 'login'],
+      summaryText: 'Create session',
+      createdAt: '2026-05-07T10:03:00.000Z',
+    }, { dir: tempDir });
+    saveProtocolAsset({
+      method: 'GET',
+      url: 'https://api.example.com/api/products',
+      status: 200,
+      tags: ['shop'],
+      summaryText: 'List products',
+      createdAt: '2026-05-07T10:02:00.000Z',
+    }, { dir: tempDir });
+
+    const result = buildProtocolTestCases({ text: 'session' }, { dir: tempDir, limit: 3 });
+
+    assert.equal(result.totalAssets, 1);
+    assert.equal(result.cases.length, 1);
+    assert.equal(result.cases[0].name, 'POST /api/session should return 201');
+    assert.equal(result.cases[0].method, 'POST');
+    assert.equal(result.cases[0].path, '/api/session');
+    assert.equal(result.cases[0].expectedStatus, 201);
+    assert.equal(result.cases[0].sourceAssetId, session.id);
+    assert.deepEqual(result.cases[0].tags, ['auth', 'login', 'contract']);
+    assert.deepEqual(result.cases[0].assertions, [
+      { field: 'status', op: 'equals', value: 201 },
+    ]);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 });

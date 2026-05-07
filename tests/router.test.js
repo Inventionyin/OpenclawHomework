@@ -265,6 +265,11 @@ test('routeAgentIntent routes browser CDP and protocol automation requests', () 
     action: 'protocol-assets-report',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('把最近抓到的接口整理成测试用例'), {
+    agent: 'browser-agent',
+    action: 'protocol-assets-to-tests',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('真实执行打开 https://projectku.local/login 页面检查'), {
     agent: 'browser-agent',
     action: 'browser-live-run',
