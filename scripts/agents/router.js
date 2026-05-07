@@ -961,6 +961,11 @@ function routeAgentIntent(text) {
     };
   }
 
+  const multiIntentRoute = routeMultiIntentPlan(original);
+  if (multiIntentRoute) {
+    return multiIntentRoute;
+  }
+
   const clerkRoute = routeClerkIntent(original);
   if (clerkRoute) {
     return clerkRoute;
@@ -974,11 +979,6 @@ function routeAgentIntent(text) {
   const qaAssetRoute = routeQaAssetIntent(normalized);
   if (qaAssetRoute) {
     return qaAssetRoute;
-  }
-
-  const multiIntentRoute = routeMultiIntentPlan(original);
-  if (multiIntentRoute) {
-    return multiIntentRoute;
   }
 
   const browserAutomationRoute = routeBrowserAutomationIntent(original);

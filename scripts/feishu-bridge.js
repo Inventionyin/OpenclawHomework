@@ -3451,6 +3451,126 @@ async function streamRoutedChatReply(payload, text, env, options = {}) {
   }
 }
 
+const MULTI_INTENT_EXECUTION_ALLOWLIST = new Set([
+  'ops-agent:load-summary',
+  'ops-agent:memory-summary',
+  'ops-agent:disk-summary',
+  'clerk-agent:command-center',
+  'clerk-agent:task-center-failed',
+  'clerk-agent:token-summary',
+  'clerk-agent:training-data',
+  'qa-agent:training-data',
+  'browser-agent:protocol-assets-report',
+  'browser-agent:protocol-assets-to-tests',
+]);
+
+function isExecutableMultiIntent(route = {}) {
+  return MULTI_INTENT_EXECUTION_ALLOWLIST.has(`${route.agent}:${route.action}`);
+}
+
+function formatMultiIntentExecutionReply(results = []) {
+  const completed = results.filter((item) => item.status === 'completed');
+  const skipped = results.filter((item) => item.status === 'skipped');
+  const failed = results.filter((item) => item.status === 'failed');
+  const lines = [
+    '多意图执行结果：',
+    `- 已执行：${completed.length}`,
+    skipped.length ? `- 已跳过：${skipped.length}（需要单独明确确认）` : null,
+    failed.length ? `- 失败：${failed.length}` : null,
+  ].filter(Boolean);
+
+  for (const [index, result] of results.entries()) {
+    lines.push('', `${index + 1}. ${result.label}`);
+    if (result.status === 'completed') {
+      lines.push(...String(result.replyText || '已完成').split(/\r?\n/).slice(0, 8));
+    } else if (result.status === 'skipped') {
+      lines.push(`已跳过：${result.reason || '这个动作不在多意图自动执行白名单里'}`);
+    } else {
+      lines.push(`执行失败：${redactPeerOutput(result.error || 'unknown error')}`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+async function runDefaultMultiIntentSubRoute(subRoute = {}, payload, env, options = {}, text = '') {
+  if (subRoute.agent === 'ops-agent') {
+    const runOpsCheck = options.runOpsCheck || ((action) => runLocalOpsAction(action, env, {
+      execFile: options.execFile,
+      fetchImpl: options.fetchImpl,
+      route: subRoute,
+    }));
+    return buildOpsAgentReply(subRoute, { runOpsCheck });
+  }
+  if (subRoute.agent === 'clerk-agent') {
+    return buildClerkAgentReply(subRoute, { env });
+  }
+  if (subRoute.agent === 'qa-agent') {
+    return buildQaAgentReply(subRoute);
+  }
+  if (subRoute.agent === 'browser-agent') {
+    return buildBrowserAgentReply({ ...subRoute, rawText: text }, {
+      env,
+      text,
+      protocolAssetReporter: options.protocolAssetReporter || ((request = {}) => {
+        const report = buildProtocolAssetReport({ text: request.query || text }, { env });
+        return {
+          summary: [
+            `总数 ${report.total}`,
+            `方法 ${Object.entries(report.byMethod || {}).map(([key, value]) => `${key}:${value}`).join('、') || '无'}`,
+            `状态 ${Object.entries(report.byStatusClass || {}).map(([key, value]) => `${key}:${value}`).join('、') || '无'}`,
+          ].join('；'),
+          lines: (report.recent || []).map((item, index) => `${index + 1}. ${item.method} ${item.path} ${item.status} ${item.id}`),
+        };
+      }),
+      protocolTestCaseBuilder: options.protocolTestCaseBuilder || ((request = {}) => buildProtocolTestCases(
+        { text: request.query || text },
+        { env, limit: 10 },
+      )),
+    });
+  }
+  return '这个子意图暂时只能单独执行。';
+}
+
+async function executeSafeMultiIntentPlan(route = {}, payload, env, options = {}, text = '') {
+  const intents = Array.isArray(route.plan?.intents) ? route.plan.intents.slice(0, 5) : [];
+  const executor = options.multiIntentExecutor || ((subRoute) => runDefaultMultiIntentSubRoute(subRoute, payload, env, options, text));
+  const results = [];
+
+  for (const intent of intents) {
+    const subRoute = {
+      ...intent,
+      rawText: text,
+      requiresAuth: Boolean(intent.requiresAuth),
+    };
+    const label = `${subRoute.agent}/${subRoute.action}`;
+    if (!isExecutableMultiIntent(subRoute)) {
+      results.push({
+        label,
+        status: 'skipped',
+        reason: '发邮件、重启、修复、清理、跑测试或长耗时任务需要单独明确指令。',
+      });
+      continue;
+    }
+    try {
+      const replyText = await Promise.resolve(executor(subRoute));
+      results.push({
+        label,
+        status: 'completed',
+        replyText,
+      });
+    } catch (error) {
+      results.push({
+        label,
+        status: 'failed',
+        error: error.message || error,
+      });
+    }
+  }
+
+  return formatMultiIntentExecutionReply(results);
+}
+
 async function buildRoutedAgentReply(payload, env, options = {}, route = routeAgentIntent(extractFeishuText(payload))) {
   if (route.agent === 'ui-test-agent') {
     return {
@@ -3486,7 +3606,7 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
     if (route.action === 'multi-intent-plan') {
       return {
         handled: true,
-        replyText: buildMultiIntentPlanReply(route),
+        replyText: await executeSafeMultiIntentPlan(route, payload, env, options, text),
       };
     }
     return {

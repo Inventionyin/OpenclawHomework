@@ -225,7 +225,7 @@ test('routeAgentIntent routes natural-language QA asset requests', () => {
 });
 
 test('routeAgentIntent routes safe combined requests to multi-intent planner', () => {
-  const route = routeAgentIntent('看看两台服务器内存硬盘，顺便看今天失败任务，再发我邮箱');
+  const route = routeAgentIntent('看看两台服务器内存硬盘，顺便看今天失败任务，再统计 token 用量');
 
   assert.equal(route.agent, 'planner-agent');
   assert.equal(route.action, 'multi-intent-plan');
@@ -233,7 +233,7 @@ test('routeAgentIntent routes safe combined requests to multi-intent planner', (
   assert.equal(route.plan.isMultiIntent, true);
   assert.deepEqual(
     route.plan.intents.map((intent) => intent.action),
-    ['load-summary', 'task-center-failed', 'daily-email'],
+    ['load-summary', 'task-center-failed', 'token-summary'],
   );
 });
 

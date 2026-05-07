@@ -1697,6 +1697,49 @@ test('buildRoutedAgentReply can turn captured protocol assets into test cases', 
   assert.match(reply.replyText, /POST \/api\/login -> 200/);
 });
 
+test('buildRoutedAgentReply executes safe multi-intent routes and merges replies', async () => {
+  const calls = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-multi-intent-execute',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '看看服务器内存硬盘，顺便看今天失败任务，再统计 token 用量' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {
+      multiIntentExecutor: async (subRoute) => {
+        calls.push(`${subRoute.agent}:${subRoute.action}`);
+        if (subRoute.action === 'load-summary') return '服务器状态：内存 3G 可用，硬盘 24G 可用';
+        if (subRoute.action === 'task-center-failed') return '失败任务：今天 0 个';
+        if (subRoute.action === 'token-summary') return 'Token 用量：Hermes 1200，OpenClaw 300';
+        return 'unknown';
+      },
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.deepEqual(calls, [
+    'ops-agent:load-summary',
+    'clerk-agent:task-center-failed',
+    'clerk-agent:token-summary',
+  ]);
+  assert.match(reply.replyText, /多意图执行结果/);
+  assert.match(reply.replyText, /服务器状态：内存 3G/);
+  assert.match(reply.replyText, /失败任务：今天 0 个/);
+  assert.match(reply.replyText, /Token 用量：Hermes 1200/);
+});
+
 test('buildRoutedAgentReply can send clerk daily summary email to explicit user recipient', async () => {
   const sent = [];
   const reply = await buildRoutedAgentReply(

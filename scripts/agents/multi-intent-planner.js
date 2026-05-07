@@ -12,6 +12,7 @@ const SAFE_INTENT_DEFS = [
     requiresAuth: true,
     reason: '用户请求任务中心今天失败任务',
     keywords: ['今天', '失败', '任务'],
+    matches: (text) => /(失败|failed|异常|报错).{0,12}(任务|task)|(任务|task).{0,12}(失败|failed|异常|报错)/i.test(text),
   },
   {
     action: 'trend-intel',
@@ -21,18 +22,12 @@ const SAFE_INTENT_DEFS = [
     keywords: ['趋势', '情报', '新闻', '热榜', '开源'],
   },
   {
-    action: 'daily-email',
-    agent: 'clerk-agent',
-    requiresAuth: true,
-    reason: '用户请求日报/邮件发送',
-    keywords: ['邮箱', '邮件', '日报', '报告', '发我'],
-  },
-  {
     action: 'token-summary',
     agent: 'clerk-agent',
     requiresAuth: true,
     reason: '用户请求 token 汇总',
     keywords: ['token', '用量', '汇总'],
+    matches: (text) => /(?:统计|汇总|查询|查看|看看|看|谁更费|用了多少).{0,16}(token|额度)|(token|额度).{0,16}(用量|汇总|统计|账本|消耗情况|用了多少)/i.test(text),
   },
   {
     action: 'training-data',
@@ -57,7 +52,10 @@ function includesAny(text, words) {
 function findSafeIntents(text) {
   const found = [];
   for (const def of SAFE_INTENT_DEFS) {
-    if (includesAny(text, def.keywords)) {
+    const matched = typeof def.matches === 'function'
+      ? def.matches(text)
+      : includesAny(text, def.keywords);
+    if (matched) {
       found.push({
         agent: def.agent,
         action: def.action,
@@ -97,7 +95,8 @@ function planMultiIntent(text) {
   }
 
   const intents = findSafeIntents(normalized);
-  const isMultiIntent = intents.length > 1;
+  const hasConnector = includesAny(normalized, MULTI_CONNECTORS);
+  const isMultiIntent = hasConnector && intents.length > 1;
   return {
     isMultiIntent,
     confidence: isMultiIntent ? 'high' : intents.length === 1 ? 'medium' : 'low',
