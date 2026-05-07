@@ -88,6 +88,10 @@ const {
   runMaintenance,
 } = require('./ecosystem-manager');
 const {
+  buildProtocolAssetReport,
+  saveProtocolAsset,
+} = require('./protocol-asset-store');
+const {
   formatTokenFactoryTask,
   getTokenFactoryTaskStatus,
   startTokenFactoryTask,
@@ -3578,6 +3582,21 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
         env,
         text,
         browserAutomationRunner: options.browserAutomationRunner,
+        browserFactory: options.browserFactory,
+        playwrightAdapter: options.playwrightAdapter,
+        protocolAssetSaver: options.protocolAssetSaver || ((asset) => saveProtocolAsset(asset, { env })),
+        protocolAssetReporter: options.protocolAssetReporter || ((request = {}) => {
+          const report = buildProtocolAssetReport({ text: request.query || text }, { env });
+          return {
+            summary: [
+              `总数 ${report.total}`,
+              `方法 ${Object.entries(report.byMethod || {}).map(([key, value]) => `${key}:${value}`).join('、') || '无'}`,
+              `状态 ${Object.entries(report.byStatusClass || {}).map(([key, value]) => `${key}:${value}`).join('、') || '无'}`,
+            ].join('；'),
+            lines: (report.recent || []).map((item, index) => `${index + 1}. ${item.method} ${item.path} ${item.status} ${item.id}`),
+          };
+        }),
+        screenshotPath: options.screenshotPath,
       }),
     };
   }

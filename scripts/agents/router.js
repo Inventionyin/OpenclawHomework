@@ -766,9 +766,28 @@ function routeBrowserAutomationIntent(text) {
   const mentionsBrowser = /(浏览器|页面|网页|cdp|har|协议|接口|network|console|控制台|截图|验证码|登录页|注册页|登录流程|注册流程|抓包|抓一下|打开\s*https?:\/\/|https?:\/\/)/i.test(normalized);
   const wantsProtocol = /(cdp|har|协议|接口|network|抓包|抓一下|请求|响应|登录流程接口|注册流程接口)/i.test(normalized);
   const wantsBrowser = /(打开|看看|检查|定位|调试|截图|验证码|登录页|注册页|console|控制台|页面)/i.test(normalized);
+  const wantsProtocolAssets = /(最近|查看|看看|里有什么|有哪些|资产库|协议资产|接口资产).{0,20}(协议|接口|资产)/i.test(normalized)
+    || /(协议|接口).{0,20}(资产库|资产)/i.test(normalized);
+  const wantsLiveRun = /(真实执行|真的打开浏览器|跑一遍页面检查)/i.test(normalized);
 
   if (!mentionsBrowser || (!wantsProtocol && !wantsBrowser)) {
     return null;
+  }
+
+  if (wantsProtocolAssets) {
+    return {
+      agent: 'browser-agent',
+      action: 'protocol-assets-report',
+      requiresAuth: true,
+    };
+  }
+
+  if (wantsLiveRun) {
+    return {
+      agent: 'browser-agent',
+      action: 'browser-live-run',
+      requiresAuth: true,
+    };
   }
 
   return {

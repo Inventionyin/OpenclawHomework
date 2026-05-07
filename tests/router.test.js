@@ -249,6 +249,32 @@ test('routeAgentIntent routes browser CDP and protocol automation requests', () 
     action: 'protocol-capture-plan',
     requiresAuth: true,
   });
+
+  assert.deepEqual(routeAgentIntent('最近抓到哪些接口'), {
+    agent: 'browser-agent',
+    action: 'protocol-assets-report',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('协议资产库里有什么'), {
+    agent: 'browser-agent',
+    action: 'protocol-assets-report',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('查看登录接口资产'), {
+    agent: 'browser-agent',
+    action: 'protocol-assets-report',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('真实执行打开 https://projectku.local/login 页面检查'), {
+    agent: 'browser-agent',
+    action: 'browser-live-run',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('真的打开浏览器去跑一遍页面检查 https://projectku.local/login'), {
+    agent: 'browser-agent',
+    action: 'browser-live-run',
+    requiresAuth: true,
+  });
 });
 
 test('routeAgentIntent routes clerk agent office work requests', () => {

@@ -106,6 +106,124 @@ test('buildBrowserAgentReply renders browser automation dry-run plan', async () 
   assert.match(reply, /dry-run/);
 });
 
+test('buildBrowserAgentReply renders blocked state naturally', async () => {
+  const reply = await buildBrowserAgentReply({
+    action: 'browser-dry-run',
+    rawText: '打开 https://forbidden.local 看看页面',
+  }, {
+    browserAutomationRunner: async () => ({
+      mode: 'blocked',
+      reason: '目标不在允许列表',
+      plan: {
+        url: 'https://forbidden.local',
+        blocked: true,
+      },
+    }),
+  });
+
+  assert.match(reply, /已拦截/);
+  assert.match(reply, /目标不在允许列表/);
+});
+
+test('buildBrowserAgentReply renders live-run mode with injected runner', async () => {
+  let received;
+  const reply = await buildBrowserAgentReply({
+    action: 'browser-live-run',
+    rawText: '真的打开浏览器去跑一遍页面检查 https://projectku.local/login',
+  }, {
+    browserAutomationRunner: async (request) => {
+      received = request;
+      return {
+        mode: 'live-run',
+        plan: { url: 'https://projectku.local/login' },
+        steps: [
+          { type: 'openPage', detail: '打开目标页面' },
+          { type: 'captureConsole', detail: '采集 console 错误' },
+        ],
+      };
+    },
+  });
+
+  assert.equal(received.dryRun, false);
+  assert.match(reply, /live-run/);
+  assert.match(reply, /打开目标页面/);
+  assert.match(reply, /采集 console 错误/);
+});
+
+test('buildBrowserAgentReply forwards live browser dependencies to default runner', async () => {
+  const events = { console: [], response: [] };
+  const page = {
+    on(event, handler) {
+      events[event].push(handler);
+    },
+    async goto(url) {
+      for (const handler of events.response) {
+        handler({
+          url: () => `${url}/api/session`,
+          status: () => 200,
+          headers: () => ({ 'content-type': 'application/json' }),
+          request: () => ({
+            method: () => 'GET',
+            url: `${url}/api/session`,
+          }),
+        });
+      }
+    },
+    async screenshot({ path }) {
+      this.screenshotPath = path;
+    },
+    async close() {},
+  };
+  const browser = {
+    async newPage() {
+      return page;
+    },
+    async close() {},
+  };
+  const saved = [];
+
+  const reply = await buildBrowserAgentReply({
+    action: 'browser-live-run',
+    rawText: '真实执行 http://localhost:3000 并截图抓接口',
+  }, {
+    browserFactory: async () => browser,
+    screenshotPath: '/tmp/agent-browser.png',
+    protocolAssetSaver: async (asset) => {
+      saved.push(asset);
+      return { id: 'asset-1', file: '/tmp/protocol-assets/asset-1.json' };
+    },
+  });
+
+  assert.equal(page.screenshotPath, '/tmp/agent-browser.png');
+  assert.equal(saved.length, 1);
+  assert.match(reply, /live/);
+  assert.match(reply, /接口入库：1/);
+  assert.match(reply, /截图：\/tmp\/agent-browser\.png/);
+});
+
+test('buildBrowserAgentReply renders protocol asset report with injected reporter', async () => {
+  const reply = await buildBrowserAgentReply({
+    action: 'protocol-assets-report',
+    rawText: '最近抓到哪些接口',
+  }, {
+    protocolAssetReporter: async (request) => {
+      assert.equal(request.query, '最近抓到哪些接口');
+      return {
+        summary: '最近资产：3 条（登录 2，注册 1）',
+        lines: [
+          '1. POST /api/login 200',
+          '2. GET /api/login/captcha 200',
+          '3. POST /api/register 201',
+        ],
+      };
+    },
+  });
+
+  assert.match(reply, /协议资产/);
+  assert.match(reply, /最近资产：3 条/);
+  assert.match(reply, /POST \/api\/login 200/);
+});
+
 test('buildClerkAgentReply summarizes token usage from ledger lines', () => {
   const reply = buildClerkAgentReply({
     action: 'token-summary',

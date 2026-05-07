@@ -5,7 +5,10 @@ const { join } = require('node:path');
 const test = require('node:test');
 
 const {
+  buildProtocolAssetReport,
+  findProtocolAssets,
   listProtocolAssets,
+  normalizeProtocolAssetInput,
   redactProtocolAsset,
   saveProtocolAsset,
   summarizeProtocolAsset,
@@ -108,5 +111,117 @@ test('summarizeProtocolAsset normalizes method url status content type duration 
     contentType: 'application/json',
     durationMs: 250,
     tags: ['users', 'update'],
+  });
+});
+
+test('findProtocolAssets filters by method path tag status range and text query', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'protocol-assets-find-'));
+  try {
+    saveProtocolAsset({
+      method: 'GET',
+      url: 'https://api.example.com/v1/users',
+      status: 200,
+      tags: ['users', 'catalog'],
+      summaryText: 'List users',
+      createdAt: '2026-05-07T10:00:00.000Z',
+    }, { dir: tempDir });
+    const match = saveProtocolAsset({
+      method: 'POST',
+      url: 'https://api.example.com/v1/sessions',
+      status: 401,
+      tags: ['auth', 'session'],
+      summaryText: 'Create session',
+      createdAt: '2026-05-07T10:01:00.000Z',
+    }, { dir: tempDir });
+    saveProtocolAsset({
+      method: 'POST',
+      url: 'https://api.example.com/internal/jobs',
+      status: 503,
+      tags: ['internal'],
+      summaryText: 'Create job',
+      createdAt: '2026-05-07T10:02:00.000Z',
+    }, { dir: tempDir });
+
+    const result = findProtocolAssets({
+      method: 'post',
+      path: '/v1',
+      tag: 'auth',
+      statusMin: 400,
+      statusMax: 499,
+      text: 'session',
+    }, { dir: tempDir });
+
+    assert.equal(result.length, 1);
+    assert.equal(result[0].id, match.id);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('buildProtocolAssetReport returns concise aggregates and recent summaries', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'protocol-assets-report-'));
+  try {
+    saveProtocolAsset({
+      method: 'POST',
+      url: 'https://api.example.com/v1/sessions',
+      status: 201,
+      tags: ['auth'],
+      summaryText: 'Create session',
+      createdAt: '2026-05-07T10:03:00.000Z',
+    }, { dir: tempDir });
+    saveProtocolAsset({
+      method: 'GET',
+      url: 'https://api.example.com/v1/sessions',
+      status: 200,
+      tags: ['auth'],
+      summaryText: 'Read session',
+      createdAt: '2026-05-07T10:02:00.000Z',
+    }, { dir: tempDir });
+    saveProtocolAsset({
+      method: 'POST',
+      url: 'https://api.example.com/v1/users',
+      status: 422,
+      tags: ['users'],
+      summaryText: 'Create user',
+      createdAt: '2026-05-07T10:01:00.000Z',
+    }, { dir: tempDir });
+    saveProtocolAsset({
+      method: 'DELETE',
+      url: 'https://api.example.com/v1/users/42',
+      status: 503,
+      tags: ['users'],
+      summaryText: 'Delete user',
+      createdAt: '2026-05-07T10:00:00.000Z',
+    }, { dir: tempDir });
+
+    const report = buildProtocolAssetReport({ text: 'session' }, { dir: tempDir });
+    assert.equal(report.total, 2);
+    assert.deepEqual(report.byMethod, { POST: 1, GET: 1 });
+    assert.deepEqual(report.byStatusClass, { '2xx': 2 });
+    assert.equal(report.recent.length, 2);
+    assert.deepEqual(report.recent.map((item) => item.summaryText), ['Create session', 'Read session']);
+    assert.deepEqual(report.topPaths, [{ path: '/v1/sessions', count: 2 }]);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('normalizeProtocolAssetInput returns stable normalized query structure', () => {
+  const normalized = normalizeProtocolAssetInput({
+    method: 'patch',
+    path: ' /v1/users ',
+    tag: ' Auth ',
+    statusMin: '400',
+    statusMax: '499',
+    text: ' Session ',
+  });
+
+  assert.deepEqual(normalized, {
+    method: 'PATCH',
+    path: '/v1/users',
+    tag: 'auth',
+    statusMin: 400,
+    statusMax: 499,
+    text: 'session',
   });
 });

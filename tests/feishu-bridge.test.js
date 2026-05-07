@@ -1614,6 +1614,45 @@ test('buildRoutedAgentReply can send clerk daily summary email when explicitly r
   assert.match(reply.replyText, /agent4\.daily@claw\.163\.com/);
 });
 
+test('buildRoutedAgentReply passes browser-agent protocol asset reporter through bridge', async () => {
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-browser-protocol-report',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '最近抓到哪些接口' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {
+      protocolAssetReporter: async (request) => {
+        assert.equal(request.query, '最近抓到哪些接口');
+        return {
+          summary: '总数 2；方法 GET:1、POST:1；状态 2xx:2',
+          lines: [
+            '1. GET /api/session 200 pa-session',
+            '2. POST /api/login 200 pa-login',
+          ],
+        };
+      },
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /协议资产报告/);
+  assert.match(reply.replyText, /总数 2/);
+  assert.match(reply.replyText, /POST \/api\/login 200 pa-login/);
+});
+
 test('buildRoutedAgentReply can send clerk daily summary email to explicit user recipient', async () => {
   const sent = [];
   const reply = await buildRoutedAgentReply(

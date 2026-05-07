@@ -149,7 +149,110 @@ function listProtocolAssets(options = {}) {
     .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
 }
 
+function normalizeProtocolAssetInput(input = {}) {
+  const statusMin = Number(input.statusMin);
+  const statusMax = Number(input.statusMax);
+  return {
+    method: input.method ? String(input.method).trim().toUpperCase() : '',
+    path: input.path ? String(input.path).trim().toLowerCase() : '',
+    tag: input.tag ? String(input.tag).trim().toLowerCase() : '',
+    statusMin: Number.isFinite(statusMin) ? statusMin : null,
+    statusMax: Number.isFinite(statusMax) ? statusMax : null,
+    text: input.text ? String(input.text).trim().toLowerCase() : '',
+  };
+}
+
+function getSummaryTags(asset = {}) {
+  const tags = Array.isArray(asset.summary?.tags) ? asset.summary.tags : asset.tags;
+  if (!Array.isArray(tags)) {
+    return [];
+  }
+  return tags.map((tag) => String(tag));
+}
+
+function getAssetTextBlob(asset = {}) {
+  const summaryText = String(asset.summaryText || '').toLowerCase();
+  const urlText = String(asset.url || asset.request?.url || '').toLowerCase();
+  const tagText = getSummaryTags(asset).join(' ').toLowerCase();
+  return `${summaryText} ${urlText} ${tagText}`.trim();
+}
+
+function findProtocolAssets(query = {}, options = {}) {
+  const normalized = normalizeProtocolAssetInput(query);
+  const assets = listProtocolAssets(options);
+  return assets.filter((asset) => {
+    const summary = summarizeProtocolAsset(asset);
+    if (normalized.method && summary.method !== normalized.method) {
+      return false;
+    }
+    if (normalized.path && !String(summary.normalizedPath || '').toLowerCase().includes(normalized.path)) {
+      return false;
+    }
+    if (normalized.tag) {
+      const tags = getSummaryTags(asset).map((tag) => tag.toLowerCase());
+      if (!tags.includes(normalized.tag)) {
+        return false;
+      }
+    }
+    if (normalized.statusMin !== null && summary.status < normalized.statusMin) {
+      return false;
+    }
+    if (normalized.statusMax !== null && summary.status > normalized.statusMax) {
+      return false;
+    }
+    if (normalized.text && !getAssetTextBlob(asset).includes(normalized.text)) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function toStatusClass(status = 0) {
+  const bucket = Math.floor(Number(status) / 100);
+  if (bucket >= 1 && bucket <= 5) {
+    return `${bucket}xx`;
+  }
+  return 'unknown';
+}
+
+function buildProtocolAssetReport(query = {}, options = {}) {
+  const assets = findProtocolAssets(query, options);
+  const byMethod = {};
+  const byStatusClass = {};
+  const pathCount = {};
+  for (const asset of assets) {
+    const summary = summarizeProtocolAsset(asset);
+    byMethod[summary.method] = (byMethod[summary.method] || 0) + 1;
+    const klass = toStatusClass(summary.status);
+    byStatusClass[klass] = (byStatusClass[klass] || 0) + 1;
+    pathCount[summary.normalizedPath] = (pathCount[summary.normalizedPath] || 0) + 1;
+  }
+  const recent = assets.slice(0, 5).map((asset) => ({
+    id: asset.id || '',
+    createdAt: asset.createdAt || '',
+    summaryText: String(asset.summaryText || ''),
+    method: summarizeProtocolAsset(asset).method,
+    path: summarizeProtocolAsset(asset).normalizedPath,
+    status: summarizeProtocolAsset(asset).status,
+  }));
+  const topPaths = Object.entries(pathCount)
+    .map(([path, count]) => ({ path, count }))
+    .sort((a, b) => b.count - a.count || a.path.localeCompare(b.path))
+    .slice(0, 5);
+
+  return {
+    total: assets.length,
+    byMethod,
+    byStatusClass,
+    recent,
+    topPaths,
+  };
+}
+
 module.exports = {
+  buildProtocolAssetReport,
+  findProtocolAssets,
+  normalizeProtocolAssetInput,
   redactProtocolAsset,
   summarizeProtocolAsset,
   saveProtocolAsset,

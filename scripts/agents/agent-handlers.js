@@ -60,6 +60,9 @@ const {
   runBrowserAutomationTask,
 } = require('../browser-cdp-executor');
 const {
+  listProtocolAssets,
+} = require('../protocol-asset-store');
+const {
   listFailedTasks,
   listTodayTasks,
   summarizeTaskCenterBrain,
@@ -286,11 +289,47 @@ function buildMultiIntentPlanReply(route = {}) {
 }
 
 async function buildBrowserAgentReply(route = {}, options = {}) {
+  if (route.action === 'protocol-assets-report') {
+    const reporter = options.protocolAssetReporter || ((request = {}) => {
+      const assets = listProtocolAssets({ env: request.env || process.env });
+      const query = String(request.query || '').toLowerCase();
+      const filtered = query.includes('登录')
+        ? assets.filter((item) => /login|登录/i.test(String(item.summary?.normalizedPath || item.url || '')))
+        : assets;
+      const top = filtered.slice(0, 8);
+      return {
+        summary: `最近协议资产 ${filtered.length} 条`,
+        lines: top.map((item, index) => {
+          const method = item.summary?.method || item.method || 'GET';
+          const path = item.summary?.normalizedPath || item.url || '/';
+          const status = item.summary?.status || item.status || '-';
+          return `${index + 1}. ${method} ${path} ${status}`;
+        }),
+      };
+    });
+    const report = await reporter({
+      query: route.rawText || options.text || '',
+      env: options.env || process.env,
+    });
+    const summary = sanitizeReplyField(report?.summary || '协议资产库暂时为空');
+    const lines = Array.isArray(report?.lines) ? report.lines : [];
+    return [
+      '协议资产报告：',
+      `- 概览：${summary}`,
+      ...(lines.length ? ['', ...lines.map((line) => sanitizeReplyField(line, 800))] : []),
+    ].join('\n');
+  }
+
   const runner = options.browserAutomationRunner || runBrowserAutomationTask;
+  const dryRun = route.action === 'browser-live-run' ? false : route.dryRun !== false;
   const result = await runner({
     text: route.rawText || options.text || '',
-    dryRun: route.dryRun !== false,
+    dryRun,
     env: options.env || process.env,
+    browserFactory: options.browserFactory,
+    playwrightAdapter: options.playwrightAdapter,
+    protocolAssetSaver: options.protocolAssetSaver,
+    screenshotPath: options.screenshotPath,
   });
   const plan = result.plan || {};
   const lines = [
@@ -311,6 +350,23 @@ async function buildBrowserAgentReply(route = {}, options = {}) {
     steps.forEach((step, index) => {
       lines.push(`${index + 1}. ${sanitizeReplyField(step.type || 'step')} - ${sanitizeReplyField(step.detail || step.url || '')}`);
     });
+  }
+
+  if (result.mode === 'live' || result.executed) {
+    const artifacts = result.artifacts || {};
+    const savedAssets = Array.isArray(artifacts.savedProtocolAssets) ? artifacts.savedProtocolAssets : [];
+    const protocolAssets = Array.isArray(artifacts.protocolAssets) ? artifacts.protocolAssets : result.networkAssets || [];
+    lines.push('', '执行结果：');
+    lines.push(`- Console：${Array.isArray(result.consoleMessages) ? result.consoleMessages.length : 0}`);
+    lines.push(`- 抓到接口：${protocolAssets.length}`);
+    lines.push(`- 接口入库：${savedAssets.length}`);
+    if (artifacts.screenshotPath) {
+      lines.push(`- 截图：${sanitizeReplyField(artifacts.screenshotPath, 800)}`);
+    }
+    if (savedAssets.length) {
+      lines.push(`- 资产：${savedAssets.map((asset) => sanitizeReplyField(asset.id || asset.file || asset.path || 'saved', 200)).join('、')}`);
+    }
+    return lines.join('\n');
   }
 
   lines.push('', '当前先以 dry-run 生成可执行计划；接下来接 Playwright/CDP 后，会把 console、network/HAR、截图和失败点写入协议资产库。');
