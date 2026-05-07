@@ -270,6 +270,33 @@ test('task center brain exposes today history failure review and next plan', () 
   }
 });
 
+test('task center brain exposes execution loop for daily clerk reports', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'task-center-execution-loop-'));
+  const env = { TOKEN_FACTORY_TASK_DIR: tempDir };
+  try {
+    createTask({ id: 'ui-ok', type: 'ui-automation', now: '2026-05-06T01:00:00.000Z', status: 'completed' }, env);
+    createTask({ id: 'news-fail', type: 'news-digest', now: '2026-05-06T01:10:00.000Z', status: 'failed', error: 'rss timeout' }, env);
+    createTask({ id: 'token-running', type: 'token-factory', now: '2026-05-06T01:20:00.000Z', status: 'running' }, env);
+
+    const brain = summarizeTaskCenterBrain({
+      env,
+      now: new Date('2026-05-06T03:00:00.000Z'),
+      timezoneOffsetMinutes: 480,
+      proactiveTypes: ['proactive'],
+      historyDays: 5,
+    });
+
+    assert.equal(brain.executionLoop.todayTask.day, '2026-05-06');
+    assert.match(brain.executionLoop.currentStatus, /失败|运行中|完成/);
+    assert.match(brain.executionLoop.history, /近 5 天历史任务/);
+    assert.match(brain.executionLoop.failureReview, /rss timeout|network_timeout|失败/);
+    assert.equal(brain.executionLoop.nextPlan.some((item) => /复盘失败任务|日报|UI 自动化/.test(item)), true);
+    assert.equal(brain.executionLoop.dailyReport.quickCommands.some((item) => /发送今天日报到邮箱/.test(item)), true);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('task center historical tasks and failure review tolerate malformed task shapes', () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'task-center-history-'));
   const env = { TOKEN_FACTORY_TASK_DIR: tempDir };

@@ -299,6 +299,55 @@ function buildNextStepPlan(options = {}) {
   };
 }
 
+function buildExecutionLoopSummary(input = {}) {
+  const today = input.today || {};
+  const history = input.history || {};
+  const failureReview = input.failureReview || {};
+  const nextPlan = input.nextPlan || {};
+  const todayTasks = Array.isArray(today.tasks) ? today.tasks : [];
+  const failureItems = Array.isArray(failureReview.items) ? failureReview.items : [];
+  const nextItems = Array.isArray(nextPlan.items) ? nextPlan.items : [];
+  const quickCommands = Array.isArray(nextPlan.quickCommands) ? nextPlan.quickCommands : [];
+  const counts = today.counts || {};
+  const latestTask = todayTasks[0] || null;
+  const currentStatus = [
+    `完成 ${Number(counts.completed || 0)}`,
+    `失败 ${Number(counts.failed || 0)}`,
+    `运行中 ${Number(counts.running || 0)}`,
+    `可恢复 ${Number(counts.recoverable || 0)}`,
+  ].join('，');
+
+  return {
+    todayTask: {
+      day: today.day || '',
+      summaryText: today.summaryText || '今天还没有可用任务摘要。',
+      latestTaskId: latestTask?.id || '',
+      activeTaskCount: todayTasks.length,
+    },
+    currentStatus,
+    history: history.summaryText || '暂无历史任务摘要。',
+    failureReview: failureReview.summaryText || (failureItems.length
+      ? `失败任务 ${failureItems.length} 个。`
+      : '暂无失败任务。'),
+    blockers: failureItems.slice(0, 5).map((task) => ({
+      id: task.id,
+      type: task.type,
+      error: task.error || '失败待复盘',
+    })),
+    nextPlan: nextItems.length
+      ? nextItems
+      : ['先查看任务中枢，再按失败项、UI 自动化、日报归档推进。'],
+    dailyReport: {
+      summaryText: today.summaryText || '今天还没有可用任务摘要。',
+      failureText: failureReview.summaryText || '暂无失败任务。',
+      planItems: nextItems,
+      quickCommands: quickCommands.length
+        ? quickCommands
+        : ['文员，发送今天日报到邮箱', '文员，查看失败任务'],
+    },
+  };
+}
+
 function recordTaskEvent(input = {}, options = {}) {
   const env = options.env || process.env;
   const now = input.now || options.now || new Date().toISOString();
@@ -644,7 +693,7 @@ function summarizeTaskCenterBrain(options = {}) {
   });
   const todayDay = toLocalDayKey(now, timezoneOffsetMinutes);
 
-  return {
+  const result = {
     today: {
       day: todayDay,
       summaryText: dailyPlan.todaySummaryText,
@@ -662,6 +711,8 @@ function summarizeTaskCenterBrain(options = {}) {
       historyDays: history.historyDays,
     },
   };
+  result.executionLoop = buildExecutionLoopSummary(result);
+  return result;
 }
 
 module.exports = {

@@ -633,6 +633,26 @@ test('resolveAgentRoute can upgrade safe fuzzy chat through model planner', asyn
   assert.match(route.reason, /下一步计划/);
 });
 
+test('resolveAgentRoute keeps rule fallback when planner suggests auth-required route with medium confidence', async () => {
+  const route = await resolveAgentRoute('我有点乱，先听你判断', {
+    FEISHU_INTENT_PLANNER_ENABLED: 'true',
+  }, {
+    intentPlanner: async () => JSON.stringify({
+      intent: 'tool',
+      agent: 'clerk-agent',
+      action: 'command-center',
+      confidence: 'medium',
+      reason: '可能需要总览',
+    }),
+  });
+
+  assert.deepEqual(route, {
+    agent: 'chat-agent',
+    action: 'chat',
+    requiresAuth: false,
+  });
+});
+
 test('resolveAgentRoute falls back to rule route when model planner fails or is unsafe', async () => {
   const failedRoute = await resolveAgentRoute('我有点乱，先听你判断', {
     FEISHU_INTENT_PLANNER_ENABLED: 'true',

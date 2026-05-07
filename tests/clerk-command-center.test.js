@@ -442,6 +442,49 @@ test('buildClerkDailyReportReply builds daily preview from plan, snapshot, and u
   assert.equal(buildCalls[0].runs[0].id, 42);
 });
 
+test('buildClerkDailyReportReply prefers execution loop details from task center brain', () => {
+  const reply = buildClerkDailyReportReply({}, {
+    summarizeDailyPlan: () => samplePlan(),
+    summarizeTaskCenterBrain: () => ({
+      executionLoop: {
+        todayTask: {
+          summaryText: '执行闭环今日总结：新闻已跑，UI 自动化待补。',
+        },
+        currentStatus: '完成 3，失败 1，运行中 1，可恢复 1',
+        failureReview: '执行闭环失败诊断：scheduled-ui 需要重跑。',
+        nextPlan: [
+          '先重跑 scheduled-ui。',
+          '再把日报发到 daily 邮箱。',
+        ],
+        dailyReport: {
+          quickCommands: [
+            '文员，启动今天的自动流水线',
+            '文员，发送今天日报到邮箱',
+          ],
+        },
+      },
+    }),
+    readUsageLedger: () => [
+      { assistant: 'Hermes', totalTokens: 300 },
+    ],
+    readMailLedger: () => [
+      { action: 'daily', timestamp: '2026-05-06T03:00:00.000Z' },
+    ],
+    readDailySummarySnapshot: () => ({ runs: [] }),
+    buildDailySummary: () => ({
+      text: '日报正文：execution loop ok',
+    }),
+    now: new Date('2026-05-06T04:00:00.000Z'),
+  });
+
+  assert.match(reply, /执行闭环今日总结/);
+  assert.match(reply, /完成 3，失败 1，运行中 1，可恢复 1/);
+  assert.match(reply, /scheduled-ui 需要重跑/);
+  assert.match(reply, /先重跑 scheduled-ui/);
+  assert.match(reply, /快捷指令/);
+  assert.match(reply, /文员，启动今天的自动流水线/);
+});
+
 test('buildClerkDailyReportReply degrades broken ledger and snapshot readers', () => {
   const reply = buildClerkDailyReportReply({}, {
     summarizeDailyPlan: () => samplePlan(),

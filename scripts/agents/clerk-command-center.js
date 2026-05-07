@@ -438,24 +438,43 @@ function buildClerkDailyReportReply(route = {}, options = {}) {
     todaySummaryText: '今天还没有可用任务摘要。',
     tomorrowPlan: [],
   });
-  const taskDigest = safeReadObject(() => (options.summarizeTaskCenterBrain || summarizeTaskCenterBrain)({
-    env,
-    now: options.now || new Date(),
-  }), {});
+  const taskDigestReader = options.summarizeTaskCenterBrain
+    || (!options.summarizeTasks ? summarizeTaskCenterBrain : null);
+  const taskDigest = taskDigestReader
+    ? safeReadObject(() => taskDigestReader({
+      env,
+      now: options.now || new Date(),
+    }), {})
+    : {};
+  const executionLoop = taskDigest.executionLoop || {};
+  const executionDailyReport = executionLoop.dailyReport || {};
   const mailEntries = safeReadList(() => (options.readMailLedger || defaultReadMailLedger)(env, 80));
   const mailSummary = summarizeMail(mailEntries, { env, now: options.now || new Date() });
   const usageSummary = summarizeUsage(artifacts.usageEntries || []);
-  const tomorrowPlan = Array.isArray(plan.tomorrowPlan) ? plan.tomorrowPlan : [];
-  const failureText = taskDigest.failureReview?.summaryText
+  const executionPlan = Array.isArray(executionLoop.nextPlan) ? executionLoop.nextPlan : [];
+  const tomorrowPlan = executionPlan.length
+    ? executionPlan
+    : (Array.isArray(plan.tomorrowPlan) ? plan.tomorrowPlan : []);
+  const todaySummaryText = executionLoop.todayTask?.summaryText
+    || executionDailyReport.summaryText
+    || plan.todaySummaryText
+    || '今天还没有可用任务摘要。';
+  const failureText = executionLoop.failureReview
+    || executionDailyReport.failureText
+    || taskDigest.failureReview?.summaryText
     || (Array.isArray(taskDigest.failureReview?.items) && taskDigest.failureReview.items.length
       ? `失败任务 ${taskDigest.failureReview.items.length} 个。`
       : '暂无失败任务或失败诊断记录。');
+  const quickCommands = Array.isArray(executionDailyReport.quickCommands)
+    ? executionDailyReport.quickCommands
+    : [];
 
   return [
     '文员日报预览：',
     '',
     '今日总结：',
-    plan.todaySummaryText || '今天还没有可用任务摘要。',
+    todaySummaryText,
+    ...(executionLoop.currentStatus ? [`当前状态：${executionLoop.currentStatus}`] : []),
     '',
     '明日计划：',
     ...tomorrowPlan.map((item) => `- ${item}`),
@@ -472,6 +491,11 @@ function buildClerkDailyReportReply(route = {}, options = {}) {
     mailSummary.todayEntries.length
       ? `今天邮件动作 ${mailSummary.todayEntries.length} 条，日报会归档到 daily 邮箱动作。`
       : '暂无今日邮件流水；发送日报时会归档到 daily 邮箱动作。',
+    ...(quickCommands.length ? [
+      '',
+      '快捷指令：',
+      ...quickCommands.slice(0, 5).map((item) => `- ${item}`),
+    ] : []),
     '',
     summary.text,
     '',

@@ -2997,6 +2997,9 @@ function isSafePlannerRoute(planned = {}) {
   if (!allowedAgents.has(agent) || !action) {
     return false;
   }
+  if (getPlannerRequiresAuth(agent, action) && confidence !== 'high') {
+    return false;
+  }
   if (agent === 'ops-agent') {
     return new Set(['status', 'health', 'watchdog', 'logs', 'memory-summary', 'disk-summary', 'load-summary']).has(action);
   }
