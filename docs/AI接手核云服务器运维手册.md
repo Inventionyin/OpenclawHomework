@@ -356,8 +356,10 @@ Hermes   服务器 38.76.188.94 -> 801ef6e 或更新
 2. 模型 usage 账本：调用次数、token 或字符估算 token
 3. 服务器快照：硬盘、内存、负载
 4. 新闻日报：优先抓取 RSS 和 GitHub 热榜，失败时降级到固定趋势摘要
-5. 自动任务状态：每日 UI 自动化、每日 token 训练是否执行
-6. 明日建议：UI 自动化、训练数据、邮件账本检查
+5. 趋势情报：GitHub / HN / RSS 热点和可学习项目
+6. 趋势 Token 工厂：热点分析 job 数、失败数、token 消耗、推荐关注项目
+7. 自动任务状态：每日 UI 自动化、每日 token 训练是否执行
+8. 明日建议：UI 自动化、训练数据、邮件账本检查
 ```
 
 实时新闻已经落地在 `scripts/news-digest.js`，不是让模型编造“今日新闻”。默认 RSS 源包括 GitHub Blog、Playwright releases、Cypress releases；GitHub 热榜使用 GitHub Search API，按 topic、最近 pushed 时间和 star 排序。单个 RSS 或 GitHub topic 抓取失败时，会把失败原因写进新闻条目；整体失败时，`proactive-daily-digest` 会自动降级到固定趋势摘要。
@@ -425,7 +427,15 @@ FEISHU_USAGE_LEDGER_PATH=/var/log/openclaw-homework/usage-ledger.jsonl
 
 ### 每日流水线和 state 文件策略
 
-每日流水线脚本是 `scripts/daily-agent-pipeline.js`，安装脚本是 `scripts/install-daily-agent-pipeline.sh`。它把新闻摘要、UI 自动化、token 训练场和主动日报串起来跑，并把最终状态写入：
+每日流水线脚本是 `scripts/daily-agent-pipeline.js`，安装脚本是 `scripts/install-daily-agent-pipeline.sh`。2026-05-07 后，流水线已经纳入 `trend-intel` 和 `trend-token-factory`。当前顺序是：
+
+```text
+新闻摘要 -> 趋势情报 -> 趋势 Token 工厂 -> UI 自动化 -> token 训练场 -> 主动日报
+```
+
+`trend-token-factory` 和 `scheduled-token-lab` 是互补关系：前者围绕当天热点项目/新闻消耗 token 做分析，后者围绕电商 QA/客服训练数据消耗 token 做样本生产。它们都可以失败后保留部分产物，主动日报和任务中枢会展示失败数和下一步复盘方向。
+
+每日流水线会把最终状态写入：
 
 ```text
 /var/lib/openclaw-homework/daily-agent-pipeline-state.json
@@ -1269,6 +1279,39 @@ cd /opt/OpenclawHomework
 node scripts/news-digest.js
 journalctl -u openclaw-proactive-daily-digest -n 80 --no-pager
 grep -E 'PROACTIVE_DIGEST_LIVE_NEWS_ENABLED|PROACTIVE_DIGEST_RSS|PROACTIVE_DIGEST_GITHUB' /etc/openclaw-feishu-bridge.env
+```
+
+趋势情报没有数据：
+
+```bash
+cd /opt/OpenclawHomework
+node scripts/trend-intel.js
+ls -lah data/trend-intel /var/lib/openclaw-homework/openclaw-trend-token-factory 2>/dev/null || true
+journalctl -u openclaw-trend-token-factory -n 80 --no-pager
+grep -E 'TREND_INTEL_OUTPUT_FILE|PROACTIVE_DIGEST_GITHUB|GITHUB_TOKEN|GH_TOKEN' /etc/openclaw-feishu-bridge.env
+```
+
+趋势 Token 工厂失败：
+
+```bash
+cd /opt/OpenclawHomework
+systemctl list-timers '*trend-token-factory*' --no-pager
+journalctl -u openclaw-trend-token-factory -n 120 --no-pager
+find /var/lib/openclaw-homework -maxdepth 4 -path '*trend-token-factory*' -type f | sort | tail -n 20
+node scripts/trend-token-factory.js \
+  --batch-size 1 \
+  --input data/trend-intel/latest.json \
+  --output-dir /tmp/trend-token-factory-debug \
+  --env-file /etc/openclaw-feishu-bridge.env
+```
+
+任务中枢状态和日报展示不一致时，排查顺序固定为：
+
+```text
+1. 先看 task-center：文员，查看今天任务中枢
+2. 再看 daily-agent-pipeline-state.json：确认阶段顺序和失败阶段
+3. 再看 trend-intel / trend-token-factory / scheduled-ui / scheduled-token-lab 各自 state 或 summary
+4. 最后看 proactive-daily-digest 的发送状态和邮件账本
 ```
 
 UI 每日任务没跑：

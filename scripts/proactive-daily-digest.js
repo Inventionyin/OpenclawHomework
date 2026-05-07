@@ -197,11 +197,24 @@ function readJsonFileSafe(filePath) {
   }
 }
 
-function collectAutomationState(env = process.env) {
+function getTrendIntelSummaryFile(env = process.env) {
+  return env.TREND_INTEL_OUTPUT_FILE || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'trend-intel', 'latest.json');
+}
+
+function getTrendTokenSummaryFile(env = process.env, options = {}) {
+  const timezoneOffsetMinutes = Number(options.timezoneOffsetMinutes ?? getTimezoneOffsetMinutes(env));
+  const day = options.day || getDayKey(options.now || new Date(), timezoneOffsetMinutes);
+  return env.TREND_TOKEN_FACTORY_SUMMARY_FILE
+    || join(env.TREND_TOKEN_FACTORY_OUTPUT_DIR || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'trend-token-factory', day), 'summary.json');
+}
+
+function collectAutomationState(env = process.env, options = {}) {
   const baseDir = env.LOCAL_PROJECT_DIR || process.cwd();
   return {
     ui: readJsonFileSafe(env.SCHEDULED_UI_STATE_FILE || join(baseDir, 'data', 'memory', 'scheduled-ui-runner-state.json')),
     tokenLab: readJsonFileSafe(env.SCHEDULED_TOKEN_LAB_STATE_FILE || join(baseDir, 'data', 'memory', 'scheduled-token-lab-state.json')),
+    trendIntel: readJsonFileSafe(getTrendIntelSummaryFile(env)),
+    trendToken: readJsonFileSafe(getTrendTokenSummaryFile(env, options)),
   };
 }
 
@@ -228,9 +241,91 @@ function buildAiSummary({ assistant, mailSummary, usageSummary, server, automati
     usageSummary.calls ? `模型调用账本 ${usageSummary.calls} 条，token 约 ${usageSummary.totalTokens}（真实 ${usageSummary.realTokens} / 字符估算 ${usageSummary.estimatedTokens}）。` : '模型调用账本今日暂无新增。',
     automation?.ui?.workflowRunUrl ? `UI 自动化已调度：${automation.ui.runMode || 'unknown'}。` : '',
     automation?.tokenLab?.totalJobs ? `训练场已产出 ${automation.tokenLab.totalJobs} 条样本。` : '',
+    automation?.trendIntel?.total ? `趋势情报抓到 ${automation.trendIntel.total} 条热点。` : '',
+    automation?.trendToken?.totalJobs ? `趋势 Token 工厂分析 ${automation.trendToken.totalJobs} 条热点，真实 token ${automation.trendToken.totalTokens || 0}。` : '',
     server.disk ? `根分区状态：${server.disk.replace(/\s+/g, ' ')}。` : '服务器磁盘状态未取到。',
   ].filter(Boolean);
   return parts.join('');
+}
+
+function normalizeTrendIntelSummary(input = {}) {
+  const summary = input && typeof input === 'object' ? input : {};
+  const items = Array.isArray(summary.items) ? summary.items : [];
+  return {
+    total: Number(summary.total || items.length || 0),
+    items: items.slice(0, 5),
+    errors: Array.isArray(summary.errors) ? summary.errors : [],
+  };
+}
+
+function normalizeTrendTokenSummary(input = {}) {
+  const summary = input && typeof input === 'object' ? input : {};
+  return {
+    totalJobs: Number(summary.totalJobs || 0),
+    failedJobs: Number(summary.failedJobs || 0),
+    totalTokens: Number(summary.totalTokens || 0),
+    estimatedTotalTokens: Number(summary.estimatedTotalTokens || 0),
+    followUpProjects: Array.isArray(summary.followUpProjects) ? summary.followUpProjects.slice(0, 6) : [],
+  };
+}
+
+function buildTrendTextLines(trendIntelSummary = {}, trendTokenSummary = {}) {
+  const intel = normalizeTrendIntelSummary(trendIntelSummary);
+  const trendToken = normalizeTrendTokenSummary(trendTokenSummary);
+  const lines = [];
+
+  if (intel.total || intel.items.length) {
+    lines.push('趋势情报：');
+    lines.push(`共 ${intel.total} 条热点。`);
+    intel.items.forEach((item, index) => {
+      const stars = item.stars ? `，${item.stars} stars` : '';
+      const link = item.link ? `，${item.link}` : '';
+      lines.push(`${index + 1}. ${item.title || '未命名热点'}（${item.source || 'trend'}${stars}${link}）`);
+    });
+    if (intel.errors.length) {
+      lines.push(`降级源：${intel.errors.map((item) => item.source || 'unknown').join('，')}`);
+    }
+    lines.push('');
+  }
+
+  if (trendToken.totalJobs) {
+    lines.push('趋势 Token 工厂：');
+    lines.push(`分析 ${trendToken.totalJobs} 条，失败 ${trendToken.failedJobs} 条，真实 token ${trendToken.totalTokens}，字符估算 ${trendToken.estimatedTotalTokens}。`);
+    if (trendToken.followUpProjects.length) {
+      lines.push(`推荐关注：${trendToken.followUpProjects.join('，')}`);
+    }
+  }
+
+  return lines;
+}
+
+function buildTrendHtmlSections(trendIntelSummary = {}, trendTokenSummary = {}) {
+  const intel = normalizeTrendIntelSummary(trendIntelSummary);
+  const trendToken = normalizeTrendTokenSummary(trendTokenSummary);
+  const sections = [];
+
+  if (intel.total || intel.items.length) {
+    sections.push([
+      '<div class="digest-section"><h3>趋势情报</h3>',
+      `<p>共 ${esc(intel.total)} 条热点。</p>`,
+      '<ol>',
+      ...intel.items.map((item) => `<li>${esc(item.title || '未命名热点')} <span style="color:#748197">(${esc(item.source || 'trend')}${item.stars ? `, ${esc(item.stars)} stars` : ''})</span></li>`),
+      '</ol>',
+      intel.errors.length ? `<p>降级源：${esc(intel.errors.map((item) => item.source || 'unknown').join('，'))}</p>` : '',
+      '</div>',
+    ].join('\n'));
+  }
+
+  if (trendToken.totalJobs) {
+    sections.push([
+      '<div class="digest-section"><h3>趋势 Token 工厂</h3>',
+      `<p>分析 ${esc(trendToken.totalJobs)} 条，失败 ${esc(trendToken.failedJobs)} 条，真实 token ${esc(trendToken.totalTokens)}，字符估算 ${esc(trendToken.estimatedTotalTokens)}。</p>`,
+      trendToken.followUpProjects.length ? `<p>推荐关注：${esc(trendToken.followUpProjects.join('，'))}</p>` : '',
+      '</div>',
+    ].join('\n'));
+  }
+
+  return sections;
 }
 
 function buildDigest(input = {}) {
@@ -241,6 +336,8 @@ function buildDigest(input = {}) {
   const server = input.server || {};
   const automation = input.automation || {};
   const newsItems = input.newsItems || fallbackNewsItems(input.env || {});
+  const trendIntelSummary = input.trendIntelSummary || automation.trendIntel || null;
+  const trendTokenSummary = input.trendTokenSummary || automation.trendToken || null;
   const taskCenterPlan = input.taskCenterPlan || null;
   const aiSummary = input.aiSummary || buildAiSummary({ assistant, mailSummary, usageSummary, server, automation });
   const workItems = [
@@ -283,6 +380,8 @@ function buildDigest(input = {}) {
     '',
     '新闻日报：',
     ...newsItems.map((item, index) => `${index + 1}. ${item.title}（${item.source || 'news'}）`),
+    '',
+    ...buildTrendTextLines(trendIntelSummary, trendTokenSummary),
     '',
     '失败诊断：',
     failureDiagnosis,
@@ -351,6 +450,7 @@ function buildDigest(input = {}) {
     `<li>内存：${esc(server.memory || '未记录')}</li>`,
     `<li>负载：${esc(server.load || '未记录')}</li>`,
     '</ul></div>',
+    ...buildTrendHtmlSections(trendIntelSummary, trendTokenSummary),
     '<div class="digest-section"><h3>自动任务</h3><ul>',
     `<li>UI 自动化：${esc(automation.ui?.workflowRunUrl || '暂无调度记录')}</li>`,
     `<li>Token 训练：${esc(automation.tokenLab?.totalJobs ? `${automation.tokenLab.totalJobs} 条样本` : '暂无训练记录')}</li>`,
@@ -401,7 +501,7 @@ async function runDigest(options = {}) {
     const timestamp = entry.timestamp || '';
     return filterMailLedgerEntriesForDay([{ timestamp }], { day, timezoneOffsetMinutes }).length > 0;
   });
-  const automation = collectAutomationState(env);
+  const automation = collectAutomationState(env, { day, timezoneOffsetMinutes });
   const task = recordTaskEvent({
     taskId: `daily-digest-${day}`,
     type: 'daily-digest',
@@ -464,6 +564,8 @@ async function runDigest(options = {}) {
     usageEntries,
     server: collectServerSnapshot(),
     automation,
+    trendIntelSummary: automation.trendIntel,
+    trendTokenSummary: automation.trendToken,
     newsItems,
     externalTo,
     taskCenterPlan,

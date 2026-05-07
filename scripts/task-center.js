@@ -15,6 +15,7 @@ const TYPE_LABELS = {
   'news-digest': '新闻摘要',
   'token-lab': 'token 训练场',
   'daily-pipeline': '每日流水线',
+  'trend-token-factory': '趋势 token 工厂',
 };
 
 function normalizeTaskType(type) {
@@ -379,10 +380,10 @@ function summarizeDailyPlan(options = {}) {
 }
 
 const PROACTIVE_TYPE_MAP = {
-  proactive: ['token-factory', 'ui-automation', 'daily-digest', 'news-digest', 'token-lab'],
+  proactive: ['token-factory', 'trend-token-factory', 'ui-automation', 'daily-digest', 'news-digest', 'token-lab'],
   news: ['news-digest'],
   ui: ['ui-automation'],
-  token: ['token-factory', 'token-lab'],
+  token: ['token-factory', 'trend-token-factory', 'token-lab'],
   daily: ['daily-digest'],
 };
 

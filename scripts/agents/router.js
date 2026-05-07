@@ -272,13 +272,17 @@ function routeClerkIntent(text) {
     };
   }
 
-  if (/(烧|消耗|花完|用掉).{0,12}(token|额度).{0,30}(git(?:hub)?|开源|热门|热榜|热点|新闻|项目|趋势)/i.test(normalized)
-    || /(git(?:hub)?|开源|热门|热榜|热点|新闻|项目|趋势).{0,30}(烧|消耗|花完|用掉).{0,12}(token|额度)/i.test(normalized)) {
+  if (/(烧|消耗|花完|用掉).{0,12}(token|额度).{0,30}(git(?:hub)?|开源|热门|热榜|热点|看新闻|刷新闻|新闻|项目|趋势)/i.test(normalized)
+    || /(git(?:hub)?|开源|热门|热榜|热点|看新闻|刷新闻|新闻|项目|趋势).{0,30}(烧|消耗|花完|用掉).{0,12}(token|额度)/i.test(normalized)
+    || /longcat.{0,18}(分析|看|研究|总结).{0,18}(热点|新闻|热榜|开源|github|项目|趋势)/i.test(normalized)
+    || /(热点|新闻|热榜|开源|github|项目|趋势).{0,18}(longcat).{0,18}(分析|看|研究|总结)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'trend-token-factory', requiresAuth: true };
   }
 
-  if (/(开源|github|热门项目|热榜|热点新闻|热点|新闻|趋势).{0,24}(热榜|热点|新闻|日报|看看|分析|今天|每日|推荐)/i.test(normalized)
-    || /(今天|每日).{0,12}(开源|github|热门项目|热榜|热点新闻|热点|新闻|趋势)/i.test(normalized)) {
+  if (/(开源|github|热门项目|热榜|热点新闻|热点|新闻|趋势|测试圈|测试社区|qa圈|测试热点).{0,24}(热榜|热点|新闻|日报|看看|分析|今天|每日|推荐|值得学|学习|学什么|推荐项目)/i.test(normalized)
+    || /(今天|每日).{0,12}(开源|github|热门项目|热榜|热点新闻|热点|新闻|趋势|测试圈|测试社区|qa圈|测试热点|值得学|学习|学什么|推荐项目)/i.test(normalized)
+    || /(值得学|学习|学什么|推荐项目).{0,24}(开源|github|热门项目|项目|趋势)/i.test(normalized)
+    || /(测试圈|测试社区|qa圈|测试热点).{0,24}(热点|看看|新闻|趋势|日报|推荐)?/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'trend-intel', requiresAuth: true };
   }
 
@@ -465,13 +469,17 @@ function routeOfficeIntent(text) {
     return { agent: 'clerk-agent', action: 'mail-ledger', requiresAuth: true };
   }
 
-  if (/(烧|消耗|花完|用掉).{0,12}(token|额度).{0,30}(git(?:hub)?|开源|热门|热榜|热点|新闻|项目|趋势)/i.test(normalized)
-    || /(git(?:hub)?|开源|热门|热榜|热点|新闻|项目|趋势).{0,30}(烧|消耗|花完|用掉).{0,12}(token|额度)/i.test(normalized)) {
+  if (/(烧|消耗|花完|用掉).{0,12}(token|额度).{0,30}(git(?:hub)?|开源|热门|热榜|热点|看新闻|刷新闻|新闻|项目|趋势)/i.test(normalized)
+    || /(git(?:hub)?|开源|热门|热榜|热点|看新闻|刷新闻|新闻|项目|趋势).{0,30}(烧|消耗|花完|用掉).{0,12}(token|额度)/i.test(normalized)
+    || /longcat.{0,18}(分析|看|研究|总结).{0,18}(热点|新闻|热榜|开源|github|项目|趋势)/i.test(normalized)
+    || /(热点|新闻|热榜|开源|github|项目|趋势).{0,18}(longcat).{0,18}(分析|看|研究|总结)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'trend-token-factory', requiresAuth: true };
   }
 
-  if (/(开源|github|热门项目|热榜|热点新闻|热点|新闻|趋势).{0,24}(热榜|热点|新闻|日报|看看|分析|今天|每日|推荐)/i.test(normalized)
-    || /(今天|每日).{0,12}(开源|github|热门项目|热榜|热点新闻|热点|新闻|趋势)/i.test(normalized)) {
+  if (/(开源|github|热门项目|热榜|热点新闻|热点|新闻|趋势|测试圈|测试社区|qa圈|测试热点).{0,24}(热榜|热点|新闻|日报|看看|分析|今天|每日|推荐|值得学|学习|学什么|推荐项目)/i.test(normalized)
+    || /(今天|每日).{0,12}(开源|github|热门项目|热榜|热点新闻|热点|新闻|趋势|测试圈|测试社区|qa圈|测试热点|值得学|学习|学什么|推荐项目)/i.test(normalized)
+    || /(值得学|学习|学什么|推荐项目).{0,24}(开源|github|热门项目|项目|趋势)/i.test(normalized)
+    || /(测试圈|测试社区|qa圈|测试热点).{0,24}(热点|看看|新闻|趋势|日报|推荐)?/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'trend-intel', requiresAuth: true };
   }
 

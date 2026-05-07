@@ -299,7 +299,27 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'trend-intel',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，今天有什么值得学的开源项目'), {
+    agent: 'clerk-agent',
+    action: 'trend-intel',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，看看测试圈热点'), {
+    agent: 'clerk-agent',
+    action: 'trend-intel',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，烧 100 万 token 分析今天 GitHub 热门项目'), {
+    agent: 'clerk-agent',
+    action: 'trend-token-factory',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，用 LongCat 分析热点'), {
+    agent: 'clerk-agent',
+    action: 'trend-token-factory',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，烧 token 看新闻'), {
     agent: 'clerk-agent',
     action: 'trend-token-factory',
     requiresAuth: true,
@@ -413,6 +433,26 @@ test('routeAgentIntent routes office work without requiring clerk wake word', ()
   assert.deepEqual(routeAgentIntent('查看今天任务中枢'), {
     agent: 'clerk-agent',
     action: 'task-center-today',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('今天有什么值得学的开源项目'), {
+    agent: 'clerk-agent',
+    action: 'trend-intel',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('测试圈热点看看'), {
+    agent: 'clerk-agent',
+    action: 'trend-intel',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('用 LongCat 分析热点'), {
+    agent: 'clerk-agent',
+    action: 'trend-token-factory',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('烧 token 看新闻'), {
+    agent: 'clerk-agent',
+    action: 'trend-token-factory',
     requiresAuth: true,
   });
   assert.deepEqual(routeAgentIntent('给我一屏看懂今天项目'), {

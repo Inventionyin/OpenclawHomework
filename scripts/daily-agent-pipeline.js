@@ -15,6 +15,14 @@ const {
   runDigest,
 } = require('./proactive-daily-digest');
 const {
+  buildTrendIntelReport,
+  collectTrendIntel,
+  writeTrendIntelReport,
+} = require('./trend-intel');
+const {
+  runTrendTokenFactory,
+} = require('./trend-token-factory');
+const {
   recordTaskEvent,
 } = require('./task-center');
 
@@ -71,6 +79,8 @@ function buildPipelinePlan(options = {}) {
     day: options.day || '',
     stages: [
       { id: 'news-digest', label: '新闻摘要' },
+      { id: 'trend-intel', label: '趋势情报' },
+      { id: 'trend-token-factory', label: '趋势 Token 工厂' },
       { id: 'scheduled-ui', label: 'UI 自动化' },
       { id: 'scheduled-token-lab', label: 'Token 训练场' },
       { id: 'proactive-daily-digest', label: '主动日报' },
@@ -89,6 +99,24 @@ function writeState(filePath, state) {
   if (!filePath) return;
   mkdirSync(dirname(filePath), { recursive: true });
   writeFileSync(filePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+}
+
+function getTrendIntelOutputFile(env = process.env) {
+  return env.TREND_INTEL_OUTPUT_FILE || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'trend-intel', 'latest.json');
+}
+
+async function runTrendIntelStage(options = {}) {
+  const env = options.env || process.env;
+  const outputFile = getTrendIntelOutputFile(env);
+  const items = await (options.collector || collectTrendIntel)(env, options.fetchImpl || fetch, options);
+  const report = (options.reportBuilder || buildTrendIntelReport)(items);
+  (options.writer || writeTrendIntelReport)(outputFile, report);
+  env.TREND_INTEL_INPUT_FILE = env.TREND_INTEL_INPUT_FILE || outputFile;
+  return {
+    report,
+    outputFile,
+    reason: report.errors?.length ? 'completed_with_degraded_sources' : '',
+  };
 }
 
 async function runPipelineStage(stage, context) {
@@ -154,6 +182,25 @@ async function runDailyAgentPipeline(options = {}) {
       id: 'news-digest',
       label: '新闻摘要',
       run: () => (options.runNewsDigest || runNewsDigest)({ day, force: options.force, env }),
+    },
+    {
+      id: 'trend-intel',
+      label: '趋势情报',
+      run: () => (options.runTrendIntel || runTrendIntelStage)({
+        day,
+        force: options.force,
+        env,
+        fetchImpl: options.fetchImpl,
+      }),
+    },
+    {
+      id: 'trend-token-factory',
+      label: '趋势 Token 工厂',
+      run: () => (options.runTrendTokenFactory || runTrendTokenFactory)({
+        env,
+        batchSize: env.TREND_TOKEN_FACTORY_BATCH_SIZE,
+        outputDir: env.TREND_TOKEN_FACTORY_OUTPUT_DIR,
+      }),
     },
     {
       id: 'scheduled-ui',
@@ -250,6 +297,7 @@ if (require.main === module) {
 
 module.exports = {
   buildPipelinePlan,
+  runTrendIntelStage,
   parseArgs,
   runDailyAgentPipeline,
 };

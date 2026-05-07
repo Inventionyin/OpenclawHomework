@@ -39,6 +39,8 @@ test('buildPipelinePlan returns ordered stages', () => {
   assert.equal(plan.day, '2026-05-06');
   assert.deepEqual(plan.stages.map((stage) => stage.id), [
     'news-digest',
+    'trend-intel',
+    'trend-token-factory',
     'scheduled-ui',
     'scheduled-token-lab',
     'proactive-daily-digest',
@@ -57,6 +59,12 @@ test('runDailyAgentPipeline dry-run returns stage plan without executing runners
     runScheduledUi: async () => {
       calls.push('ui');
     },
+    runTrendIntel: async () => {
+      calls.push('trend-intel');
+    },
+    runTrendTokenFactory: async () => {
+      calls.push('trend-token');
+    },
     runScheduledTokenLab: async () => {
       calls.push('token');
     },
@@ -66,7 +74,7 @@ test('runDailyAgentPipeline dry-run returns stage plan without executing runners
   });
 
   assert.equal(result.reason, 'dry_run');
-  assert.equal(result.stages.length, 4);
+  assert.equal(result.stages.length, 6);
   assert.deepEqual(calls, []);
   assert(result.stages.every((stage) => stage.status === 'planned'));
 });
@@ -82,6 +90,12 @@ test('runDailyAgentPipeline executes all stages and keeps going after failure', 
       },
       runNewsDigest: async () => ({
         report: { total: 3 },
+      }),
+      runTrendIntel: async () => ({
+        report: { total: 2 },
+      }),
+      runTrendTokenFactory: async () => ({
+        report: { totalJobs: 2, failedJobs: 0, totalTokens: 200 },
       }),
       runScheduledUi: async () => {
         throw new Error('ui dispatch timeout');
@@ -99,15 +113,17 @@ test('runDailyAgentPipeline executes all stages and keeps going after failure', 
     assert.equal(result.ok, false);
     assert.equal(result.summary.failedStages, 1);
     assert.equal(result.stages[0].status, 'completed');
-    assert.equal(result.stages[1].status, 'failed');
+    assert.equal(result.stages[1].status, 'completed');
     assert.equal(result.stages[2].status, 'completed');
-    assert.equal(result.stages[3].status, 'completed');
+    assert.equal(result.stages[3].status, 'failed');
+    assert.equal(result.stages[4].status, 'completed');
+    assert.equal(result.stages[5].status, 'completed');
 
     const tasks = listTasks(result.env);
     assert.equal(tasks.length, 1);
     assert.equal(tasks[0].type, 'daily-pipeline');
     assert.equal(tasks[0].status, 'failed');
-    assert.equal(tasks[0].summary.completedStages, 3);
+    assert.equal(tasks[0].summary.completedStages, 5);
     assert.equal(tasks[0].summary.failedStages, 1);
     assert(tasks[0].events.some((event) => event.event === 'scheduled'));
     assert(tasks[0].events.some((event) => event.event === 'completed_with_failures'));
@@ -126,6 +142,8 @@ test('runDailyAgentPipeline marks completed when all stages succeed', async () =
         TOKEN_FACTORY_TASK_DIR: join(tempDir, 'tasks'),
       },
       runNewsDigest: async () => ({ report: { total: 2 } }),
+      runTrendIntel: async () => ({ report: { total: 2 } }),
+      runTrendTokenFactory: async () => ({ report: { totalJobs: 2 } }),
       runScheduledUi: async () => ({ dispatched: true, state: { status: 'queued' } }),
       runScheduledTokenLab: async () => ({ ran: true, state: { totalJobs: 8 } }),
       runDigest: async () => ({ sent: true, reason: '' }),
@@ -135,7 +153,7 @@ test('runDailyAgentPipeline marks completed when all stages succeed', async () =
     assert.equal(result.summary.failedStages, 0);
     const tasks = listTasks(result.env);
     assert.equal(tasks[0].status, 'completed');
-    assert.equal(tasks[0].summary.completedStages, 4);
+    assert.equal(tasks[0].summary.completedStages, 6);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -153,6 +171,8 @@ test('runDailyAgentPipeline writes state file when provided', async () => {
         TOKEN_FACTORY_TASK_DIR: join(tempDir, 'tasks'),
       },
       runNewsDigest: async () => ({ report: { total: 1 } }),
+      runTrendIntel: async () => ({ report: { total: 1 } }),
+      runTrendTokenFactory: async () => ({ report: { totalJobs: 1 } }),
       runScheduledUi: async () => ({ dispatched: true }),
       runScheduledTokenLab: async () => ({ ran: true }),
       runDigest: async () => ({ sent: true }),
@@ -163,7 +183,9 @@ test('runDailyAgentPipeline writes state file when provided', async () => {
     const state = JSON.parse(readFileSync(stateFile, 'utf8'));
     assert.equal(state.lastRunDay, '2026-05-06');
     assert.equal(state.failedStages, 0);
-    assert.equal(state.completedStages, 4);
+    assert.equal(state.completedStages, 6);
+    assert.equal(state.stageStatuses.some((stage) => stage.id === 'trend-intel'), true);
+    assert.equal(state.stageStatuses.some((stage) => stage.id === 'trend-token-factory'), true);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

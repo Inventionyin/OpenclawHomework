@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
+const { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const test = require('node:test');
@@ -127,6 +127,53 @@ test('runDigest dry-run builds message and respects already-sent state', async (
   }
 });
 
+test('runDigest reads trend token summary for the requested report day', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'proactive-digest-trend-day-'));
+  const currentDay = getDayKey(new Date(), 480);
+  const targetDay = currentDay === '2099-01-01' ? '2099-01-02' : '2099-01-01';
+  try {
+    const stateFile = join(tempDir, 'state.json');
+    const targetDir = join(tempDir, 'data', 'trend-token-factory', targetDay);
+    const currentDir = join(tempDir, 'data', 'trend-token-factory', currentDay);
+    mkdirSync(targetDir, { recursive: true });
+    mkdirSync(currentDir, { recursive: true });
+    writeFileSync(join(targetDir, 'summary.json'), `${JSON.stringify({
+      totalJobs: 1,
+      failedJobs: 0,
+      totalTokens: 111,
+      estimatedTotalTokens: 222,
+      followUpProjects: ['target-day-project'],
+    })}\n`);
+    writeFileSync(join(currentDir, 'summary.json'), `${JSON.stringify({
+      totalJobs: 1,
+      failedJobs: 0,
+      totalTokens: 999,
+      estimatedTotalTokens: 888,
+      followUpProjects: ['current-day-project'],
+    })}\n`);
+
+    const result = await runDigest({
+      dryRun: true,
+      force: true,
+      skipNews: true,
+      day: targetDay,
+      stateFile,
+      to: '1693457391@qq.com',
+      env: {
+        LOCAL_PROJECT_DIR: tempDir,
+        FEISHU_ASSISTANT_NAME: 'Hermes',
+      },
+    });
+
+    assert.match(result.message.text, /target-day-project/);
+    assert.match(result.message.text, /111/);
+    assert.doesNotMatch(result.message.text, /current-day-project/);
+    assert.doesNotMatch(result.message.text, /999/);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('buildDigest uses task-center summary for today and tomorrow plan when provided', () => {
   const digest = buildDigest({
     assistant: 'OpenClaw',
@@ -157,4 +204,44 @@ test('buildDigest uses task-center summary for today and tomorrow plan when prov
   assert.match(digest.html, /今天任务 4 个/);
   assert.match(digest.html, /RSS 超时/);
   assert.match(digest.html, /恢复中断或超时任务/);
+});
+
+test('buildDigest includes trend intelligence and trend token factory highlights', () => {
+  const digest = buildDigest({
+    assistant: 'Hermes',
+    day: '2026-05-07',
+    mailEntries: [],
+    usageEntries: [],
+    server: {
+      disk: '/dev/vda1 40G 15G 25G 38% /',
+      memory: 'Mem: 2.0Gi 700Mi 1.3Gi',
+      load: '0.01 0.02 0.03',
+    },
+    newsItems: [],
+    trendIntelSummary: {
+      total: 2,
+      items: [
+        { title: 'microsoft/playwright', source: 'GitHub Trending', link: 'https://github.com/microsoft/playwright', stars: 71000 },
+        { title: 'Browser agent evals', source: 'Hacker News', link: 'https://news.ycombinator.com/item?id=42' },
+      ],
+    },
+    trendTokenSummary: {
+      totalJobs: 2,
+      failedJobs: 0,
+      totalTokens: 1200,
+      estimatedTotalTokens: 1800,
+      followUpProjects: ['microsoft/playwright'],
+    },
+  });
+
+  assert.match(digest.text, /趋势情报/);
+  assert.match(digest.text, /microsoft\/playwright/);
+  assert.match(digest.text, /GitHub Trending/);
+  assert.match(digest.text, /趋势 Token 工厂/);
+  assert.match(digest.text, /1200/);
+  assert.match(digest.text, /1800/);
+  assert.match(digest.text, /推荐关注：microsoft\/playwright/);
+  assert.match(digest.html, /趋势情报/);
+  assert.match(digest.html, /趋势 Token 工厂/);
+  assert.match(digest.html, /microsoft\/playwright/);
 });

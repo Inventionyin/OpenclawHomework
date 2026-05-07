@@ -172,6 +172,7 @@ test('task center digest supports today/tomorrow and proactive types with bad ta
     createTask({ id: 'proactive-news-fail', type: 'news-digest', now: '2026-05-06T01:05:00.000Z', status: 'failed', error: 'api timeout' }, env);
     createTask({ id: 'proactive-ui-run', type: 'ui-automation', now: '2026-05-06T01:10:00.000Z', status: 'running' }, env);
     createTask({ id: 'proactive-token-queued', type: 'token-factory', now: '2026-05-06T01:15:00.000Z', status: 'queued' }, env);
+    createTask({ id: 'proactive-trend-token', type: 'trend-token-factory', now: '2026-05-06T01:18:00.000Z', status: 'completed' }, env);
     createTask({ id: 'broken-shape', type: '', now: '2026-05-06T01:20:00.000Z', status: '' }, env);
 
     const digest = summarizeTaskCenterDigest({
@@ -185,11 +186,52 @@ test('task center digest supports today/tomorrow and proactive types with bad ta
     assert.match(digest.todaySummary, /今天任务/);
     assert.equal(digest.activeTypes.includes('news-digest'), true);
     assert.equal(digest.activeTypes.includes('ui-automation'), true);
+    assert.equal(digest.activeTypes.includes('trend-token-factory'), true);
     assert.equal(digest.failedItems.some((item) => item.id === 'proactive-news-fail'), true);
     assert.equal(digest.recoverableItems.some((item) => item.id === 'proactive-token-queued'), true);
     assert.equal(Array.isArray(digest.nextSuggestedActions), true);
     assert.equal(digest.nextSuggestedActions.length > 0, true);
     assert.equal(Array.isArray(digest.tomorrowPlan), true);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('task center brain includes trend token factory in proactive history and failure review', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'task-center-trend-brain-'));
+  const env = { TOKEN_FACTORY_TASK_DIR: tempDir };
+  try {
+    createTask({
+      id: 'trend-token-ok',
+      type: 'trend-token-factory',
+      now: '2026-05-06T01:00:00.000Z',
+      status: 'completed',
+      summary: {
+        totalJobs: 8,
+        totalTokens: 2048,
+      },
+    }, env);
+    createTask({
+      id: 'trend-token-fail',
+      type: 'trend-token-factory',
+      now: '2026-05-06T02:00:00.000Z',
+      status: 'failed',
+      error: '429 quota exhausted',
+    }, env);
+
+    const brain = summarizeTaskCenterBrain({
+      env,
+      now: new Date('2026-05-06T03:00:00.000Z'),
+      timezoneOffsetMinutes: 480,
+      proactiveTypes: ['proactive'],
+      historyDays: 3,
+    });
+
+    assert.equal(brain.today.byType.some((row) => row.type === 'trend-token-factory' && row.label === '趋势 token 工厂'), true);
+    assert.equal(brain.history.items.some((task) => task.id === 'trend-token-ok'), true);
+    assert.equal(brain.failureReview.items.some((task) => task.id === 'trend-token-fail'), true);
+    assert.equal(brain.failureReview.byReason.some((row) => row.reason === 'quota_or_rate_limit'), true);
+    assert.equal(brain.nextPlan.items.some((item) => /趋势 token 工厂|token 工厂|失败任务/.test(item)), true);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

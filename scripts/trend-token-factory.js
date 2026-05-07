@@ -7,6 +7,9 @@ const {
   appendUsageLedgerEntry,
   buildUsageLedgerEntry,
 } = require('./usage-ledger');
+const {
+  recordTaskEvent,
+} = require('./task-center');
 
 function numberOrDefault(value, fallback) {
   const number = Number(value);
@@ -282,6 +285,37 @@ function buildTrendTokenEmailMessages(report, files, plan, env = process.env) {
   }];
 }
 
+function shouldRecordTask(env = process.env, options = {}) {
+  return String(options.recordTask ?? env.TREND_TOKEN_FACTORY_RECORD_TASK ?? 'true').toLowerCase() !== 'false';
+}
+
+function buildTaskId(now = new Date()) {
+  return `trend-token-factory-${now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}`;
+}
+
+function recordTrendTaskEvent(input = {}, options = {}) {
+  if (!shouldRecordTask(options.env || process.env, options)) {
+    return null;
+  }
+  try {
+    return recordTaskEvent({
+      type: 'trend-token-factory',
+      ...input,
+    }, {
+      env: options.env || process.env,
+      now: input.now || options.now,
+    });
+  } catch (error) {
+    if (options.warnings) {
+      options.warnings.push({
+        type: 'task-center',
+        message: String(error?.message || error),
+      });
+    }
+    return null;
+  }
+}
+
 function writeJson(file, data) {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
@@ -350,6 +384,22 @@ async function runTrendTokenFactory(options = {}) {
   const assistant = options.assistant || plan.assistant || 'Hermes';
   const items = [];
   const warnings = [];
+  let task = recordTrendTaskEvent({
+    taskId: options.taskId || buildTaskId(now),
+    event: 'started',
+    status: 'running',
+    now: now.toISOString(),
+    summaryPatch: {
+      totalJobs: plan.jobs.length,
+      completedJobs: 0,
+      failedJobs: 0,
+      assistant,
+      outputDir,
+    },
+    filesPatch: {
+      outputDir,
+    },
+  }, { env, now: now.toISOString(), warnings, recordTask: options.recordTask });
 
   mkdirSync(outputDir, { recursive: true });
   for (const job of plan.jobs) {
@@ -397,6 +447,19 @@ async function runTrendTokenFactory(options = {}) {
       error: error ? String(error.message || error) : undefined,
     };
     items.push(item);
+    task = recordTrendTaskEvent({
+      taskId: task?.id || options.taskId || buildTaskId(now),
+      event: error ? 'job-failed' : 'job-completed',
+      status: 'running',
+      now: new Date().toISOString(),
+      note: job.id,
+      error: error ? String(error.message || error) : '',
+      summaryPatch: {
+        totalJobs: plan.jobs.length,
+        completedJobs: items.filter((row) => !row.error && !row.parsed?.error).length,
+        failedJobs: items.filter((row) => row.error || row.parsed?.error).length,
+      },
+    }, { env, warnings, recordTask: options.recordTask }) || task;
     try {
       appendUsageLedgerEntry(env, {
         assistant,
@@ -437,6 +500,26 @@ async function runTrendTokenFactory(options = {}) {
   writeFileSync(files.report, `# 趋势 Token 工厂\n\n${report.text}\n`, 'utf8');
   writeJson(files.summary, report);
 
+  const failedJobDetails = items
+    .filter((item) => item.error || item.parsed?.error)
+    .map((item) => `${item.job?.id || 'unknown'}: ${item.error || item.parsed?.error || 'failed trend job'}`);
+  task = recordTrendTaskEvent({
+    taskId: task?.id || options.taskId || buildTaskId(now),
+    event: report.failedJobs ? 'failed' : 'completed',
+    status: report.failedJobs ? 'failed' : 'completed',
+    now: new Date().toISOString(),
+    error: report.failedJobs ? `failed trend jobs: ${failedJobDetails.slice(0, 3).join(' | ')}` : '',
+    summaryPatch: {
+      totalJobs: report.totalJobs,
+      completedJobs: Math.max(0, report.totalJobs - report.failedJobs),
+      failedJobs: report.failedJobs,
+      totalTokens: report.totalTokens,
+      estimatedTotalTokens: report.estimatedTotalTokens,
+      followUpProjects: report.followUpProjects,
+    },
+    filesPatch: files,
+  }, { env, warnings, recordTask: options.recordTask }) || task;
+
   const emailMessages = buildTrendTokenEmailMessages(report, files, plan, env);
   if (options.emailSender) {
     for (const message of emailMessages) {
@@ -451,6 +534,7 @@ async function runTrendTokenFactory(options = {}) {
     files,
     emailMessages,
     warnings,
+    task,
   };
 }
 

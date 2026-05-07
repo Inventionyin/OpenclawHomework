@@ -12,6 +12,9 @@ const {
   parseArgs,
   runTrendTokenFactory,
 } = require('../scripts/trend-token-factory');
+const {
+  listTasks,
+} = require('../scripts/background-task-store');
 
 function sampleTrendReport() {
   return {
@@ -118,6 +121,7 @@ test('runTrendTokenFactory writes artifacts, usage ledger and report mailbox dig
       env: {
         FEISHU_USAGE_LEDGER_ENABLED: 'true',
         FEISHU_USAGE_LEDGER_PATH: ledgerPath,
+        TOKEN_FACTORY_TASK_DIR: join(tempDir, 'tasks'),
       },
       modelRunner: async (prompt, job) => {
         seenPrompts.push(prompt);
@@ -191,6 +195,7 @@ test('runTrendTokenFactory keeps running when usage ledger write fails', async (
       env: {
         FEISHU_USAGE_LEDGER_ENABLED: 'true',
         FEISHU_USAGE_LEDGER_PATH: tempDir,
+        TOKEN_FACTORY_TASK_DIR: join(tempDir, 'tasks'),
       },
       modelRunner: async (prompt, job) => ({
         text: JSON.stringify({
@@ -235,6 +240,7 @@ test('trend token factory CLI email mode does not emit circular dependency warni
       env: {
         ...process.env,
         EMAIL_NOTIFY_ENABLED: 'false',
+        TOKEN_FACTORY_TASK_DIR: join(tempDir, 'tasks'),
       },
       encoding: 'utf8',
     });
@@ -242,6 +248,81 @@ test('trend token factory CLI email mode does not emit circular dependency warni
     assert.equal(result.status, 0, result.stderr);
     assert.doesNotMatch(result.stderr, /circular dependency|non-existent property/i);
     assert.match(result.stdout, /"totalJobs": 0/);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('runTrendTokenFactory records completed trend task center state', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'trend-token-factory-task-'));
+  const taskDir = join(tempDir, 'tasks');
+
+  try {
+    const result = await runTrendTokenFactory({
+      trendReport: sampleTrendReport(),
+      batchSize: 1,
+      outputDir: tempDir,
+      env: {
+        FEISHU_USAGE_LEDGER_ENABLED: 'false',
+        TOKEN_FACTORY_TASK_DIR: taskDir,
+      },
+      modelRunner: async (prompt, job) => ({
+        text: JSON.stringify({
+          id: job.id,
+          title: job.item.title,
+          worth_following: true,
+          action_suggestions: ['复现 demo', '写自动化清单', '归档训练样本'],
+        }),
+        model: 'LongCat-Flash-Chat',
+        tier: job.modelTier,
+        endpoint: 'chat_completions',
+        usage: { total_tokens: 88 },
+      }),
+    });
+
+    const tasks = listTasks({ TOKEN_FACTORY_TASK_DIR: taskDir });
+    assert.equal(tasks.length, 1);
+    assert.equal(tasks[0].type, 'trend-token-factory');
+    assert.equal(tasks[0].status, 'completed');
+    assert.equal(tasks[0].summary.totalJobs, 1);
+    assert.equal(tasks[0].summary.completedJobs, 1);
+    assert.equal(tasks[0].summary.failedJobs, 0);
+    assert.equal(tasks[0].summary.totalTokens, 88);
+    assert.equal(tasks[0].files.report, result.files.report);
+    assert(tasks[0].events.some((event) => event.event === 'started'));
+    assert(tasks[0].events.some((event) => event.event === 'completed'));
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('runTrendTokenFactory marks task failed when model jobs fail', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'trend-token-factory-task-fail-'));
+  const taskDir = join(tempDir, 'tasks');
+
+  try {
+    await runTrendTokenFactory({
+      trendReport: sampleTrendReport(),
+      batchSize: 1,
+      outputDir: tempDir,
+      env: {
+        FEISHU_USAGE_LEDGER_ENABLED: 'false',
+        TOKEN_FACTORY_TASK_DIR: taskDir,
+      },
+      modelRunner: async () => {
+        throw new Error('model timeout');
+      },
+    });
+
+    const tasks = listTasks({ TOKEN_FACTORY_TASK_DIR: taskDir });
+    assert.equal(tasks.length, 1);
+    assert.equal(tasks[0].type, 'trend-token-factory');
+    assert.equal(tasks[0].status, 'failed');
+    assert.equal(tasks[0].summary.totalJobs, 1);
+    assert.equal(tasks[0].summary.failedJobs, 1);
+    assert.match(tasks[0].error, /failed trend jobs|model timeout/);
+    assert(tasks[0].events.some((event) => event.event === 'job-failed'));
+    assert(tasks[0].events.some((event) => event.event === 'failed'));
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

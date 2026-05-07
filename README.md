@@ -25,6 +25,36 @@ See the Chinese step-by-step task list:
 4. GitHub Actions runs UI automation tests.
 5. The bridge can poll the workflow run and send the final result back to Feishu.
 
+## Proactive Daily Pipeline
+
+The current "advanced" workflow is no longer only UI automation. The daily pipeline is:
+
+```text
+news-digest
+  -> trend-intel
+  -> trend-token-factory
+  -> scheduled-ui-runner
+  -> scheduled-token-lab
+  -> proactive-daily-digest
+```
+
+This means the bots can collect live news and GitHub trends, spend model tokens analyzing useful projects, run UI automation, generate QA training data, and then send a daily summary. The task center is the source of truth for task history, failed runs, and next-step planning; runtime state files are local machine snapshots and should not be committed.
+
+Useful Feishu examples:
+
+```text
+文员，查看今天自动流水线状态
+文员，给我最近一次失败复盘
+文员，今天有什么值得学的开源项目
+文员，烧 token 看新闻
+文员，发送今天日报到邮箱
+```
+
+Detailed docs:
+
+- [飞书桥梁服务使用说明](docs/飞书桥梁服务使用说明.md)
+- [AI 接手核云服务器运维手册](docs/AI接手核云服务器运维手册.md)
+
 ## Task Breakdown
 
 ### Phase 1: Minimal Working Version
