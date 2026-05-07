@@ -285,13 +285,75 @@ test('buildClerkAgentReply shows practical workbench with mailbox and qa assets'
 });
 
 test('buildClerkAgentReply explains real mailbox workbench bindings', () => {
-  const reply = buildClerkAgentReply({ action: 'mailbox-workbench' });
+  const reply = buildClerkAgentReply({ action: 'mailbox-workbench' }, {
+    readInboxMessages: () => [
+      {
+        uid: 'm-1',
+        from: 'student@example.com',
+        subject: '应届生求职咨询',
+        text: '我是大四应届毕业生，可以应聘吗？',
+      },
+    ],
+    readMailLedger: () => [],
+    now: new Date('2026-05-07T12:00:00.000Z'),
+  });
   assert.match(reply, /邮箱工作台/);
+  assert.match(reply, /ClawEmail/);
+  assert.match(reply, /待审批 1 封/);
   assert.match(reply, /watchee\.ui@claw\.163\.com/);
   assert.match(reply, /evasan\.account@claw\.163\.com/);
   assert.match(reply, /agent4\.archive@claw\.163\.com/);
   assert.match(reply, /子邮箱/);
   assert.match(reply, /注册验证码测试/);
+});
+
+test('buildClerkAgentReply lists mailbox approvals from workbench state', () => {
+  const reply = buildClerkAgentReply({ action: 'mailbox-approvals' }, {
+    readInboxMessages: () => [
+      {
+        uid: 'm-1',
+        from: 'buyer@example.com',
+        subject: '退款处理',
+        text: '我要退款',
+      },
+    ],
+    readMailLedger: () => [],
+    now: new Date('2026-05-07T12:00:00.000Z'),
+  });
+
+  assert.match(reply, /待审批邮件/);
+  assert.match(reply, /退款处理/);
+  assert.match(reply, /审批第 1 封/);
+  assert.match(reply, /默认不会自动批准/);
+});
+
+test('buildClerkAgentReply renders ClawEmail daily report preview', () => {
+  const reply = buildClerkAgentReply({ action: 'mailbox-daily-report' }, {
+    readInboxMessages: () => [
+      {
+        uid: 'm-1',
+        from: 'partner@example.com',
+        subject: '商务合作咨询',
+        text: '想和你们合作做测试平台。',
+      },
+    ],
+    readMailLedger: () => [
+      {
+        timestamp: '2026-05-07T01:00:00.000Z',
+        assistant: 'Hermes',
+        action: 'daily',
+        sent: true,
+        externalTo: ['1693457391@qq.com'],
+      },
+    ],
+    env: { FEISHU_ASSISTANT_NAME: 'Hermes' },
+    now: new Date('2026-05-07T12:00:00.000Z'),
+  });
+
+  assert.match(reply, /ClawEmail 每日报告/);
+  assert.match(reply, /收信 1 封/);
+  assert.match(reply, /成功发信 1 封/);
+  assert.match(reply, /发送今天日报到邮箱/);
 });
 
 test('buildClerkAgentReply explains file channel workbench', () => {

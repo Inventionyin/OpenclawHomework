@@ -255,6 +255,15 @@ function routeClerkIntent(text) {
     return { agent: 'clerk-agent', action: 'mailbox-tasks', requiresAuth: true };
   }
 
+  if (/(待审批|待确认|审批).{0,16}(邮件|邮箱)|((邮件|邮箱).{0,16}(待审批|待确认|审批))/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'mailbox-approvals', requiresAuth: true };
+  }
+
+  if (!/(发送|发到|发给|寄到|寄给|外发)/i.test(normalized)
+    && (/(clawemail|邮箱|邮件).{0,24}(每日报告|日结|每日总结|生成报告)|(生成|查看|预览|制作).{0,12}(clawemail|邮箱|邮件).{0,24}(日报|报告)|(每日报告|日结|每日总结|生成报告).{0,24}(clawemail|邮箱|邮件)/i.test(normalized))) {
+    return { agent: 'clerk-agent', action: 'mailbox-daily-report', requiresAuth: true };
+  }
+
   if (/(邮件|邮箱).{0,18}(发了|发送了|发出去|发送记录|流水|账本|历史|记录|哪些|列表)/i.test(normalized)
     || /(发了|发送了|发出去|发送记录|流水|账本|历史|记录|哪些|列表).{0,18}(邮件|邮箱)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'mail-ledger', requiresAuth: true };
@@ -462,6 +471,15 @@ function routeOfficeIntent(text) {
   if (/(今天|当前|现在).{0,12}(邮箱|邮件).{0,12}(任务|队列|待办|有什么|有哪些)/i.test(normalized)
     || /(邮箱|邮件).{0,12}(任务|队列|待办).{0,12}(今天|当前|现在|有哪些|有什么)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'mailbox-tasks', requiresAuth: true };
+  }
+
+  if (/(待审批|待确认|审批).{0,16}(邮件|邮箱)|((邮件|邮箱).{0,16}(待审批|待确认|审批))/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'mailbox-approvals', requiresAuth: true };
+  }
+
+  if (!/(发送|发到|发给|寄到|寄给|外发)/i.test(normalized)
+    && (/(clawemail|邮箱|邮件).{0,24}(每日报告|日结|每日总结|生成报告)|(生成|查看|预览|制作).{0,12}(clawemail|邮箱|邮件).{0,24}(日报|报告)|(每日报告|日结|每日总结|生成报告).{0,24}(clawemail|邮箱|邮件)/i.test(normalized))) {
+    return { agent: 'clerk-agent', action: 'mailbox-daily-report', requiresAuth: true };
   }
 
   if (/(邮件|邮箱).{0,18}(发了|发送了|发出去|发送记录|流水|账本|历史|记录|哪些|列表)/i.test(normalized)

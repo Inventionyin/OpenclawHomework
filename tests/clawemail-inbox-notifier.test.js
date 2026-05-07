@@ -272,7 +272,10 @@ test('runInboxNotifierOnce sends Feishu notification for new messages and writes
     assert.equal(sent[0].message.receiveIdType, 'chat_id');
     assert.equal(sent[0].message.receiveId, 'chat-a');
     assert.match(JSON.parse(sent[0].message.content).text, /Hermes 收到新邮件/);
-    assert.equal(JSON.parse(readFileSync(stateFile, 'utf8')).lastUid, 2);
+    const savedState = JSON.parse(readFileSync(stateFile, 'utf8'));
+    assert.equal(savedState.lastUid, 2);
+    assert.equal(savedState.recentMessages.length, 1);
+    assert.equal(savedState.recentMessages[0].subject, '应届生求职咨询');
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

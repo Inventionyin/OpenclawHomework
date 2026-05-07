@@ -47,8 +47,26 @@ Useful Feishu examples:
 文员，给我最近一次失败复盘
 文员，今天有什么值得学的开源项目
 文员，烧 token 看新闻
+文员，查看今天邮箱工作台
+文员，列出待审批邮件
+文员，生成 ClawEmail 每日报告
 文员，发送今天日报到邮箱
 ```
+
+## ClawEmail Workbench
+
+The Feishu clerk agent now has a lightweight ClawEmail workbench. It reads recent inbox snapshots from the ClawEmail inbox notifier, combines them with the outbound mail ledger, classifies messages, and shows pending approval items before any risky reply is sent.
+
+Natural language examples:
+
+```text
+文员，查看今天邮箱工作台
+文员，列出待审批邮件
+文员，生成 ClawEmail 每日报告
+文员，发送今天日报到邮箱
+```
+
+Important boundary: `生成 ClawEmail 每日报告` only previews the mailbox report. `发送今天日报到邮箱` is the command that actually calls the existing daily email sender.
 
 Detailed docs:
 

@@ -28,6 +28,10 @@ const {
   readMailLedgerEntries,
 } = require('../mail-ledger');
 const {
+  buildMailWorkbenchReportFromEnv,
+  formatMailWorkbenchReply,
+} = require('../mail-workbench');
+const {
   resolveMailboxAction,
 } = require('../mailbox-action-router');
 const {
@@ -372,9 +376,12 @@ function mailboxLine(actionName, env = process.env) {
   return `- ${actionName} -> ${action.mailbox}：${action.description}`;
 }
 
-function buildClerkMailboxWorkbenchReply(env = process.env) {
+function buildClerkMailboxWorkbenchReply(env = process.env, options = {}) {
+  const workbench = (options.buildMailWorkbenchReportFromEnv || buildMailWorkbenchReportFromEnv)(env, options);
   return [
-    '文员邮箱工作台：',
+    formatMailWorkbenchReply(workbench),
+    '',
+    '邮箱动作绑定：',
     mailboxLine('task', env),
     mailboxLine('report', env),
     mailboxLine('verify', env),
@@ -388,6 +395,8 @@ function buildClerkMailboxWorkbenchReply(env = process.env) {
     '- 文员，用 verify 邮箱设计一轮注册验证码测试',
     '- 文员，子邮箱可以拿去注册测试平台吗',
     '- 文员，今天邮箱里有哪些任务',
+    '- 文员，列出待审批邮件',
+    '- 文员，生成 ClawEmail 每日报告',
     '- 文员，今天机器人发了哪些邮件',
     '- 文员，把失败样本归档到 archive',
     '- 文员，把今天日报发到邮箱',
@@ -744,7 +753,23 @@ function buildClerkAgentReply(route = {}, options = {}) {
   }
 
   if (route.action === 'mailbox-workbench') {
-    return buildClerkMailboxWorkbenchReply(options.env || process.env);
+    return buildClerkMailboxWorkbenchReply(options.env || process.env, options);
+  }
+
+  if (route.action === 'mailbox-approvals') {
+    const workbench = (options.buildMailWorkbenchReportFromEnv || buildMailWorkbenchReportFromEnv)(options.env || process.env, options);
+    return formatMailWorkbenchReply(workbench, { mode: 'pending' });
+  }
+
+  if (route.action === 'mailbox-daily-report') {
+    const workbench = (options.buildMailWorkbenchReportFromEnv || buildMailWorkbenchReportFromEnv)(options.env || process.env, options);
+    return [
+      'ClawEmail 每日报告预览：',
+      '',
+      formatMailWorkbenchReply(workbench),
+      '',
+      '这份报告可以直接进入主动日报模板；要真实外发，请说：文员，发送今天日报到邮箱。',
+    ].join('\n');
   }
 
   if (route.action === 'file-channel-workbench') {

@@ -46,6 +46,35 @@ function writeState(filePath, state) {
   writeFileSync(filePath, `${JSON.stringify(state, null, 2)}\n`);
 }
 
+function compactMessageForState(message = {}) {
+  return {
+    uid: getMessageId(message),
+    mailbox: message.mailbox || '',
+    from: message.from || '',
+    subject: message.subject || '',
+    date: message.date || '',
+    text: compactText(message.text || message.html || '', 500),
+  };
+}
+
+function mergeRecentMessages(previous = [], incoming = [], limit = 80) {
+  const merged = [];
+  const seen = new Set();
+  for (const message of [...incoming, ...(Array.isArray(previous) ? previous : [])]) {
+    const compact = compactMessageForState(message);
+    const key = compact.uid || `${compact.from}:${compact.subject}:${compact.date}`;
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(compact);
+    if (merged.length >= limit) {
+      break;
+    }
+  }
+  return merged;
+}
+
 function normalizeUid(value) {
   const uid = Number(value);
   return Number.isFinite(uid) ? uid : 0;
@@ -277,6 +306,7 @@ async function runInboxNotifierOnce(config, env = process.env, options = {}) {
     mailbox: config.mailbox || mergedEnv.CLAWEMAIL_INBOX_MAILBOX || mergedEnv.EMAIL_FROM || mergedEnv.SMTP_USER || '',
     fetched: messages.length,
     notified,
+    recentMessages: mergeRecentMessages(state.recentMessages, newMessages, Number(mergedEnv.CLAWEMAIL_WORKBENCH_RECENT_LIMIT || 80)),
   });
 
   return {
@@ -313,6 +343,7 @@ module.exports = {
   compactText,
   fetchMessagesWithMailCli,
   filterNewMessages,
+  mergeRecentMessages,
   parseCliArgs,
   parseMailCliJson,
   runInboxNotifierOnce,
