@@ -18,12 +18,14 @@ const {
 } = require('./agents/router');
 const {
   buildCapabilityGuideReply,
+  buildBrowserAgentReply,
   buildChatAgentPrompt,
   buildClerkAgentReply,
   buildDocAgentReply,
   buildEcosystemAgentReply,
   buildImageChannelReply,
   buildModelChannelReply,
+  buildMultiIntentPlanReply,
   buildMemoryAgentReply,
   buildOpsAgentReply,
   buildPlannerClarifyReply,
@@ -3476,6 +3478,12 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
   }
 
   if (route.agent === 'planner-agent') {
+    if (route.action === 'multi-intent-plan') {
+      return {
+        handled: true,
+        replyText: buildMultiIntentPlanReply(route),
+      };
+    }
     return {
       handled: true,
       replyText: buildPlannerClarifyReply(text),
@@ -3560,6 +3568,17 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
     return {
       handled: true,
       replyText: buildQaAgentReply(route),
+    };
+  }
+
+  if (route.agent === 'browser-agent') {
+    return {
+      handled: true,
+      replyText: await buildBrowserAgentReply({ ...route, rawText: text }, {
+        env,
+        text,
+        browserAutomationRunner: options.browserAutomationRunner,
+      }),
     };
   }
 

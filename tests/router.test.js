@@ -224,6 +224,33 @@ test('routeAgentIntent routes natural-language QA asset requests', () => {
   });
 });
 
+test('routeAgentIntent routes safe combined requests to multi-intent planner', () => {
+  const route = routeAgentIntent('看看两台服务器内存硬盘，顺便看今天失败任务，再发我邮箱');
+
+  assert.equal(route.agent, 'planner-agent');
+  assert.equal(route.action, 'multi-intent-plan');
+  assert.equal(route.requiresAuth, true);
+  assert.equal(route.plan.isMultiIntent, true);
+  assert.deepEqual(
+    route.plan.intents.map((intent) => intent.action),
+    ['load-summary', 'task-center-failed', 'daily-email'],
+  );
+});
+
+test('routeAgentIntent routes browser CDP and protocol automation requests', () => {
+  assert.deepEqual(routeAgentIntent('打开 https://projectku.local/login 看看登录页为什么验证码不出来'), {
+    agent: 'browser-agent',
+    action: 'browser-dry-run',
+    requiresAuth: true,
+  });
+
+  assert.deepEqual(routeAgentIntent('抓一下 http://localhost:3000/register 登录流程接口，生成接口测试用例'), {
+    agent: 'browser-agent',
+    action: 'protocol-capture-plan',
+    requiresAuth: true,
+  });
+});
+
 test('routeAgentIntent routes clerk agent office work requests', () => {
   assert.deepEqual(routeAgentIntent('文员，统计今天 Hermes 和 OpenClaw 谁更费 token'), {
     agent: 'clerk-agent',

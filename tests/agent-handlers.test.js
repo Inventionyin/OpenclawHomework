@@ -10,6 +10,8 @@ const {
   buildClerkFileChannelReply,
   buildImageChannelReply,
   buildModelChannelReply,
+  buildBrowserAgentReply,
+  buildMultiIntentPlanReply,
   buildCapabilityGuideReply,
   buildBrainGuideReply,
   buildDocAgentReply,
@@ -70,6 +72,38 @@ test('buildPlannerClarifyReply turns vague requests into natural choices', () =>
   assert.match(reply, /自然语言/);
   assert.match(reply, /服务器/);
   assert.match(reply, /UI 自动化/);
+});
+
+test('buildMultiIntentPlanReply explains ordered safe sub-intents', () => {
+  const reply = buildMultiIntentPlanReply({
+    plan: {
+      confidence: 'high',
+      intents: [
+        { agent: 'ops-agent', action: 'load-summary', reason: '看服务器资源' },
+        { agent: 'clerk-agent', action: 'task-center-failed', reason: '看失败任务' },
+        { agent: 'clerk-agent', action: 'daily-email', reason: '发日报邮件' },
+      ],
+      blocked: [],
+    },
+  });
+
+  assert.match(reply, /多意图计划/);
+  assert.match(reply, /服务器资源/);
+  assert.match(reply, /失败任务/);
+  assert.match(reply, /日报邮件/);
+  assert.match(reply, /高风险操作/);
+});
+
+test('buildBrowserAgentReply renders browser automation dry-run plan', async () => {
+  const reply = await buildBrowserAgentReply({
+    action: 'protocol-capture-plan',
+    rawText: '抓一下 http://localhost:3000/register 登录流程接口，生成接口测试用例',
+  });
+
+  assert.match(reply, /浏览器自动化计划/);
+  assert.match(reply, /localhost:3000/);
+  assert.match(reply, /captureNetworkOrProtocol/);
+  assert.match(reply, /dry-run/);
 });
 
 test('buildClerkAgentReply summarizes token usage from ledger lines', () => {

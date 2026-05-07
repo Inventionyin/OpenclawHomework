@@ -4,6 +4,9 @@ const {
 const {
   parseModelChannelConfig,
 } = require('../model-channel-config');
+const {
+  planMultiIntent,
+} = require('./multi-intent-planner');
 
 function normalizeText(text) {
   return extractCommandText(stripMention(String(text ?? '').trim()));
@@ -741,6 +744,40 @@ function routeBroadPlannerIntent(text) {
   return null;
 }
 
+function routeMultiIntentPlan(text) {
+  if (routeBroadPlannerIntent(text)) {
+    return null;
+  }
+  const plan = planMultiIntent(text);
+  if (!plan.isMultiIntent || plan.blocked.length) {
+    return null;
+  }
+  return {
+    agent: 'planner-agent',
+    action: 'multi-intent-plan',
+    confidence: plan.confidence,
+    plan,
+    requiresAuth: true,
+  };
+}
+
+function routeBrowserAutomationIntent(text) {
+  const normalized = String(text ?? '').trim().toLowerCase();
+  const mentionsBrowser = /(浏览器|页面|网页|cdp|har|协议|接口|network|console|控制台|截图|验证码|登录页|注册页|登录流程|注册流程|抓包|抓一下|打开\s*https?:\/\/|https?:\/\/)/i.test(normalized);
+  const wantsProtocol = /(cdp|har|协议|接口|network|抓包|抓一下|请求|响应|登录流程接口|注册流程接口)/i.test(normalized);
+  const wantsBrowser = /(打开|看看|检查|定位|调试|截图|验证码|登录页|注册页|console|控制台|页面)/i.test(normalized);
+
+  if (!mentionsBrowser || (!wantsProtocol && !wantsBrowser)) {
+    return null;
+  }
+
+  return {
+    agent: 'browser-agent',
+    action: wantsProtocol ? 'protocol-capture-plan' : 'browser-dry-run',
+    requiresAuth: true,
+  };
+}
+
 function routeAgentIntent(text) {
   const original = stripMention(text);
   if (looksLikeShortContinuationIntent(original) && !hasClerkWakeWord(text)) {
@@ -909,6 +946,16 @@ function routeAgentIntent(text) {
     return qaAssetRoute;
   }
 
+  const multiIntentRoute = routeMultiIntentPlan(original);
+  if (multiIntentRoute) {
+    return multiIntentRoute;
+  }
+
+  const browserAutomationRoute = routeBrowserAutomationIntent(original);
+  if (browserAutomationRoute) {
+    return browserAutomationRoute;
+  }
+
   const naturalLanguageOpsRoute = routeNaturalLanguageOps(normalized);
   if (naturalLanguageOpsRoute) {
     return naturalLanguageOpsRoute;
@@ -951,6 +998,7 @@ module.exports = {
   routeAgentIntent,
   routeBrainMemoryIntent,
   routeBroadPlannerIntent,
+  routeBrowserAutomationIntent,
   routeCapabilityIntent,
   routeEcosystemIntent,
   looksLikeShortContinuationIntent,
@@ -959,5 +1007,6 @@ module.exports = {
   routeOfficeIntent,
   routeQaAssetIntent,
   routeNaturalLanguageOps,
+  routeMultiIntentPlan,
   stripMention,
 };

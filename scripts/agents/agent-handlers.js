@@ -57,6 +57,9 @@ const {
   parseRegistrationTaskRequest,
 } = require('../browser-registration-runner');
 const {
+  runBrowserAutomationTask,
+} = require('../browser-cdp-executor');
+const {
   listFailedTasks,
   listTodayTasks,
   summarizeTaskCenterBrain,
@@ -257,6 +260,61 @@ function buildPlannerClarifyReply(text = '') {
     '',
     `我刚收到的是：${trimForReply(text, 120)}`,
   ].join('\n');
+}
+
+function buildMultiIntentPlanReply(route = {}) {
+  const plan = route.plan || {};
+  const intents = Array.isArray(plan.intents) ? plan.intents : [];
+  const lines = [
+    '多意图计划：我识别到你这句话里有多个低风险任务，会按顺序拆开处理。',
+    `- 置信度：${plan.confidence || route.confidence || 'medium'}`,
+  ];
+
+  if (intents.length) {
+    lines.push('', '执行顺序：');
+    intents.forEach((intent, index) => {
+      lines.push(`${index + 1}. ${intent.agent || 'unknown'} / ${intent.action || 'unknown'}：${sanitizeReplyField(intent.reason || '待处理')}`);
+    });
+  }
+
+  if (Array.isArray(plan.blocked) && plan.blocked.length) {
+    lines.push('', `已拦截：${plan.blocked.map((item) => sanitizeReplyField(item)).join('、')}`);
+  }
+
+  lines.push('', '高风险操作不会混在多意图里执行；重启、修复、清理、shell 命令都需要你单独明确确认。');
+  return lines.join('\n');
+}
+
+async function buildBrowserAgentReply(route = {}, options = {}) {
+  const runner = options.browserAutomationRunner || runBrowserAutomationTask;
+  const result = await runner({
+    text: route.rawText || options.text || '',
+    dryRun: route.dryRun !== false,
+    env: options.env || process.env,
+  });
+  const plan = result.plan || {};
+  const lines = [
+    '浏览器自动化计划：',
+    `- 模式：${result.mode || 'dry-run'}`,
+    `- 目标：${plan.url || result.request?.url || '未提供 URL，会先做页面检查计划'}`,
+  ];
+
+  if (plan.blocked || result.mode === 'blocked') {
+    lines.push(`- 状态：已拦截`);
+    lines.push(`- 原因：${sanitizeReplyField(result.reason || plan.reason || '目标不在允许列表')}`);
+    return lines.join('\n');
+  }
+
+  const steps = Array.isArray(result.steps) ? result.steps : [];
+  if (steps.length) {
+    lines.push('', '步骤：');
+    steps.forEach((step, index) => {
+      lines.push(`${index + 1}. ${sanitizeReplyField(step.type || 'step')} - ${sanitizeReplyField(step.detail || step.url || '')}`);
+    });
+  }
+
+  lines.push('', '当前先以 dry-run 生成可执行计划；接下来接 Playwright/CDP 后，会把 console、network/HAR、截图和失败点写入协议资产库。');
+  return lines.join('\n');
 }
 
 function defaultReadUsageLedger(env = process.env, limit = 200) {
@@ -1434,6 +1492,7 @@ module.exports = {
   ALLOWED_OPS_ACTIONS,
   buildCapabilityGuideReply,
   buildBrainGuideReply,
+  buildBrowserAgentReply,
   buildChatAgentPrompt,
   buildClerkAgentReply,
   buildClerkFileChannelReply,
@@ -1446,6 +1505,7 @@ module.exports = {
   buildClerkWorkbenchReply,
   buildImageChannelReply,
   buildModelChannelReply,
+  buildMultiIntentPlanReply,
   buildDocAgentReply,
   buildEcosystemAgentReply,
   buildMemoryAgentReply,
