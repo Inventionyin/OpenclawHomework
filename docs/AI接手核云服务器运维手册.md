@@ -439,10 +439,22 @@ FEISHU_USAGE_LEDGER_PATH=/var/log/openclaw-homework/usage-ledger.jsonl
 
 `trend-token-factory` 和 `scheduled-token-lab` 是互补关系：前者围绕当天热点项目/新闻消耗 token 做分析，后者围绕电商 QA/客服训练数据消耗 token 做样本生产。它们都可以失败后保留部分产物，主动日报和任务中枢会展示失败数和下一步复盘方向。
 
+2026-05-07 Hermes 生产策略：Hermes 只保留 `hermes-daily-agent-pipeline.timer` 作为每日主动任务总入口，避免 `hermes-trend-token-factory.timer`、`hermes-scheduled-token-lab.timer`、`hermes-proactive-daily-digest.timer` 与总流水线重复烧 token 或重复发日报。这三个独立 timer 已停用，服务文件保留；调试时可以手动 `systemctl start xxx.service`，不要同时重新启用 timer。
+
+Hermes 当前保留的定时器：
+
+```text
+hermes-daily-agent-pipeline.timer      每天 08:45 跑总流水线
+hermes-token-factory-worker.timer      每分钟恢复后台 token-factory 队列
+hermes-homework-watchdog.timer         每 5 分钟检查桥服务健康
+hermes-ecosystem-maintenance.timer     每日生态/技能巡检
+```
+
 每日流水线会把最终状态写入：
 
 ```text
-/var/lib/openclaw-homework/daily-agent-pipeline-state.json
+/var/lib/openclaw-homework/hermes-daily-agent-pipeline-state.json（Hermes 生产）
+/var/lib/openclaw-homework/daily-agent-pipeline-state.json（兼容旧路径）
 data/memory/daily-agent-pipeline-state.json（本地开发默认）
 ```
 
