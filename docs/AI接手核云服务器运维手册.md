@@ -206,7 +206,7 @@ Hermes 邮件网关的关键配置在：
 - `hermes-clawemail-inbox-notifier.service` 首次启动只记录已有邮件，不推送历史邮件；之后新邮件才推飞书，避免一次性刷屏。
 - 2026-05-07 起，收信通知器会在状态文件里保留最近邮件快照 `recentMessages`，供文员 Agent 的 ClawEmail 邮箱工作台读取。
 - 邮箱工作台不会直接自动回复高风险邮件；客户咨询、售后/退款、商务合作、招聘/求职、系统告警、异常邮件都会进入待审批列表。
-- 飞书口令：`文员，查看今天邮箱工作台`、`文员，列出待审批邮件`、`文员，生成 ClawEmail 每日报告`。
+- 飞书口令：`文员，查看今天邮箱工作台`、`文员，列出待审批邮件`、`文员，审批第 1 封并发送`、`文员，忽略第 1 封`、`文员，把第 1 封整理成客服训练数据`、`文员，生成 ClawEmail 每日报告`。
 - `生成 ClawEmail 每日报告` 只是预览；真实外发仍然使用 `文员，发送今天日报到邮箱`，走现有 `sendDailySummaryNotification`。
 - 如果 `hermes-gateway.service` 循环重启，先看 `/root/.hermes/logs/gateway.log` 里的 IMAP/SMTP 错误，不要先怀疑模型。
 - 如果网关因为邮件连接失败反复重启，生产飞书桥梁服务通常不受影响；优先确认 `hermes-feishu-bridge` 和 `/health`。
