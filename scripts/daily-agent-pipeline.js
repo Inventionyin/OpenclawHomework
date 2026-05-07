@@ -101,6 +101,10 @@ function writeState(filePath, state) {
   writeFileSync(filePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
 }
 
+function truthyEnv(value) {
+  return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
+}
+
 function getTrendIntelOutputFile(env = process.env) {
   return env.TREND_INTEL_OUTPUT_FILE || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'trend-intel', 'latest.json');
 }
@@ -138,6 +142,35 @@ async function runPipelineStage(stage, context) {
       error: sanitizeError(error),
     };
   }
+}
+
+function resolveStageDomainSummary(stages = []) {
+  const byId = new Map(stages.map((stage) => [stage.id, stage]));
+  const toDomain = (stageId) => {
+    const stage = byId.get(stageId);
+    if (!stage) {
+      return { stageId, status: 'skipped', reason: 'stage_not_configured' };
+    }
+    const status = stage.status === 'degraded'
+      ? 'degraded'
+      : stage.status === 'completed' && stage.reason === 'completed_with_degraded_sources'
+        ? 'degraded'
+        : stage.status;
+    return {
+      stageId,
+      status,
+      reason: stage.reason || '',
+    };
+  };
+
+  return {
+    newsDigest: toDomain('news-digest'),
+    trendIntel: toDomain('trend-intel'),
+    trendTokenFactory: toDomain('trend-token-factory'),
+    uiAutomation: toDomain('scheduled-ui'),
+    tokenLab: toDomain('scheduled-token-lab'),
+    dailyDigest: toDomain('proactive-daily-digest'),
+  };
 }
 
 async function runDailyAgentPipeline(options = {}) {
@@ -221,19 +254,38 @@ async function runDailyAgentPipeline(options = {}) {
 
   const stages = [];
   for (const stage of stageDefs) {
-    stages.push(await runPipelineStage(stage, { day, env }));
+    const stageResult = await runPipelineStage(stage, { day, env });
+    if (stageResult.id === 'scheduled-ui' && stageResult.status === 'failed' && truthyEnv(env.DAILY_PIPELINE_UI_OPTIONAL)) {
+      stages.push({
+        ...stageResult,
+        status: 'degraded',
+        reason: 'optional_stage_failed',
+      });
+      continue;
+    }
+    stages.push(stageResult);
   }
 
   const failedStages = stages.filter((stage) => stage.status === 'failed');
   const completedStages = stages.filter((stage) => stage.status === 'completed');
+  const degradedStages = stages.filter((stage) => stage.status === 'degraded');
   const ok = failedStages.length === 0;
   const finalEvent = ok ? 'completed' : 'completed_with_failures';
+  const domains = resolveStageDomainSummary(stages);
+  const pipelineStatus = failedStages.length
+    ? 'failed'
+    : degradedStages.length
+      ? 'completed_with_degraded'
+      : 'completed';
   writeState(stateFile, {
     lastRunDay: day,
     lastRunAt: new Date().toISOString(),
     totalStages: stages.length,
     completedStages: completedStages.length,
     failedStages: failedStages.length,
+    degradedStages: degradedStages.length,
+    pipelineStatus,
+    domains,
     stageStatuses: stages.map((stage) => ({
       id: stage.id,
       status: stage.status,
@@ -251,6 +303,8 @@ async function runDailyAgentPipeline(options = {}) {
       totalStages: stages.length,
       completedStages: completedStages.length,
       failedStages: failedStages.length,
+      degradedStages: degradedStages.length,
+      pipelineStatus,
       failedStageIds: failedStages.map((stage) => stage.id).join(','),
     },
     error: failedStages.length ? failedStages.map((stage) => `${stage.id}: ${stage.error || stage.reason}`).join(' | ') : '',
@@ -265,6 +319,9 @@ async function runDailyAgentPipeline(options = {}) {
       totalStages: stages.length,
       completedStages: completedStages.length,
       failedStages: failedStages.length,
+      degradedStages: degradedStages.length,
+      pipelineStatus,
+      domains,
     },
   };
 }

@@ -259,6 +259,33 @@ function routeClerkIntent(text) {
     return { agent: 'clerk-agent', action: 'mailbox-approvals', requiresAuth: true };
   }
 
+  const approvalActionMatch = original.match(/(?:文员[，,\s]*)?(审批|忽略|无视).{0,10}第\s*(\d+)\s*封(?:并发送|并外发|并归档|邮件)?/i);
+  if (approvalActionMatch) {
+    const keyword = approvalActionMatch[1];
+    const index = Number(approvalActionMatch[2]);
+    let approvalAction = 'approve';
+    if (/(忽略|无视)/i.test(keyword)) approvalAction = 'ignore';
+    if (/(转成|整理成|转为)/i.test(keyword)) approvalAction = 'training-data';
+    return {
+      agent: 'clerk-agent',
+      action: 'mailbox-approval-action',
+      approvalAction,
+      index,
+      requiresAuth: true,
+    };
+  }
+
+  const approvalTrainingMatch = original.match(/(?:文员[，,\s]*)?(?:把|将)?第\s*(\d+)\s*封.{0,12}(整理成|转成|转为).{0,8}(客服)?训练数据/i);
+  if (approvalTrainingMatch) {
+    return {
+      agent: 'clerk-agent',
+      action: 'mailbox-approval-action',
+      approvalAction: 'training-data',
+      index: Number(approvalTrainingMatch[1]),
+      requiresAuth: true,
+    };
+  }
+
   if (!/(发送|发到|发给|寄到|寄给|外发)/i.test(normalized)
     && (/(clawemail|邮箱|邮件).{0,24}(每日报告|日结|每日总结|生成报告)|(生成|查看|预览|制作).{0,12}(clawemail|邮箱|邮件).{0,24}(日报|报告)|(每日报告|日结|每日总结|生成报告).{0,24}(clawemail|邮箱|邮件)/i.test(normalized))) {
     return { agent: 'clerk-agent', action: 'mailbox-daily-report', requiresAuth: true };
@@ -310,6 +337,11 @@ function routeClerkIntent(text) {
     return { agent: 'clerk-agent', action: 'multi-agent-lab', requiresAuth: true };
   }
 
+  if (/(任务中枢|任务中心|主控脑).{0,10}(主控脑|大脑|总览|全景|复盘|下一步|历史|脑图)/i.test(normalized)
+    || /(今日任务|历史任务|失败复盘|下一步计划).{0,12}(中枢|任务中心|主控脑)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'task-center-brain', requiresAuth: true };
+  }
+
   if (/(邮箱平台|邮箱|clawemail).{0,24}(怎么玩|玩法|调度|归档|验证码|结合|分工|工作台)/i.test(normalized)
     || /(怎么玩|玩法|调度|归档|验证码|结合|分工|工作台).{0,24}(邮箱平台|邮箱|clawemail)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'mailbox-workbench', requiresAuth: true };
@@ -351,7 +383,6 @@ function routeClerkIntent(text) {
     || /(任务中枢|任务中心).{0,12}(今天|今日|待办|任务)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'task-center-today', requiresAuth: true };
   }
-
   if (/(失败任务|失败的任务|失败清单|失败列表).{0,12}(查看|汇总|有哪些|整理)?/i.test(normalized)
     || /(查看|汇总|整理).{0,12}(失败任务|失败清单|失败列表)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'task-center-failed', requiresAuth: true };
@@ -432,6 +463,30 @@ function routeOfficeIntent(text) {
   const emailLike = emailLikeMatch ? emailLikeMatch[1].replace(/[，。！!？?,;；]+$/u, '') : '';
   const recipientMatch = original.match(/\b([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\b/i);
   const recipientEmail = recipientMatch ? recipientMatch[1] : '';
+
+  const officeApprovalActionMatch = original.match(/(?:审批|忽略|无视).{0,10}第\s*(\d+)\s*封(?:并发送|并外发|并归档|邮件)?/i);
+  if (officeApprovalActionMatch) {
+    let approvalAction = 'approve';
+    if (/(忽略|无视)/i.test(original)) approvalAction = 'ignore';
+    return {
+      agent: 'clerk-agent',
+      action: 'mailbox-approval-action',
+      approvalAction,
+      index: Number(officeApprovalActionMatch[1]),
+      requiresAuth: true,
+    };
+  }
+
+  const officeApprovalTrainingMatch = original.match(/(?:把|将)?第\s*(\d+)\s*封.{0,12}(整理成|转成|转为).{0,8}(客服)?训练数据/i);
+  if (officeApprovalTrainingMatch) {
+    return {
+      agent: 'clerk-agent',
+      action: 'mailbox-approval-action',
+      approvalAction: 'training-data',
+      index: Number(officeApprovalTrainingMatch[1]),
+      requiresAuth: true,
+    };
+  }
 
   if (/(继续|接着|延续).{0,12}(昨天|昨晚|昨日).{0,12}(没跑完|没做完|没完成).{0,12}(token|token\s*工厂|token-factory)/i.test(normalized)
     || /(token|token\s*工厂|token-factory).{0,18}(继续|接着).{0,12}(昨天|昨晚|昨日)/i.test(normalized)) {
@@ -526,6 +581,10 @@ function routeOfficeIntent(text) {
     || /(今日|今天).{0,10}(总结).{0,10}(明日|明天).{0,10}(计划)/i.test(normalized)
     || /(明日|明天).{0,10}(计划).{0,10}(今日|今天).{0,10}(总结)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'todo-summary', requiresAuth: true };
+  }
+  if (/(任务中枢|任务中心|主控脑).{0,10}(主控脑|大脑|总览|全景|复盘|下一步|历史|脑图)/i.test(normalized)
+    || /(今日任务|历史任务|失败复盘|下一步计划).{0,12}(中枢|任务中心|主控脑)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'task-center-brain', requiresAuth: true };
   }
 
   return null;

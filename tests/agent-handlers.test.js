@@ -327,6 +327,32 @@ test('buildClerkAgentReply lists mailbox approvals from workbench state', () => 
   assert.match(reply, /默认不会自动批准/);
 });
 
+test('buildClerkAgentReply handles mailbox approval action', () => {
+  const reply = buildClerkAgentReply({
+    action: 'mailbox-approval-action',
+    approvalAction: 'approve',
+    index: 1,
+  }, {
+    readInboxMessages: () => [
+      {
+        uid: 'm-1',
+        from: 'buyer@example.com',
+        subject: '退款处理',
+        text: '我要退款',
+      },
+    ],
+    readMailLedger: () => [],
+    now: new Date('2026-05-07T12:00:00.000Z'),
+    env: {
+      LOCAL_PROJECT_DIR: '/tmp/openclaw-homework-test',
+      MAIL_APPROVAL_QUEUE_FILE: '/tmp/openclaw-homework-test/mail-approval-queue.json',
+    },
+  });
+
+  assert.match(reply, /已审批第 1 封/);
+  assert.match(reply, /不会自动对外发信/);
+});
+
 test('buildClerkAgentReply renders ClawEmail daily report preview', () => {
   const reply = buildClerkAgentReply({ action: 'mailbox-daily-report' }, {
     readInboxMessages: () => [
@@ -616,6 +642,26 @@ test('buildClerkAgentReply supports continue yesterday suggestion', () => {
   assert.match(reply, /继续昨天任务建议/);
   assert.match(reply, /可恢复任务：1/);
   assert.match(reply, /tf-z/);
+});
+
+test('buildClerkAgentReply renders task center brain summary', () => {
+  const reply = buildClerkAgentReply({ action: 'task-center-brain' }, {
+    summarizeTaskCenterBrain: () => ({
+      today: { summaryText: '今天任务 4 个，完成 2 个，失败 1 个。' },
+      history: { summaryText: '近 7 天历史任务 18 个。' },
+      failureReview: { summaryText: '最近失败任务 2 个。' },
+      nextPlan: {
+        items: ['先复盘失败任务', '再补一轮 UI 自动化'],
+        quickCommands: ['文员，查看失败任务', '文员，启动今天的自动流水线'],
+      },
+    }),
+  });
+
+  assert.match(reply, /任务中枢主控脑/);
+  assert.match(reply, /今日/);
+  assert.match(reply, /历史/);
+  assert.match(reply, /失败复盘/);
+  assert.match(reply, /下一步计划/);
 });
 
 test('buildClerkAgentReply explains multi-agent lab before execution', () => {

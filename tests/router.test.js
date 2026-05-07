@@ -269,6 +269,27 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'mailbox-approvals',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，审批第 1 封并发送'), {
+    agent: 'clerk-agent',
+    action: 'mailbox-approval-action',
+    approvalAction: 'approve',
+    index: 1,
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，忽略第 2 封'), {
+    agent: 'clerk-agent',
+    action: 'mailbox-approval-action',
+    approvalAction: 'ignore',
+    index: 2,
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，把第 1 封整理成客服训练数据'), {
+    agent: 'clerk-agent',
+    action: 'mailbox-approval-action',
+    approvalAction: 'training-data',
+    index: 1,
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，生成 ClawEmail 每日报告'), {
     agent: 'clerk-agent',
     action: 'mailbox-daily-report',
@@ -372,6 +393,11 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
   assert.deepEqual(routeAgentIntent('文员，查看今天任务中枢'), {
     agent: 'clerk-agent',
     action: 'task-center-today',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，查看任务中枢主控脑'), {
+    agent: 'clerk-agent',
+    action: 'task-center-brain',
     requiresAuth: true,
   });
   assert.deepEqual(routeAgentIntent('文员，启动今天的自动流水线'), {
@@ -483,6 +509,27 @@ test('routeAgentIntent routes office work without requiring clerk wake word', ()
   assert.deepEqual(routeAgentIntent('列出待审批邮件'), {
     agent: 'clerk-agent',
     action: 'mailbox-approvals',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('审批第 1 封并发送'), {
+    agent: 'clerk-agent',
+    action: 'mailbox-approval-action',
+    approvalAction: 'approve',
+    index: 1,
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('忽略第 1 封'), {
+    agent: 'clerk-agent',
+    action: 'mailbox-approval-action',
+    approvalAction: 'ignore',
+    index: 1,
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('把第 1 封整理成客服训练数据'), {
+    agent: 'clerk-agent',
+    action: 'mailbox-approval-action',
+    approvalAction: 'training-data',
+    index: 1,
     requiresAuth: true,
   });
   assert.deepEqual(routeAgentIntent('生成 ClawEmail 每日报告'), {

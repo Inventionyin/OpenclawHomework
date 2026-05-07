@@ -190,3 +190,54 @@ test('runDailyAgentPipeline writes state file when provided', async () => {
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('runDailyAgentPipeline returns readable domain summary for trend, token, ui and daily digest', async () => {
+  const result = await runDailyAgentPipeline({
+    force: true,
+    day: '2026-05-06',
+    env: {
+      TOKEN_FACTORY_TASK_DIR: join(tmpdir(), 'daily-agent-pipeline-summary-tasks'),
+    },
+    runNewsDigest: async () => ({ report: { total: 4 } }),
+    runTrendIntel: async () => ({ report: { total: 5 }, reason: 'completed_with_degraded_sources' }),
+    runTrendTokenFactory: async () => ({ report: { totalJobs: 3, totalTokens: 456 } }),
+    runScheduledUi: async () => ({ dispatched: true, state: { status: 'queued' }, reason: 'queued_dispatch' }),
+    runScheduledTokenLab: async () => ({ ran: true, state: { totalJobs: 9, totalTokens: 999 } }),
+    runDigest: async () => ({ sent: true, reason: '' }),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.summary.pipelineStatus, 'completed');
+  assert.equal(result.summary.domains.uiAutomation.status, 'completed');
+  assert.equal(result.summary.domains.trendIntel.status, 'degraded');
+  assert.equal(result.summary.domains.trendIntel.stageId, 'trend-intel');
+  assert.equal(result.summary.domains.trendTokenFactory.status, 'completed');
+  assert.equal(result.summary.domains.dailyDigest.status, 'completed');
+});
+
+test('runDailyAgentPipeline degrades optional ui stage instead of failing pipeline', async () => {
+  const result = await runDailyAgentPipeline({
+    force: true,
+    day: '2026-05-06',
+    env: {
+      TOKEN_FACTORY_TASK_DIR: join(tmpdir(), 'daily-agent-pipeline-ui-optional-tasks'),
+      DAILY_PIPELINE_UI_OPTIONAL: 'true',
+    },
+    runNewsDigest: async () => ({ report: { total: 2 } }),
+    runTrendIntel: async () => ({ report: { total: 2 } }),
+    runTrendTokenFactory: async () => ({ report: { totalJobs: 2 } }),
+    runScheduledUi: async () => {
+      throw new Error('ui runner unavailable');
+    },
+    runScheduledTokenLab: async () => ({ ran: true }),
+    runDigest: async () => ({ sent: true }),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.summary.failedStages, 0);
+  assert.equal(result.summary.degradedStages, 1);
+  const uiStage = result.stages.find((stage) => stage.id === 'scheduled-ui');
+  assert.equal(uiStage.status, 'degraded');
+  assert.equal(uiStage.reason, 'optional_stage_failed');
+  assert.equal(result.summary.domains.uiAutomation.status, 'degraded');
+});

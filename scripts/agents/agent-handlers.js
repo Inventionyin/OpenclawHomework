@@ -32,6 +32,12 @@ const {
   formatMailWorkbenchReply,
 } = require('../mail-workbench');
 const {
+  applyMailApprovalAction,
+  buildApprovalQueueFromMessages,
+  getMailApprovalQueueFile,
+  writeMailApprovalQueue,
+} = require('../mail-approval-queue');
+const {
   resolveMailboxAction,
 } = require('../mailbox-action-router');
 const {
@@ -53,6 +59,7 @@ const {
 const {
   listFailedTasks,
   listTodayTasks,
+  summarizeTaskCenterBrain,
   summarizeDailyPlan,
   summarizeDailyPipeline,
   summarizeTasks,
@@ -510,6 +517,56 @@ function buildClerkMailboxTasksReply(env = process.env) {
   ].join('\n');
 }
 
+function buildTaskCenterBrainReply(options = {}) {
+  const brain = (options.summarizeTaskCenterBrain || summarizeTaskCenterBrain)({
+    env: options.env || process.env,
+    now: options.now || new Date(),
+  });
+  const today = brain.today || {};
+  const history = brain.history || {};
+  const failureReview = brain.failureReview || {};
+  const nextPlan = brain.nextPlan || {};
+  const lines = [
+    '任务中枢主控脑：',
+    `- 今日：${today.summaryText || '暂无'}`,
+    `- 历史：${history.summaryText || '暂无历史摘要'}`,
+    `- 失败复盘：${failureReview.summaryText || '暂无失败任务'}`,
+    '下一步计划：',
+    ...((nextPlan.items || []).slice(0, 5).map((item) => `- ${item}`)),
+    '快捷指令：',
+    ...((nextPlan.quickCommands || []).slice(0, 5).map((item) => `- ${item}`)),
+  ];
+  return lines.join('\n');
+}
+
+function buildMailboxApprovalActionReply(route = {}, options = {}) {
+  const env = options.env || process.env;
+  const queueFile = getMailApprovalQueueFile(env);
+  const workbench = (options.buildMailWorkbenchReportFromEnv || buildMailWorkbenchReportFromEnv)(env, options);
+  const queue = buildApprovalQueueFromMessages(workbench.inbox || [], { now: (options.now || new Date()).toISOString() });
+  writeMailApprovalQueue(queue, queueFile);
+
+  const actionResult = applyMailApprovalAction({
+    action: route.approvalAction || 'approve',
+    index: Number(route.index || 0),
+  }, {
+    env,
+    queueFile,
+    now: (options.now || new Date()).toISOString(),
+  });
+
+  if (!actionResult.ok) return actionResult.reply;
+  const extra = [];
+  if (route.approvalAction === 'approve') {
+    extra.push('继续处理可以说：审批第 2 封并发送。');
+  } else if (route.approvalAction === 'ignore') {
+    extra.push('继续处理可以说：审批第 1 封并发送。');
+  } else if (route.approvalAction === 'training-data' && actionResult.trainingSample) {
+    extra.push(`训练数据主题：${actionResult.trainingSample.source?.subject || '无主题'}`);
+  }
+  return [actionResult.reply, ...extra].join('\n');
+}
+
 function buildTaskCenterTodayReply(options = {}) {
   const env = options.env || process.env;
   const tasks = (options.listTodayTasks || listTodayTasks)({
@@ -758,7 +815,14 @@ function buildClerkAgentReply(route = {}, options = {}) {
 
   if (route.action === 'mailbox-approvals') {
     const workbench = (options.buildMailWorkbenchReportFromEnv || buildMailWorkbenchReportFromEnv)(options.env || process.env, options);
+    const queueFile = getMailApprovalQueueFile(options.env || process.env);
+    const queue = buildApprovalQueueFromMessages(workbench.inbox || [], { now: (options.now || new Date()).toISOString() });
+    writeMailApprovalQueue(queue, queueFile);
     return formatMailWorkbenchReply(workbench, { mode: 'pending' });
+  }
+
+  if (route.action === 'mailbox-approval-action') {
+    return buildMailboxApprovalActionReply(route, options);
   }
 
   if (route.action === 'mailbox-daily-report') {
@@ -895,6 +959,10 @@ function buildClerkAgentReply(route = {}, options = {}) {
 
   if (route.action === 'task-center-continue-yesterday') {
     return buildTaskCenterContinueYesterdayReply(options);
+  }
+
+  if (route.action === 'task-center-brain') {
+    return buildTaskCenterBrainReply(options);
   }
 
   if (route.action === 'multi-agent-lab') {
