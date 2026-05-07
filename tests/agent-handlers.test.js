@@ -910,6 +910,49 @@ test('buildClerkAgentReply renders task center brain summary', () => {
   assert.match(reply, /下一步计划/);
 });
 
+test('buildClerkAgentReply renders task center brain with pipeline and safe fallback', () => {
+  const reply = buildClerkAgentReply({ action: 'task-center-brain' }, {
+    summarizeTaskCenterBrain: () => ({
+      today: { summaryText: '今日 UI 任务 1 个。' },
+      history: { summaryText: '近 7 天历史任务 8 个。' },
+      failureReview: {
+        summaryText: '最近失败集中在 scheduled-ui。',
+        items: [{ id: 'ui-fail', type: 'ui-automation', error: 'runner_failed' }],
+      },
+      nextPlan: {
+        items: ['先修复 scheduled-ui。'],
+        quickCommands: ['文员，启动今天的自动流水线'],
+      },
+    }),
+    summarizeDailyPipeline: () => ({
+      day: '2026-05-07',
+      totalStages: 4,
+      completedStages: 3,
+      failedStages: 1,
+      failedStageIds: ['scheduled-ui'],
+      nextAction: '先修复 scheduled-ui，再重跑每日流水线。',
+    }),
+  });
+
+  assert.match(reply, /当前卡点/);
+  assert.match(reply, /ui-fail/);
+  assert.match(reply, /每日流水线：2026-05-07，3\/4 阶段完成，失败 1/);
+  assert.match(reply, /先修复 scheduled-ui，再重跑每日流水线/);
+});
+
+test('buildClerkAgentReply task center brain degrades invalid data safely', () => {
+  const reply = buildClerkAgentReply({ action: 'task-center-brain' }, {
+    summarizeTaskCenterBrain: () => {
+      throw new Error('brain broken');
+    },
+    summarizeDailyPipeline: () => 'bad pipeline',
+  });
+
+  assert.match(reply, /任务中枢主控脑/);
+  assert.match(reply, /暂无/);
+  assert.match(reply, /降级提示：task_center_brain_unavailable/);
+});
+
 test('buildClerkAgentReply explains multi-agent lab before execution', () => {
   const reply = buildClerkAgentReply({ action: 'multi-agent-lab' });
   assert.match(reply, /多 Agent 训练场/);

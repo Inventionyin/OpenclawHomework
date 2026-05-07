@@ -247,6 +247,16 @@ function hasClerkWakeWord(text) {
   return /^(?:@\S+\s*)?(?:文员|秘书|助理|clerk|office)(?:[，,.\s:：。]+|$)/i.test(String(text ?? '').trim());
 }
 
+function looksLikeTaskCenterBrainIntent(text) {
+  const normalized = String(text ?? '').trim().toLowerCase();
+  return /(任务中枢|任务中心|主控脑|项目大脑|任务驾驶舱).{0,12}(主控脑|大脑|总览|全景|全局|复盘|下一步|历史|脑图|总结|汇总|驾驶舱)/i.test(normalized)
+    || /(今日任务|今天任务|历史任务|失败复盘|下一步计划).{0,16}(主控脑|全景|总览|汇总|总结|复盘|一起)/i.test(normalized)
+    || /(失败复盘).{0,16}(下一步).{0,16}(汇总|总结|一起)/i.test(normalized)
+    || /(下一步).{0,16}(失败复盘).{0,16}(汇总|总结|一起)/i.test(normalized)
+    || /主控脑.{0,12}(总结|汇总|看一下|看看)/i.test(normalized)
+    || /(今天任务).{0,8}(全景图|全景|驾驶舱)/i.test(normalized);
+}
+
 function routeClerkIntent(text) {
   const original = stripMention(String(text ?? '').trim());
   const normalized = original.toLowerCase();
@@ -256,6 +266,10 @@ function routeClerkIntent(text) {
   const recipientEmail = recipientMatch ? recipientMatch[1] : '';
   if (!/(文员|秘书|助理|clerk|office)/i.test(normalized)) {
     return null;
+  }
+
+  if (looksLikeTaskCenterBrainIntent(original)) {
+    return { agent: 'clerk-agent', action: 'task-center-brain', requiresAuth: true };
   }
 
   if (/(projectku-web|projectku).{0,30}(注册|验证码|验证).{0,20}(测试|跑一轮|测一下|执行)/i.test(normalized)
@@ -360,8 +374,7 @@ function routeClerkIntent(text) {
     return { agent: 'clerk-agent', action: 'multi-agent-lab', requiresAuth: true };
   }
 
-  if (/(任务中枢|任务中心|主控脑).{0,10}(主控脑|大脑|总览|全景|复盘|下一步|历史|脑图)/i.test(normalized)
-    || /(今日任务|历史任务|失败复盘|下一步计划).{0,12}(中枢|任务中心|主控脑)/i.test(normalized)) {
+  if (looksLikeTaskCenterBrainIntent(original)) {
     return { agent: 'clerk-agent', action: 'task-center-brain', requiresAuth: true };
   }
 
@@ -491,6 +504,10 @@ function routeOfficeIntent(text) {
   const recipientMatch = original.match(/\b([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\b/i);
   const recipientEmail = recipientMatch ? recipientMatch[1] : '';
 
+  if (looksLikeTaskCenterBrainIntent(original)) {
+    return { agent: 'clerk-agent', action: 'task-center-brain', requiresAuth: true };
+  }
+
   const officeApprovalActionMatch = original.match(/(?:审批|忽略|无视).{0,10}第\s*(\d+)\s*封(?:并发送|并外发|并归档|邮件)?/i);
   if (officeApprovalActionMatch) {
     let approvalAction = 'approve';
@@ -613,8 +630,7 @@ function routeOfficeIntent(text) {
     || /(明日|明天).{0,10}(计划).{0,10}(今日|今天).{0,10}(总结)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'todo-summary', requiresAuth: true };
   }
-  if (/(任务中枢|任务中心|主控脑).{0,10}(主控脑|大脑|总览|全景|复盘|下一步|历史|脑图)/i.test(normalized)
-    || /(今日任务|历史任务|失败复盘|下一步计划).{0,12}(中枢|任务中心|主控脑)/i.test(normalized)) {
+  if (looksLikeTaskCenterBrainIntent(original)) {
     return { agent: 'clerk-agent', action: 'task-center-brain', requiresAuth: true };
   }
 

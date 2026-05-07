@@ -68,6 +68,12 @@ function defaultReadMailLedger(env) {
   return readMailLedgerEntries(env, 80);
 }
 
+function defaultReadTrendIntelReport(env, options = {}) {
+  const filePath = env.TREND_INTEL_OUTPUT_FILE
+    || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'trend-intel', 'latest.json');
+  return readJsonFileSafe(filePath, options.readJsonFile);
+}
+
 function toLocalDayKey(input, timezoneOffsetMinutes = 480) {
   const date = input instanceof Date ? input : new Date(input);
   if (!Number.isFinite(date.getTime())) {
@@ -243,6 +249,12 @@ function buildClerkCommandCenterState(options = {}) {
     'daily_snapshot_unavailable',
     warnings,
   );
+  const trendIntel = safeReadObject(
+    () => (options.readTrendIntelReport || defaultReadTrendIntelReport)(env, options),
+    { total: 0, learningRadar: { items: [] } },
+    '',
+    warnings,
+  );
   const runs = Array.isArray(snapshot.runs) ? snapshot.runs : [];
 
   const mergedTasks = mergeTaskDigest(tasks, taskDigest);
@@ -267,6 +279,14 @@ function buildClerkCommandCenterState(options = {}) {
       runs,
       latestRun: runs.at(-1) || null,
     },
+    trendIntel: {
+      ...trendIntel,
+      total: Number(trendIntel.total || 0),
+      learningRadar: {
+        ...(trendIntel.learningRadar || {}),
+        items: Array.isArray(trendIntel.learningRadar?.items) ? trendIntel.learningRadar.items : [],
+      },
+    },
     multiAgentSummary: loadMultiAgentSummary(env, options),
     warnings,
   };
@@ -286,6 +306,31 @@ function formatLatestRun(run) {
   const link = run.artifactsUrl || run.runUrl || '';
   const mode = [run.targetRef, run.runMode].filter(Boolean).join(' / ');
   return `最近 UI 快照：${run.conclusion || 'unknown'}${mode ? `（${mode}）` : ''}${link ? ` ${link}` : ''}`;
+}
+
+function formatUiAutomationSignal(run) {
+  if (!run) {
+    return '- UI 自动化状态：暂无最近 Actions/Allure 记录';
+  }
+  const mode = [run.targetRef, run.runMode].filter(Boolean).join(' / ');
+  const link = run.artifactsUrl || run.runUrl || '';
+  return `- UI 自动化状态：最近 ${run.conclusion || 'unknown'}${mode ? `（${mode}）` : ''}${link ? ` ${link}` : ''}`;
+}
+
+function formatTrendRadarSignal(trendIntel = {}) {
+  const items = Array.isArray(trendIntel.learningRadar?.items) ? trendIntel.learningRadar.items : [];
+  if (!items.length && !Number(trendIntel.total || 0)) {
+    return ['- 开源学习雷达：暂无可用报告'];
+  }
+  const lines = [`- 开源学习雷达：${Number(trendIntel.total || items.length || 0)} 条`];
+  const first = items[0] || {};
+  if (first.projectName || first.title) {
+    const nextStep = first.nextStep ? `，下一步：${first.nextStep}` : '';
+    const usefulFor = first.usefulFor ? `，用途：${first.usefulFor}` : '';
+    const link = first.link ? ` ${first.link}` : '';
+    lines.push(`- 雷达首选：${first.projectName || first.title}${usefulFor}${nextStep}${link}`);
+  }
+  return lines;
 }
 
 function formatPipelineSignal(pipeline = {}) {
@@ -357,7 +402,9 @@ function buildClerkCommandCenterReply(options = {}) {
     formatPipelineSignal(state.pipeline),
     ...(state.pipeline?.failureDiagnosis ? [`- ${state.pipeline.failureDiagnosis}`] : []),
     ...(state.pipeline?.nextAction ? [`- 下一步：${state.pipeline.nextAction}`] : []),
+    formatUiAutomationSignal(state.snapshot.latestRun),
     `- ${state.snapshot.latestRun ? formatLatestRun(state.snapshot.latestRun) : '日报快照：暂无最近 run'}`,
+    ...formatTrendRadarSignal(state.trendIntel),
     `- 模型账本：${state.usage.entries.length ? `${state.usage.entries.length} 条，约 ${state.usage.totalTokens} tokens（真实 ${state.usage.realTokens} / 字符估算 ${state.usage.estimatedTokens}）` : '暂无可用记录'}`,
     `- 邮件流水：${state.mail.todayEntries.length ? `今天 ${state.mail.todayEntries.length} 条` : '暂无可用记录'}`,
     ...(state.warnings.length ? [`- 降级提示：${state.warnings.join('、')}`] : []),

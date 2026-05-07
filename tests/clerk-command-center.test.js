@@ -297,6 +297,73 @@ test('buildClerkCommandCenterReply renders task-center brain sections when avail
   assert.match(reply, /文员，启动今天的自动流水线/);
 });
 
+test('buildClerkCommandCenterState gathers trend radar report when available', () => {
+  const state = buildClerkCommandCenterState({
+    summarizeDailyPlan: () => samplePlan(),
+    summarizeTasks: () => sampleTaskSummary(),
+    readUsageLedger: () => [],
+    readMailLedger: () => [],
+    readDailySummarySnapshot: () => ({ runs: [] }),
+    readTrendIntelReport: () => ({
+      generatedAt: '2026-05-07T00:00:00.000Z',
+      total: 2,
+      learningRadar: {
+        items: [
+          {
+            projectName: 'microsoft/playwright',
+            usefulFor: 'UI 自动化 / AI Agent',
+            nextStep: '看 README / 跑 demo / 借鉴测试用例',
+            link: 'https://github.com/microsoft/playwright',
+          },
+        ],
+      },
+    }),
+  });
+
+  assert.equal(state.trendIntel.total, 2);
+  assert.equal(state.trendIntel.learningRadar.items[0].projectName, 'microsoft/playwright');
+});
+
+test('buildClerkCommandCenterReply includes explicit ui and trend radar signals', () => {
+  const reply = buildClerkCommandCenterReply({
+    now: new Date('2026-05-06T04:00:00.000Z'),
+    summarizeDailyPlan: () => samplePlan(),
+    summarizeTasks: () => sampleTaskSummary(),
+    readUsageLedger: () => [],
+    readMailLedger: () => [],
+    readDailySummarySnapshot: () => ({
+      runs: [
+        {
+          id: 77,
+          conclusion: 'failure',
+          runUrl: 'https://github.com/Inventionyin/OpenclawHomework/actions/runs/77',
+          targetRef: 'main',
+          runMode: 'smoke',
+        },
+      ],
+    }),
+    readTrendIntelReport: () => ({
+      generatedAt: '2026-05-07T00:00:00.000Z',
+      total: 3,
+      learningRadar: {
+        items: [
+          {
+            projectName: 'microsoft/playwright',
+            usefulFor: 'UI 自动化 / AI Agent',
+            nextStep: '看 README / 跑 demo / 借鉴测试用例',
+            link: 'https://github.com/microsoft/playwright',
+          },
+        ],
+      },
+    }),
+  });
+
+  assert.match(reply, /UI 自动化状态：最近 failure/);
+  assert.match(reply, /开源学习雷达：3 条/);
+  assert.match(reply, /microsoft\/playwright/);
+  assert.match(reply, /借鉴测试用例/);
+});
+
 test('buildClerkCommandCenterState degrades bad ledgers and broken snapshots', () => {
   const state = buildClerkCommandCenterState({
     summarizeDailyPlan: () => samplePlan(),

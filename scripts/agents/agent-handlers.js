@@ -667,23 +667,61 @@ function buildClerkMailboxTasksReply(env = process.env) {
 }
 
 function buildTaskCenterBrainReply(options = {}) {
-  const brain = (options.summarizeTaskCenterBrain || summarizeTaskCenterBrain)({
-    env: options.env || process.env,
-    now: options.now || new Date(),
-  });
+  const warnings = [];
+  let brain = {};
+  try {
+    const result = (options.summarizeTaskCenterBrain || summarizeTaskCenterBrain)({
+      env: options.env || process.env,
+      now: options.now || new Date(),
+    });
+    brain = result && typeof result === 'object' ? result : {};
+  } catch {
+    warnings.push('task_center_brain_unavailable');
+    brain = {};
+  }
+  let pipeline = {};
+  try {
+    const result = (options.summarizeDailyPipeline || summarizeDailyPipeline)({
+      env: options.env || process.env,
+      now: options.now || new Date(),
+      type: 'daily-pipeline',
+    });
+    pipeline = result && typeof result === 'object' ? result : {};
+  } catch {
+    warnings.push('daily_pipeline_unavailable');
+    pipeline = {};
+  }
   const today = brain.today || {};
   const history = brain.history || {};
   const failureReview = brain.failureReview || {};
   const nextPlan = brain.nextPlan || {};
+  const failureItems = Array.isArray(failureReview.items) ? failureReview.items : [];
+  const nextItems = Array.isArray(nextPlan.items) ? nextPlan.items : [];
+  const quickCommands = Array.isArray(nextPlan.quickCommands) ? nextPlan.quickCommands : [];
+  const pipelineParts = [];
+  if (pipeline.day) pipelineParts.push(pipeline.day);
+  if (pipeline.totalStages) pipelineParts.push(`${Number(pipeline.completedStages || 0)}/${Number(pipeline.totalStages || 0)} 阶段完成`);
+  if (pipeline.failedStages) pipelineParts.push(`失败 ${pipeline.failedStages}`);
   const lines = [
     '任务中枢主控脑：',
     `- 今日：${today.summaryText || '暂无'}`,
     `- 历史：${history.summaryText || '暂无历史摘要'}`,
     `- 失败复盘：${failureReview.summaryText || '暂无失败任务'}`,
+    '当前卡点：',
+    ...(failureItems.length
+      ? failureItems.slice(0, 5).map((item) => `- ${sanitizeReplyField(`${item.id || 'unknown'} ${item.type || ''}${item.error ? `：${item.error}` : ''}`, 260)}`)
+      : ['- 暂无明确卡点。']),
+    '运行信号：',
+    `- 每日流水线：${pipelineParts.join('，') || '暂无运行记录'}`,
+    ...(pipeline.nextAction ? [`- 下一步：${sanitizeReplyField(pipeline.nextAction, 300)}`] : []),
     '下一步计划：',
-    ...((nextPlan.items || []).slice(0, 5).map((item) => `- ${item}`)),
+    ...(nextItems.length ? nextItems.slice(0, 5).map((item) => `- ${sanitizeReplyField(item, 260)}`) : ['- 先查看任务中枢，再按失败项、UI 自动化、日报归档推进。']),
     '快捷指令：',
-    ...((nextPlan.quickCommands || []).slice(0, 5).map((item) => `- ${item}`)),
+    ...(quickCommands.length ? quickCommands.slice(0, 5).map((item) => `- ${sanitizeReplyField(item, 180)}`) : [
+      '- 文员，查看失败任务',
+      '- 文员，启动今天的自动流水线',
+    ]),
+    ...(warnings.length ? [`降级提示：${warnings.join('、')}`] : []),
   ];
   return lines.join('\n');
 }

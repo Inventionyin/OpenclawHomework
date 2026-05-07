@@ -479,6 +479,16 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'task-center-brain',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，给我主控脑总结一下'), {
+    agent: 'clerk-agent',
+    action: 'task-center-brain',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，把失败复盘和下一步一起汇总'), {
+    agent: 'clerk-agent',
+    action: 'task-center-brain',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，启动今天的自动流水线'), {
     agent: 'clerk-agent',
     action: 'daily-pipeline',
@@ -598,6 +608,16 @@ test('routeAgentIntent routes office work without requiring clerk wake word', ()
   assert.deepEqual(routeAgentIntent('给我一屏看懂今天项目'), {
     agent: 'clerk-agent',
     action: 'command-center',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('给我主控脑总结一下'), {
+    agent: 'clerk-agent',
+    action: 'task-center-brain',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('今天任务全景图'), {
+    agent: 'clerk-agent',
+    action: 'task-center-brain',
     requiresAuth: true,
   });
   assert.deepEqual(routeAgentIntent('今天发了哪些邮件'), {
