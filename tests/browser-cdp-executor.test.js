@@ -183,6 +183,70 @@ test("live execution saves captured protocol assets when saver is provided", asy
   assert.match(result.summary, /saved 1 protocol asset/i);
 });
 
+test("live execution reads Playwright methods with the original object context", async () => {
+  const events = { console: [], response: [] };
+  const page = {
+    on(event, handler) {
+      events[event].push(handler);
+    },
+    async goto(url) {
+      const request = {
+        _url: `${url}/api/context-bound`,
+        _method: "GET",
+        _headers: { accept: "application/json" },
+        url() {
+          return this._url;
+        },
+        method() {
+          return this._method;
+        },
+        headers() {
+          return this._headers;
+        },
+      };
+      const response = {
+        _url: `${url}/api/context-bound`,
+        _status: 204,
+        _headers: { "content-type": "application/json" },
+        request() {
+          return request;
+        },
+        url() {
+          return this._url;
+        },
+        status() {
+          return this._status;
+        },
+        headers() {
+          return this._headers;
+        },
+      };
+      for (const handler of events.response) {
+        handler(response);
+      }
+    },
+    async close() {},
+  };
+  const browser = {
+    async newPage() {
+      return page;
+    },
+    async close() {},
+  };
+
+  const result = await runBrowserAutomationTask({
+    text: "真实执行 http://localhost:3000 并抓接口",
+    dryRun: false,
+    browserFactory: async () => browser,
+  });
+
+  assert.equal(result.networkAssets.length, 1);
+  assert.equal(result.networkAssets[0].url, "http://localhost:3000/api/context-bound");
+  assert.equal(result.networkAssets[0].request.url, "http://localhost:3000/api/context-bound");
+  assert.equal(result.networkAssets[0].status, 204);
+  assert.deepEqual(result.networkAssets[0].request.headers, { accept: "application/json" });
+});
+
 test("live execution without injected browser support stays not implemented", async () => {
   const result = await runBrowserAutomationTask({
     text: "Inspect https://localhost:3000/dashboard in live mode.",

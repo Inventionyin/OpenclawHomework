@@ -328,19 +328,19 @@ function normalizeConsoleMessage(message) {
 
 function normalizeProtocolAsset(response) {
   const request = typeof response?.request === "function" ? response.request() : response?.request;
-  const requestUrl = readMaybe(request?.url, request?.url);
-  const responseUrl = readMaybe(response?.url, response?.url);
-  const method = readMaybe(request?.method, request?.method) || "GET";
-  const status = Number(readMaybe(response?.status, response?.status) || 0);
-  const headers = readMaybe(response?.headers, response?.headers) || {};
-  const requestHeaders = readMaybe(request?.headers, request?.headers) || {};
+  const requestUrl = readObjectMember(request, "url");
+  const responseUrl = readObjectMember(response, "url");
+  const method = readObjectMember(request, "method") || "GET";
+  const status = Number(readObjectMember(response, "status") || 0);
+  const headers = readObjectMember(response, "headers") || {};
+  const requestHeaders = readObjectMember(request, "headers") || {};
   const startedAt =
-    readMaybe(request?.startedAt, request?.startedAt) ||
-    readMaybe(response?.startedAt, response?.startedAt) ||
+    readObjectMember(request, "startedAt") ||
+    readObjectMember(response, "startedAt") ||
     null;
   const endedAt =
-    readMaybe(response?.finishedAt, response?.finishedAt) ||
-    readMaybe(response?.endedAt, response?.endedAt) ||
+    readObjectMember(response, "finishedAt") ||
+    readObjectMember(response, "endedAt") ||
     null;
 
   return {
@@ -374,11 +374,15 @@ function computeDurationMs(startedAt, endedAt) {
   return 0;
 }
 
-function readMaybe(methodOrValue, fallback) {
-  if (typeof methodOrValue === "function") {
-    return methodOrValue.call(fallback);
+function readObjectMember(object, key) {
+  if (!object) {
+    return undefined;
   }
-  return methodOrValue;
+  const value = object[key];
+  if (typeof value === "function") {
+    return value.call(object);
+  }
+  return value;
 }
 
 function resolveScreenshotPath(input, request) {
