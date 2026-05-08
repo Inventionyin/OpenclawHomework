@@ -2884,6 +2884,7 @@ function getWechatMpConfig(env = process.env) {
   return {
     appId: env.WECHAT_MP_APP_ID || '',
     token: env.WECHAT_MP_TOKEN || '',
+    bindCode: env.WECHAT_MP_BIND_CODE || '',
     allowedOpenIds: String(env.WECHAT_MP_ALLOWED_OPENIDS || '')
       .split(',')
       .map((item) => item.trim())
@@ -2985,6 +2986,15 @@ function buildWechatMpRouteEnv(env = process.env, message = {}) {
   return routeEnv;
 }
 
+function isWechatMpBindCommand(text = '', config = getWechatMpConfig()) {
+  const normalized = String(text || '').trim();
+  if (config.bindCode) {
+    const match = normalized.match(/^绑定我\s+(.+)$/);
+    return Boolean(match && String(match[1]).trim() === config.bindCode);
+  }
+  return /^(绑定我|只允许我|限制为我|我的ID|我的id|whoami)$/i.test(normalized);
+}
+
 function trimWechatReply(text = '', limit = 900) {
   const value = String(text || '').trim() || '收到。';
   if (value.length <= limit) {
@@ -3032,6 +3042,23 @@ async function handleWechatMpWebhook(request, response, env = process.env, optio
   const payload = buildWechatSyntheticFeishuPayload(message);
   const routeEnv = buildWechatMpRouteEnv(env, message);
   const text = extractFeishuText(payload);
+  if (isWechatMpBindCommand(text, config)) {
+    const senderId = message.fromUserName || '';
+    if (!senderId) {
+      response.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8' });
+      response.end(buildWechatMpTextReplyXml(message, '没有拿到 openid，暂时不能绑定。'));
+      return true;
+    }
+    const envFile = env.WECHAT_MP_ENV_FILE || env.FEISHU_ENV_FILE || '/etc/hermes-feishu-bridge.env';
+    if (envFile) {
+      upsertEnvFileValue(envFile, 'WECHAT_MP_ALLOWED_OPENIDS', senderId);
+    }
+    routeEnv.FEISHU_ALLOWED_USER_IDS = senderId;
+    routeEnv.FEISHU_REQUIRE_BINDING = '';
+    response.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8' });
+    response.end(buildWechatMpTextReplyXml(message, `已绑定当前公众号用户。\nopenid：${senderId}`));
+    return true;
+  }
   const routeResolver = options.resolveAgentRoute || resolveAgentRoute;
   const routedReplyBuilder = options.buildRoutedAgentReply || buildRoutedAgentReply;
   const route = await routeResolver(text, routeEnv, options);
@@ -4606,6 +4633,7 @@ module.exports = {
   handleFeishuWebhook,
   handleWechatMpWebhook,
   isDuplicateFeishuEvent,
+  isWechatMpBindCommand,
   notifyFeishuRunResult,
   parseWechatMpXml,
   resolveAgentRoute,

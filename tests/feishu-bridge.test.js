@@ -53,6 +53,7 @@ const {
   buildWechatMpTextReplyXml,
   getWechatMpConfig,
   parseWechatMpXml,
+  isWechatMpBindCommand,
   verifyWechatMpSignature,
 } = require('../scripts/feishu-bridge');
 const {
@@ -109,6 +110,8 @@ test('wechat mp helpers verify signature parse xml and build text reply', () => 
   assert.equal(message.fromUserName, 'openid-a');
   assert.equal(message.content, '服务器状态');
   assert.match(buildWechatMpTextReplyXml(message, '收到 <ok>'), /&lt;ok&gt;/);
+  assert.equal(isWechatMpBindCommand('绑定我 xyz', { bindCode: 'xyz' }), true);
+  assert.equal(isWechatMpBindCommand('绑定我 abc', { bindCode: 'xyz' }), false);
 });
 
 test('parseRunUiTestCommand parses branch and run mode', () => {
@@ -3199,6 +3202,50 @@ test('createServer handles wechat mp verification and text reply', async () => {
     assert.match(body, /<!\[CDATA\[text\]\]>/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer binds wechat mp openid with bind code', async () => {
+  const token = 'wechat-test-token';
+  const timestamp = '1710000000';
+  const nonce = 'nonce-2';
+  const signature = buildWechatSignature(token, timestamp, nonce);
+  const tempDir = mkdtempSync(join(tmpdir(), 'wechat-mp-env-'));
+  const envFile = join(tempDir, 'hermes.env');
+  writeFileSync(envFile, 'WECHAT_MP_ALLOWED_OPENIDS=\n', 'utf8');
+  const server = createServer({
+    WECHAT_MP_TOKEN: token,
+    WECHAT_MP_BIND_CODE: 'bind-123',
+    WECHAT_MP_ENV_FILE: envFile,
+    FEISHU_ENV_FILE: envFile,
+  });
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const postResponse = await fetch(`http://127.0.0.1:${port}/webhook/wechat/mp?signature=${signature}&timestamp=${timestamp}&nonce=${nonce}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/xml',
+      },
+      body: [
+        '<xml>',
+        '<ToUserName><![CDATA[gh_test]]></ToUserName>',
+        '<FromUserName><![CDATA[openid-owner]]></FromUserName>',
+        '<CreateTime>1710000001</CreateTime>',
+        '<MsgType><![CDATA[text]]></MsgType>',
+        '<Content><![CDATA[绑定我 bind-123]]></Content>',
+        '<MsgId>43</MsgId>',
+        '</xml>',
+      ].join(''),
+    });
+
+    assert.equal(postResponse.status, 200);
+    assert.match(await postResponse.text(), /已绑定当前公众号用户/);
+    assert.match(readFileSync(envFile, 'utf8'), /WECHAT_MP_ALLOWED_OPENIDS=openid-owner/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    rmSync(tempDir, { recursive: true, force: true });
   }
 });
 
