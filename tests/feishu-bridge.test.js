@@ -17,6 +17,7 @@ const {
   extractFeishuText,
   getFeishuDedupKeys,
   getFeishuRouteMode,
+  buildRouteOptions,
   buildRouteEnv,
   handleFeishuWebhook,
   isDuplicateFeishuEvent,
@@ -6149,6 +6150,31 @@ test('createServer uses Hermes as primary chat on Hermes route', async () => {
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+test('buildRouteOptions keeps Hermes fallback on Hermes route', async () => {
+  let primaryCalled = false;
+  let fallbackCalled = false;
+  const options = buildRouteOptions('hermes', {
+    chat: async () => {
+      primaryCalled = true;
+      throw new Error('Hermes primary unavailable');
+    },
+    hermesChat: async () => {
+      fallbackCalled = true;
+      return 'Hermes fallback replied.';
+    },
+  });
+
+  const reply = await buildRoutedChatReply('你好', {
+    OPENCLAW_CHAT_ENABLED: 'true',
+    HERMES_FALLBACK_ENABLED: 'true',
+    FEISHU_ASSISTANT_NAME: 'Hermes',
+  }, options);
+
+  assert.equal(primaryCalled, true);
+  assert.equal(fallbackCalled, true);
+  assert.match(reply, /Hermes fallback replied/);
 });
 
 test('createServer binds current sender before enforcing allowlist', async () => {

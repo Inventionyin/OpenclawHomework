@@ -856,6 +856,43 @@ test('buildClerkAgentReply summarizes daily pipeline status from injected helper
   assert.match(reply, /下一步/);
 });
 
+test('buildClerkAgentReply delegates WeChat MP article publishing', async () => {
+  const reply = await buildClerkAgentReply({
+    action: 'wechat-mp-direct-publish',
+    idea: '今天白嫖福利和 API 中转站推荐',
+  }, {
+    publishWechatMpArticle: async (request) => {
+      assert.equal(request.mode, 'direct');
+      assert.equal(request.idea, '今天白嫖福利和 API 中转站推荐');
+      return {
+        ok: true,
+        mode: 'direct',
+        title: '今日 API 中转站和白嫖福利观察',
+        mediaId: 'draft-media-1',
+        publishId: 'publish-1',
+      };
+    },
+  });
+
+  assert.match(reply, /公众号文章/);
+  assert.match(reply, /已提交发布/);
+  assert.match(reply, /publish-1/);
+});
+
+test('buildClerkAgentReply explains WeChat MP publisher failures', async () => {
+  const reply = await buildClerkAgentReply({
+    action: 'wechat-mp-draft',
+    idea: '测试文章',
+  }, {
+    publishWechatMpArticle: async () => {
+      throw new Error('wechat api failed: invalid credential');
+    },
+  });
+
+  assert.match(reply, /公众号文章处理失败/);
+  assert.match(reply, /invalid credential/);
+});
+
 test('buildClerkAgentReply keeps summarizeTasks fallback for daily pipeline status', () => {
   const reply = buildClerkAgentReply({ action: 'daily-pipeline-status' }, {
     summarizeTasks: (request) => {

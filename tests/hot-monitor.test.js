@@ -7,6 +7,7 @@ const test = require('node:test');
 const {
   buildHotMonitorSnapshot,
   classifyHotItem,
+  defaultHotMonitorOnCalendar,
   fetchBraveSearchItems,
   fetchSerpApiSearchItems,
   fetchSearxngSearchItems,
@@ -18,6 +19,10 @@ const {
   selectAlertItems,
   shouldAlertItem,
 } = require('../scripts/hot-monitor');
+
+test('defaultHotMonitorOnCalendar uses a calmer 30 minute cadence', () => {
+  assert.equal(defaultHotMonitorOnCalendar(), '*:0/30');
+});
 
 test('classifyHotItem detects benefits and technical topics', () => {
   assert.deepEqual(
@@ -234,7 +239,7 @@ test('formatHotMonitorMessage separates benefits and technical hotspots', () => 
     },
   ], { total: 2 }, { assistantName: 'Hermes' });
 
-  assert.match(text, /Hermes 10 分钟热点\/福利雷达/);
+  assert.match(text, /Hermes 30 分钟热点\/福利雷达/);
   assert.match(text, /福利\/免费活动/);
   assert.match(text, /技术热点/);
   assert.match(text, /Free GPU credits/);

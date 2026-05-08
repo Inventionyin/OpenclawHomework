@@ -7,7 +7,7 @@ NODE_BIN="/usr/bin/node"
 ENV_FILE="/etc/hermes-feishu-bridge.env"
 STATE_FILE="/var/lib/openclaw-homework/hot-monitor-state.json"
 OUTPUT_FILE="/var/lib/openclaw-homework/hot-monitor-latest.json"
-ON_CALENDAR="*:0/10"
+ON_CALENDAR="*:0/30"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -36,7 +36,7 @@ mkdir -p "$(dirname "${STATE_FILE}")" "$(dirname "${OUTPUT_FILE}")"
 
 cat > "/etc/systemd/system/${UNIT_NAME}.service" <<EOF
 [Unit]
-Description=OpenclawHomework 10-minute hot and benefit monitor
+Description=OpenclawHomework 30-minute hot and benefit monitor
 After=network-online.target
 Wants=network-online.target
 
@@ -49,7 +49,7 @@ EOF
 
 cat > "/etc/systemd/system/${UNIT_NAME}.timer" <<EOF
 [Unit]
-Description=Run OpenclawHomework hot and benefit monitor every 10 minutes
+Description=Run OpenclawHomework hot and benefit monitor every 30 minutes
 
 [Timer]
 OnCalendar=${ON_CALENDAR}

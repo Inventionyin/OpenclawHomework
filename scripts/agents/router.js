@@ -285,6 +285,26 @@ function routeClerkIntent(text) {
     return { agent: 'clerk-agent', action: 'task-center-brain', requiresAuth: true };
   }
 
+  const wechatArticleMatch = original.match(/(?:文员|秘书|助理|clerk|office)[，,\s]*(公众号)(草稿|直接发布|发布)?[:：\s]*(.+)$/i);
+  if (wechatArticleMatch) {
+    const verb = wechatArticleMatch[2] || '草稿';
+    const idea = String(wechatArticleMatch[3] || '').trim();
+    if (/直接发布/.test(verb)) {
+      return { agent: 'clerk-agent', action: 'wechat-mp-direct-publish', idea, requiresAuth: true };
+    }
+    if (/发布/.test(verb) && /(刚才|上一|最新|草稿)/.test(idea)) {
+      return { agent: 'clerk-agent', action: 'wechat-mp-publish-latest', requiresAuth: true };
+    }
+    if (/发布/.test(verb)) {
+      return { agent: 'clerk-agent', action: 'wechat-mp-direct-publish', idea, requiresAuth: true };
+    }
+    return { agent: 'clerk-agent', action: 'wechat-mp-draft', idea, requiresAuth: true };
+  }
+
+  if (/(?:文员|秘书|助理|clerk|office)[，,\s]*公众号发布.{0,8}(刚才|上一|最新|草稿)/i.test(original)) {
+    return { agent: 'clerk-agent', action: 'wechat-mp-publish-latest', requiresAuth: true };
+  }
+
   if (/(projectku-web|projectku).{0,30}(注册|验证码|验证).{0,20}(测试|跑一轮|测一下|执行)/i.test(normalized)
     || /(注册|验证码|验证).{0,20}(测试|跑一轮|测一下|执行).{0,30}(projectku-web|projectku)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'platform-registration-runner', requiresAuth: true };

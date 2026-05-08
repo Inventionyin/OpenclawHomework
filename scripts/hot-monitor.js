@@ -138,6 +138,10 @@ function parseCliArgs(args = process.argv.slice(2), env = process.env) {
   };
 }
 
+function defaultHotMonitorOnCalendar() {
+  return '*:0/30';
+}
+
 function parseEnvFile(filePath) {
   if (!filePath || !existsSync(filePath)) return {};
   return Object.fromEntries(readFileSync(filePath, 'utf8')
@@ -741,7 +745,7 @@ function selectAlertItems(snapshot = {}, previousState = {}, env = process.env, 
 function formatHotMonitorMessage(alertItems = [], snapshot = {}, options = {}) {
   const assistant = options.assistantName || 'Hermes';
   const lines = [
-    `${assistant} 10 分钟热点/福利雷达`,
+    `${assistant} 30 分钟热点/福利雷达`,
     `本轮扫描：${snapshot.total || 0} 条，命中：${alertItems.length} 条。`,
   ];
   if (!alertItems.length) {
@@ -953,6 +957,7 @@ module.exports = {
   buildNotificationTarget,
   classifyHotItem,
   collectHotMonitorItems,
+  defaultHotMonitorOnCalendar,
   fetchBenefitRssItems,
   fetchBraveSearchItems,
   fetchExternalSearchItems,

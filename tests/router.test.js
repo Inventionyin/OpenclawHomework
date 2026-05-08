@@ -716,6 +716,26 @@ test('routeAgentIntent routes natural-language control brain and memory discover
   });
 });
 
+test('routeAgentIntent routes WeChat MP article draft and publish requests', () => {
+  assert.deepEqual(routeAgentIntent('文员，公众号草稿：推荐几个 API 中转站'), {
+    agent: 'clerk-agent',
+    action: 'wechat-mp-draft',
+    idea: '推荐几个 API 中转站',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，公众号直接发布：今天白嫖福利和 API 中转站推荐'), {
+    agent: 'clerk-agent',
+    action: 'wechat-mp-direct-publish',
+    idea: '今天白嫖福利和 API 中转站推荐',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，公众号发布刚才那篇'), {
+    agent: 'clerk-agent',
+    action: 'wechat-mp-publish-latest',
+    requiresAuth: true,
+  });
+});
+
 test('routeAgentIntent routes ecosystem plugin and skill management requests', () => {
   assert.deepEqual(routeAgentIntent('给 Hermes 安装 GBrain、Hermes WebUI 和自检更新技能'), {
     agent: 'ecosystem-agent',

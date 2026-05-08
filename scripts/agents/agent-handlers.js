@@ -78,6 +78,9 @@ const {
 const {
   readDailySummarySnapshot,
 } = require('../daily-summary-snapshot');
+const {
+  publishWechatMpArticle,
+} = require('../wechat-mp-publisher');
 
 const OPS_SECRET_PATTERNS = [
   /\bauthorization\s*:\s*\S+/i,
@@ -1193,6 +1196,44 @@ function buildClerkWorkbenchReply(options = {}) {
   ].join('\n');
 }
 
+async function buildWechatMpArticleReply(route = {}, options = {}) {
+  const publisher = options.publishWechatMpArticle || publishWechatMpArticle;
+  const mode = route.action === 'wechat-mp-direct-publish'
+    ? 'direct'
+    : route.action === 'wechat-mp-publish-latest'
+      ? 'publish-latest'
+      : 'draft';
+  try {
+    const result = await publisher({
+      mode,
+      idea: route.idea || route.rawText || '',
+    }, {
+      env: options.env || process.env,
+      now: options.now,
+    });
+    const lines = [
+      '公众号文章处理完成：',
+      `- 标题：${sanitizeReplyField(result.title || '未返回标题', 120)}`,
+      `- 草稿 media_id：${sanitizeReplyField(result.mediaId || '未返回', 120)}`,
+    ];
+    if (result.publishId) {
+      lines.push(`- 发布状态：已提交发布，publish_id：${sanitizeReplyField(result.publishId, 120)}`);
+    } else if (mode === 'draft') {
+      lines.push('- 发布状态：已生成草稿，等待你审核或继续说“公众号发布刚才那篇”。');
+    } else {
+      lines.push('- 发布状态：已处理，但微信接口没有返回 publish_id，请到公众号后台确认。');
+    }
+    return lines.join('\n');
+  } catch (error) {
+    return [
+      '公众号文章处理失败：',
+      `- 原因：${sanitizeReplyField(error.message || error, 500)}`,
+      '- 常见原因：公众号未认证/接口权限不足、AppSecret 不正确、IP 白名单缺服务器 IP、缺少封面 media_id。',
+      '- 建议先说：文员，公众号草稿：写一篇测试文章。草稿成功后再尝试直接发布。',
+    ].join('\n');
+  }
+}
+
 function buildClerkAgentReply(route = {}, options = {}) {
   if (route.action === 'token-summary') {
     const entries = (options.readUsageLedger || defaultReadUsageLedger)(options.env || process.env);
@@ -1310,6 +1351,10 @@ function buildClerkAgentReply(route = {}, options = {}) {
 
   if (route.action === 'daily-pipeline-status') {
     return buildDailyPipelineStatusReply(options);
+  }
+
+  if (['wechat-mp-draft', 'wechat-mp-direct-publish', 'wechat-mp-publish-latest'].includes(route.action)) {
+    return buildWechatMpArticleReply(route, options);
   }
 
   if (route.action === 'token-factory') {

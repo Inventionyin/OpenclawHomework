@@ -3080,11 +3080,11 @@ function buildRouteOptions(mode, options = {}) {
   return {
     ...options,
     chat: options.chat || runHermesChat,
-    hermesChat: options.hermesChat || runOpenClawChat,
+    hermesChat: options.hermesChat || runHermesChat,
     parser: options.parser || runHermesParser,
-    hermesParser: options.hermesParser || runOpenClawParser,
+    hermesParser: options.hermesParser || runHermesParser,
     parserSource: options.parserSource || 'hermes',
-    fallbackParserSource: options.fallbackParserSource || 'openclaw',
+    fallbackParserSource: options.fallbackParserSource || 'hermes',
   };
 }
 
@@ -4620,6 +4620,7 @@ module.exports = {
   buildFeishuCardMessage,
   buildWechatMpTextReplyXml,
   buildFeishuTextMessage,
+  buildRouteOptions,
   buildRouteEnv,
   buildWechatMpRouteEnv,
   createServer,

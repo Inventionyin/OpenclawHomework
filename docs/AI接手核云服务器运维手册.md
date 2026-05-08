@@ -475,9 +475,9 @@ FEISHU_USAGE_LEDGER_PATH=/var/log/openclaw-homework/usage-ledger.jsonl
 - GitHub 热榜可复用 `GITHUB_TOKEN` 或 `GH_TOKEN` 提高 API 限额；不要把 token 写进仓库。
 - `--skip-news` 可用于测试日报模板，避免测试时联网。
 
-### 10 分钟热点/福利雷达
+### 30 分钟热点/福利雷达
 
-`scripts/hot-monitor.js` 是独立于每日流水线的短周期监听器。它不是每天总结一次，而是每 10 分钟扫描一次，适合发现：
+`scripts/hot-monitor.js` 是独立于每日流水线的短周期监听器。它不是每天总结一次，而是每 30 分钟扫描一次，适合发现：
 
 ```text
 1. GitHub / HN / RSS / Tavily / Brave / SerpApi / SearXNG 上突然变热的 AI Agent、UI 自动化、测试、电商、邮箱相关项目
@@ -503,7 +503,7 @@ bash scripts/install-hot-monitor.sh \
   --env-file /etc/hermes-feishu-bridge.env \
   --state-file /var/lib/openclaw-homework/hot-monitor-state.json \
   --output-file /var/lib/openclaw-homework/hot-monitor-latest.json \
-  --on-calendar '*:0/10'
+  --on-calendar '*:0/30'
 ```
 
 常用环境变量：
@@ -538,9 +538,9 @@ PROTOCOL_ASSET_DIR=/var/lib/openclaw-homework/protocol-assets
 
 ```text
 首次运行会建立 baseline。
-后续每 10 分钟对比上一轮快照。
+后续每 30 分钟对比上一轮快照。
 只有新增高价值活动、明显涨星、或今日新增 stars 达标时才飞书提醒；不会再仅因为总分高就提醒。
-默认不会每 10 分钟无条件发空报告，避免刷屏。
+默认不会每 30 分钟无条件发空报告，避免刷屏。
 搜索 API 单源失败不会拖垮整轮；失败项会被过滤或写入摘要，密钥会脱敏。
 SearXNG 是搜索聚合器，不是全网索引；适合统一入口。真正长期沉淀靠协议资产库。
 热点候选可保存为 protocol-assets，后续用浏览器验证、抓包、生成接口契约测试。
