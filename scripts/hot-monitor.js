@@ -353,14 +353,13 @@ async function collectHotMonitorItems(env = process.env, fetchImpl = fetch, opti
 }
 
 function shouldAlertItem(item = {}, env = process.env, options = {}) {
-  const minScore = Number(options.minScore ?? env.HOT_MONITOR_MIN_SCORE ?? 80);
   const minDeltaStars = Number(options.minDeltaStars ?? env.HOT_MONITOR_MIN_DELTA_STARS ?? 30);
   const minStarsToday = Number(options.minStarsToday ?? env.HOT_MONITOR_MIN_STARS_TODAY ?? 50);
   const notifyNewBenefits = toBool(options.notifyNewBenefits ?? env.HOT_MONITOR_NOTIFY_NEW_BENEFITS, true);
   if (item.categories?.includes('benefit') && item.isNew !== false && notifyNewBenefits) return true;
   if (Number(item.deltaStars || 0) >= minDeltaStars) return true;
   if (Number(item.starsToday || 0) >= minStarsToday) return true;
-  return Number(item.score || 0) >= minScore;
+  return false;
 }
 
 function buildHotMonitorSnapshot(rawItems = [], previousState = {}, env = process.env, options = {}) {

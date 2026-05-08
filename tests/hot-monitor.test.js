@@ -141,11 +141,11 @@ test('buildHotMonitorSnapshot preserves prior seen items outside the current fet
   assert.equal(snapshot.items['github:repo-b'].deltaStars, 0);
 });
 
-test('shouldAlertItem requires score or specific benefit/star triggers', () => {
+test('shouldAlertItem requires event signal instead of score alone', () => {
   assert.equal(shouldAlertItem({
     title: 'ordinary item',
-    score: 10,
-    categories: ['general'],
+    score: 500,
+    categories: ['tech', 'github'],
   }, { HOT_MONITOR_MIN_SCORE: '80' }), false);
 
   assert.equal(shouldAlertItem({
@@ -154,6 +154,19 @@ test('shouldAlertItem requires score or specific benefit/star triggers', () => {
     categories: ['benefit'],
     isNew: true,
   }, { HOT_MONITOR_MIN_SCORE: '80' }), true);
+});
+
+test('shouldAlertItem ignores tiny GitHub movement below short-window thresholds', () => {
+  assert.equal(shouldAlertItem({
+    title: 'popular agent repo',
+    score: 190,
+    deltaStars: 2,
+    starsToday: 0,
+    categories: ['tech', 'github'],
+  }, {
+    HOT_MONITOR_MIN_DELTA_STARS: '30',
+    HOT_MONITOR_MIN_STARS_TODAY: '50',
+  }), false);
 });
 
 test('formatHotMonitorMessage separates benefits and technical hotspots', () => {
