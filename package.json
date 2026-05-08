@@ -17,6 +17,7 @@
     "worker:token-factory": "node scripts/token-factory-worker.js",
     "trend:intel": "node scripts/trend-intel.js",
     "trend:token-factory": "node scripts/trend-token-factory.js",
+    "hot:monitor": "node scripts/hot-monitor.js",
     "trigger:ui": "node scripts/trigger-ui-tests.js",
     "watchdog": "node scripts/server-watchdog.js"
   },

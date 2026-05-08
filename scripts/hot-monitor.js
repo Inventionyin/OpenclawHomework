@@ -1,0 +1,603 @@
+const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
+const { dirname, join } = require('node:path');
+const {
+  collectTrendIntel,
+  parseFeedConfig,
+  parseListEnv,
+  parseRssItems,
+} = require('./trend-intel');
+const {
+  recordTaskEvent,
+} = require('./task-center');
+const {
+  sendFeishuTextMessage,
+} = require('./feishu-bridge');
+
+const DEFAULT_BENEFIT_QUERIES = [
+  'free credits',
+  'cloud credits',
+  'AI credits',
+  'GPU credits',
+  'LLM API credits',
+  'startup credits',
+  'free tier',
+  'free trial',
+];
+
+const DEFAULT_BENEFIT_FEEDS = [
+  { source: 'Product Hunt', url: 'https://www.producthunt.com/feed/' },
+  { source: 'GitHub Blog', url: 'https://github.blog/feed/' },
+  { source: 'Hugging Face Blog', url: 'https://huggingface.co/blog/feed.xml' },
+  { source: 'Cloudflare Blog', url: 'https://blog.cloudflare.com/rss/' },
+];
+
+const BENEFIT_KEYWORDS = [
+  'free',
+  'credit',
+  'credits',
+  'coupon',
+  'voucher',
+  'grant',
+  'trial',
+  'beta',
+  'invite',
+  'startup',
+  'student',
+  'server',
+  'cloud',
+  'gpu',
+  'token',
+  'tokens',
+  'membership',
+  '免费',
+  '额度',
+  '代金券',
+  '优惠',
+  '试用',
+  '会员',
+  '内测',
+  '邀请',
+  '服务器',
+  '云服务器',
+  '算力',
+  '赠送',
+];
+
+const TECH_KEYWORDS = [
+  'agent',
+  'ai',
+  'llm',
+  'mcp',
+  'dify',
+  'openhands',
+  'langgraph',
+  'browser',
+  'automation',
+  'playwright',
+  'cypress',
+  'selenium',
+  'allure',
+  'testing',
+  'test',
+  'qa',
+  'ecommerce',
+  'commerce',
+  'email',
+  'smtp',
+  'imap',
+  '客服',
+  '测试',
+  '自动化',
+  '电商',
+  '邮箱',
+];
+
+function readOption(args, name, fallback) {
+  const index = args.indexOf(name);
+  if (index === -1) return fallback;
+  const value = args[index + 1];
+  if (!value || value.startsWith('--')) {
+    throw new Error(`Missing value for ${name}`);
+  }
+  return value;
+}
+
+function hasFlag(args, name) {
+  return args.includes(name);
+}
+
+function parseCliArgs(args = process.argv.slice(2), env = process.env) {
+  return {
+    envFile: readOption(args, '--env-file', env.HOT_MONITOR_ENV_FILE || ''),
+    stateFile: readOption(
+      args,
+      '--state-file',
+      env.HOT_MONITOR_STATE_FILE || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'memory', 'hot-monitor-state.json'),
+    ),
+    outputFile: readOption(
+      args,
+      '--output-file',
+      env.HOT_MONITOR_OUTPUT_FILE || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'hot-monitor', 'latest.json'),
+    ),
+    once: hasFlag(args, '--once') || String(env.HOT_MONITOR_ONCE || '').toLowerCase() === 'true',
+    dryRun: hasFlag(args, '--dry-run'),
+    force: hasFlag(args, '--force'),
+  };
+}
+
+function parseEnvFile(filePath) {
+  if (!filePath || !existsSync(filePath)) return {};
+  return Object.fromEntries(readFileSync(filePath, 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#') && line.includes('='))
+    .map((line) => {
+      const index = line.indexOf('=');
+      return [line.slice(0, index), line.slice(index + 1)];
+    }));
+}
+
+function toBool(value, fallback = false) {
+  const text = String(value ?? '').trim().toLowerCase();
+  if (!text) return fallback;
+  return ['1', 'true', 'yes', 'on'].includes(text);
+}
+
+function readJsonFile(filePath, fallback = {}) {
+  if (!filePath || !existsSync(filePath)) return fallback;
+  try {
+    return JSON.parse(readFileSync(filePath, 'utf8'));
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJsonFile(filePath, value) {
+  mkdirSync(dirname(filePath), { recursive: true });
+  writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+function normalizeText(value) {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function itemKey(item = {}) {
+  return String(item.id || item.link || `${item.source || ''}:${item.title || ''}`)
+    .trim()
+    .toLowerCase();
+}
+
+function includesAny(text, keywords) {
+  const lowered = String(text || '').toLowerCase();
+  return keywords.some((keyword) => lowered.includes(String(keyword).toLowerCase()));
+}
+
+function classifyHotItem(item = {}) {
+  const text = [
+    item.title,
+    item.summary,
+    item.source,
+    item.kind,
+    item.topic,
+    item.link,
+  ].join(' ');
+  const categories = [];
+  if (includesAny(text, BENEFIT_KEYWORDS)) categories.push('benefit');
+  if (includesAny(text, TECH_KEYWORDS)) categories.push('tech');
+  if (/github/i.test(String(item.source || item.kind || item.link || ''))) categories.push('github');
+  if (!categories.length) categories.push('general');
+  return [...new Set(categories)];
+}
+
+function keywordScore(item = {}) {
+  const text = [
+    item.title,
+    item.summary,
+    item.source,
+    item.topic,
+  ].join(' ');
+  let score = 0;
+  if (includesAny(text, TECH_KEYWORDS)) score += 25;
+  if (includesAny(text, BENEFIT_KEYWORDS)) score += 45;
+  if (/playwright|cypress|dify|agent|mcp|openhands|langgraph|allure/i.test(text)) score += 25;
+  if (/免费|额度|token|credits?|server|服务器|trial|coupon/i.test(text)) score += 30;
+  return score;
+}
+
+function scoreHotItem(item = {}, previous = {}) {
+  const stars = Number(item.stars || 0);
+  const previousStars = Number(previous.stars || 0);
+  const deltaStars = Math.max(0, stars - previousStars);
+  const starsToday = Number(item.starsToday || 0);
+  const isNew = !previous.firstSeenAt;
+  const score = Math.round(
+    Math.min(stars / 100, 120)
+    + Math.min(deltaStars * 4, 220)
+    + Math.min(starsToday * 2, 220)
+    + keywordScore(item)
+    + (isNew ? 20 : 0),
+  );
+  return {
+    score,
+    deltaStars,
+    starsToday,
+    isNew,
+  };
+}
+
+function normalizeHotItem(item = {}, previous = {}, now = new Date()) {
+  const metrics = scoreHotItem(item, previous);
+  const categories = classifyHotItem(item);
+  return {
+    id: itemKey(item),
+    title: normalizeText(item.title).slice(0, 180),
+    source: normalizeText(item.source || item.kind || 'hot-monitor').slice(0, 120),
+    kind: normalizeText(item.kind || 'hot').slice(0, 80),
+    link: normalizeText(item.link).slice(0, 500),
+    summary: normalizeText(item.summary).slice(0, 260),
+    topic: normalizeText(item.topic).slice(0, 100),
+    stars: Number.isFinite(Number(item.stars)) ? Number(item.stars) : undefined,
+    starsToday: Number.isFinite(Number(item.starsToday)) ? Number(item.starsToday) : undefined,
+    deltaStars: metrics.deltaStars,
+    score: metrics.score,
+    categories,
+    firstSeenAt: previous.firstSeenAt || now.toISOString(),
+    lastSeenAt: now.toISOString(),
+    alertReason: buildAlertReason(item, metrics, categories),
+  };
+}
+
+function buildAlertReason(item = {}, metrics = {}, categories = []) {
+  const reasons = [];
+  if (metrics.isNew) reasons.push('首次进入雷达');
+  if (metrics.deltaStars > 0) reasons.push(`较上次 +${metrics.deltaStars} stars`);
+  if (metrics.starsToday > 0) reasons.push(`今日 +${metrics.starsToday} stars`);
+  if (categories.includes('benefit')) reasons.push('疑似免费/额度/试用活动');
+  if (categories.includes('tech')) reasons.push('命中你的技术方向');
+  if (!reasons.length) reasons.push('热度分数达标');
+  return reasons.join('，');
+}
+
+async function fetchText(url, fetchImpl = fetch, options = {}) {
+  const response = await fetchImpl(url, {
+    headers: {
+      'User-Agent': 'OpenclawHomework-HotMonitor/1.0',
+      Accept: options.accept || '*/*',
+      ...(options.headers || {}),
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Fetch failed ${response.status} ${response.statusText}: ${url}`);
+  }
+  return response.text();
+}
+
+async function fetchHackerNewsBenefitItems(env = process.env, fetchImpl = fetch) {
+  const queries = parseListEnv(env.HOT_MONITOR_BENEFIT_QUERIES, DEFAULT_BENEFIT_QUERIES)
+    .slice(0, Number(env.HOT_MONITOR_BENEFIT_HN_MAX_QUERIES || 8));
+  const perQuery = Number(env.HOT_MONITOR_BENEFIT_HN_PER_QUERY || 3);
+  const items = [];
+  for (const query of queries) {
+    const url = new URL('https://hn.algolia.com/api/v1/search_by_date');
+    url.searchParams.set('tags', 'story');
+    url.searchParams.set('query', query);
+    url.searchParams.set('hitsPerPage', String(perQuery));
+    try {
+      const json = JSON.parse(await fetchText(url.toString(), fetchImpl, { accept: 'application/json' }));
+      const hits = Array.isArray(json.hits) ? json.hits : [];
+      items.push(...hits.map((hit) => ({
+        id: `hn-benefit:${hit.objectID || hit.url || hit.title}`,
+        title: hit.title || hit.story_title || '',
+        source: `Hacker News 福利: ${query}`,
+        kind: 'benefit-hacker-news',
+        link: hit.url || `https://news.ycombinator.com/item?id=${hit.objectID}`,
+        summary: hit.story_text || '',
+        topic: query,
+        publishedAt: hit.created_at || '',
+      })));
+    } catch (error) {
+      items.push({
+        id: `hn-benefit-error:${query}`,
+        title: `Hacker News 福利查询失败：${query}`,
+        source: 'Hacker News 福利',
+        kind: 'benefit-error',
+        summary: error.message,
+      });
+    }
+  }
+  return items;
+}
+
+async function fetchBenefitRssItems(env = process.env, fetchImpl = fetch) {
+  const feeds = parseFeedConfig(env.HOT_MONITOR_BENEFIT_RSS_FEEDS)
+    .slice(0, Number(env.HOT_MONITOR_BENEFIT_RSS_MAX_FEEDS || 8));
+  const perFeed = Number(env.HOT_MONITOR_BENEFIT_RSS_PER_FEED || 5);
+  const items = [];
+  for (const feed of feeds.length ? feeds : DEFAULT_BENEFIT_FEEDS) {
+    try {
+      const xml = await fetchText(feed.url, fetchImpl, {
+        accept: 'application/rss+xml, application/atom+xml, text/xml, */*',
+      });
+      items.push(...parseRssItems(xml, feed.source).slice(0, perFeed).map((item) => ({
+        ...item,
+        id: `benefit-rss:${item.link || item.title}`,
+        kind: 'benefit-rss',
+      })));
+    } catch (error) {
+      items.push({
+        id: `benefit-rss-error:${feed.source}`,
+        title: `${feed.source} 福利源抓取失败`,
+        source: feed.source,
+        kind: 'benefit-error',
+        summary: error.message,
+      });
+    }
+  }
+  return items;
+}
+
+async function collectHotMonitorItems(env = process.env, fetchImpl = fetch, options = {}) {
+  const [trendItems, hnBenefits, rssBenefits] = await Promise.all([
+    collectTrendIntel(env, fetchImpl, {
+      limit: env.HOT_MONITOR_TREND_LIMIT || 60,
+      now: options.now,
+    }),
+    fetchHackerNewsBenefitItems(env, fetchImpl),
+    fetchBenefitRssItems(env, fetchImpl),
+  ]);
+  return [...trendItems, ...hnBenefits, ...rssBenefits]
+    .filter((item) => item && item.title && !/抓取失败|Fetch failed/i.test(item.title));
+}
+
+function shouldAlertItem(item = {}, env = process.env, options = {}) {
+  const minScore = Number(options.minScore ?? env.HOT_MONITOR_MIN_SCORE ?? 80);
+  const minDeltaStars = Number(options.minDeltaStars ?? env.HOT_MONITOR_MIN_DELTA_STARS ?? 30);
+  const minStarsToday = Number(options.minStarsToday ?? env.HOT_MONITOR_MIN_STARS_TODAY ?? 50);
+  const notifyNewBenefits = toBool(options.notifyNewBenefits ?? env.HOT_MONITOR_NOTIFY_NEW_BENEFITS, true);
+  if (item.categories?.includes('benefit') && item.isNew !== false && notifyNewBenefits) return true;
+  if (Number(item.deltaStars || 0) >= minDeltaStars) return true;
+  if (Number(item.starsToday || 0) >= minStarsToday) return true;
+  return Number(item.score || 0) >= minScore;
+}
+
+function buildHotMonitorSnapshot(rawItems = [], previousState = {}, env = process.env, options = {}) {
+  const now = options.now || new Date();
+  const previousItems = previousState.items || {};
+  const normalized = rawItems
+    .map((item) => normalizeHotItem(item, previousItems[itemKey(item)], now))
+    .filter((item) => item.title)
+    .sort((a, b) => b.score - a.score || b.deltaStars - a.deltaStars || String(a.title).localeCompare(String(b.title)));
+  const maxTracked = Number(env.HOT_MONITOR_MAX_TRACKED_ITEMS || 300);
+  const items = {};
+  for (const item of normalized.slice(0, maxTracked)) {
+    items[item.id] = item;
+  }
+  return {
+    generatedAt: now.toISOString(),
+    total: normalized.length,
+    items,
+    ordered: normalized,
+  };
+}
+
+function selectAlertItems(snapshot = {}, previousState = {}, env = process.env, options = {}) {
+  const maxAlerts = Number(options.maxAlerts ?? env.HOT_MONITOR_MAX_ALERTS ?? 8);
+  const cooldownMinutes = Number(options.cooldownMinutes ?? env.HOT_MONITOR_ALERT_COOLDOWN_MINUTES ?? 360);
+  const nowMs = Date.parse(snapshot.generatedAt || new Date().toISOString());
+  const alerts = previousState.alerts || {};
+  return (snapshot.ordered || [])
+    .map((item) => {
+      const previous = previousState.items?.[item.id] || {};
+      return {
+        ...item,
+        isNew: !previous.firstSeenAt,
+      };
+    })
+    .filter((item) => {
+      const lastAlert = Date.parse(alerts[item.id] || '');
+      if (Number.isFinite(lastAlert) && nowMs - lastAlert < cooldownMinutes * 60 * 1000) {
+        return false;
+      }
+      return shouldAlertItem(item, env, options);
+    })
+    .slice(0, maxAlerts);
+}
+
+function formatHotMonitorMessage(alertItems = [], snapshot = {}, options = {}) {
+  const assistant = options.assistantName || 'Hermes';
+  const lines = [
+    `${assistant} 10 分钟热点/福利雷达`,
+    `本轮扫描：${snapshot.total || 0} 条，命中：${alertItems.length} 条。`,
+  ];
+  if (!alertItems.length) {
+    lines.push('没有发现新的高价值热点或福利活动。');
+    return lines.join('\n');
+  }
+  const tech = alertItems.filter((item) => !item.categories?.includes('benefit'));
+  const benefits = alertItems.filter((item) => item.categories?.includes('benefit'));
+  if (benefits.length) {
+    lines.push('', '福利/免费活动：');
+    benefits.forEach((item, index) => {
+      lines.push(`${index + 1}. ${item.title}`);
+      lines.push(`   原因：${item.alertReason}；分数 ${item.score}`);
+      if (item.summary) lines.push(`   摘要：${item.summary}`);
+      if (item.link) lines.push(`   链接：${item.link}`);
+    });
+  }
+  if (tech.length) {
+    lines.push('', '技术热点：');
+    tech.forEach((item, index) => {
+      lines.push(`${index + 1}. ${item.title}`);
+      lines.push(`   原因：${item.alertReason}；分数 ${item.score}`);
+      if (item.stars || item.deltaStars || item.starsToday) {
+        lines.push(`   热度：总 stars ${item.stars || '未知'}，本轮增量 ${item.deltaStars || 0}，今日新增 ${item.starsToday || 0}`);
+      }
+      if (item.summary) lines.push(`   摘要：${item.summary}`);
+      if (item.link) lines.push(`   链接：${item.link}`);
+    });
+  }
+  lines.push('', '处理建议：高价值技术热点进 trend-token-factory；福利活动优先手动核验领取条件，避免误点钓鱼链接。');
+  return lines.join('\n');
+}
+
+function buildNotificationTarget(env = process.env) {
+  const receiveId = env.HOT_MONITOR_FEISHU_RECEIVE_ID
+    || env.FEISHU_NOTIFY_RECEIVE_ID
+    || env.HERMES_FEISHU_NOTIFY_RECEIVE_ID
+    || String(env.HERMES_FEISHU_ALLOWED_USER_IDS || env.FEISHU_ALLOWED_USER_IDS || '').split(',')[0].trim();
+  if (!receiveId) return null;
+  return {
+    receiveId,
+    receiveIdType: env.HOT_MONITOR_FEISHU_RECEIVE_ID_TYPE
+      || env.FEISHU_NOTIFY_RECEIVE_ID_TYPE
+      || env.HERMES_FEISHU_NOTIFY_RECEIVE_ID_TYPE
+      || 'open_id',
+  };
+}
+
+async function sendHotMonitorNotification(env, text, options = {}) {
+  const target = buildNotificationTarget(env);
+  if (!target) return { sent: false, reason: 'missing_target' };
+  await (options.sendFeishuTextMessage || sendFeishuTextMessage)(env, {
+    receiveIdType: target.receiveIdType,
+    receiveId: target.receiveId,
+    msgType: 'text',
+    content: JSON.stringify({ text }),
+  });
+  return { sent: true };
+}
+
+async function runHotMonitor(config = {}, options = {}) {
+  const env = { ...process.env, ...parseEnvFile(config.envFile), ...(options.env || {}) };
+  const now = options.now || new Date();
+  const stateFile = config.stateFile || env.HOT_MONITOR_STATE_FILE || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'memory', 'hot-monitor-state.json');
+  const outputFile = config.outputFile || env.HOT_MONITOR_OUTPUT_FILE || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'hot-monitor', 'latest.json');
+  const previousState = readJsonFile(stateFile, { items: {}, alerts: {} });
+  const taskId = `hot-monitor-${now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 12)}`;
+  const recordTask = options.recordTask !== false;
+  if (recordTask) {
+    recordTaskEvent({
+      taskId,
+      type: 'hot-monitor',
+      event: 'scheduled',
+      status: 'running',
+      now: now.toISOString(),
+    }, { env, now: now.toISOString() });
+  }
+  try {
+    const rawItems = await (options.collectItems || collectHotMonitorItems)(env, options.fetchImpl || fetch, { now });
+    const snapshot = buildHotMonitorSnapshot(rawItems, previousState, env, { now });
+    const alertItems = config.force
+      ? snapshot.ordered.slice(0, Number(env.HOT_MONITOR_MAX_ALERTS || 8))
+      : selectAlertItems(snapshot, previousState, env);
+    const shouldNotify = alertItems.length > 0 || toBool(env.HOT_MONITOR_NOTIFY_EMPTY, false) || config.force;
+    const message = formatHotMonitorMessage(alertItems, snapshot, {
+      assistantName: env.FEISHU_ASSISTANT_NAME || env.ASSISTANT_NAME || 'Hermes',
+    });
+    const nextState = {
+      ...previousState,
+      lastRunAt: now.toISOString(),
+      lastTotal: snapshot.total,
+      items: snapshot.items,
+      alerts: { ...(previousState.alerts || {}) },
+    };
+    if (alertItems.length) {
+      for (const item of alertItems) {
+        nextState.alerts[item.id] = now.toISOString();
+      }
+    }
+    writeJsonFile(stateFile, nextState);
+    writeJsonFile(outputFile, {
+      generatedAt: snapshot.generatedAt,
+      total: snapshot.total,
+      alertCount: alertItems.length,
+      alerts: alertItems,
+      top: snapshot.ordered.slice(0, 20),
+      message,
+    });
+    let notification = { sent: false, reason: shouldNotify ? 'dry_run' : 'no_alerts' };
+    if (shouldNotify && !config.dryRun && toBool(env.HOT_MONITOR_FEISHU_NOTIFY_ENABLED, true)) {
+      notification = await sendHotMonitorNotification(env, message, options).catch((error) => ({
+        sent: false,
+        reason: error.message,
+      }));
+    }
+    if (recordTask) {
+      recordTaskEvent({
+        taskId,
+        type: 'hot-monitor',
+        event: 'completed',
+        status: 'completed',
+        now: new Date(now.getTime() + 1000).toISOString(),
+        summaryPatch: {
+          total: snapshot.total,
+          alertCount: alertItems.length,
+          sent: Boolean(notification.sent),
+        },
+        filesPatch: { outputFile },
+      }, { env });
+    }
+    return {
+      ok: true,
+      total: snapshot.total,
+      alertCount: alertItems.length,
+      alerts: alertItems,
+      notification,
+      stateFile,
+      outputFile,
+      message,
+    };
+  } catch (error) {
+    if (recordTask) {
+      recordTaskEvent({
+        taskId,
+        type: 'hot-monitor',
+        event: 'failed',
+        status: 'failed',
+        now: new Date().toISOString(),
+        error: String(error.message || error).slice(0, 1000),
+      }, { env });
+    }
+    throw error;
+  }
+}
+
+async function main() {
+  const config = parseCliArgs();
+  const result = await runHotMonitor(config);
+  console.log(JSON.stringify({
+    ok: result.ok,
+    total: result.total,
+    alertCount: result.alertCount,
+    notification: result.notification,
+    stateFile: result.stateFile,
+    outputFile: result.outputFile,
+  }, null, 2));
+}
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error.stack || error.message);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  BENEFIT_KEYWORDS,
+  DEFAULT_BENEFIT_FEEDS,
+  DEFAULT_BENEFIT_QUERIES,
+  buildHotMonitorSnapshot,
+  buildNotificationTarget,
+  classifyHotItem,
+  collectHotMonitorItems,
+  fetchBenefitRssItems,
+  fetchHackerNewsBenefitItems,
+  formatHotMonitorMessage,
+  parseCliArgs,
+  runHotMonitor,
+  scoreHotItem,
+  selectAlertItems,
+  shouldAlertItem,
+};

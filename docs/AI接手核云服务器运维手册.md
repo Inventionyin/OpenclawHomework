@@ -475,6 +475,67 @@ FEISHU_USAGE_LEDGER_PATH=/var/log/openclaw-homework/usage-ledger.jsonl
 - GitHub 热榜可复用 `GITHUB_TOKEN` 或 `GH_TOKEN` 提高 API 限额；不要把 token 写进仓库。
 - `--skip-news` 可用于测试日报模板，避免测试时联网。
 
+### 10 分钟热点/福利雷达
+
+`scripts/hot-monitor.js` 是独立于每日流水线的短周期监听器。它不是每天总结一次，而是每 10 分钟扫描一次，适合发现：
+
+```text
+1. GitHub / HN / RSS 上突然变热的 AI Agent、UI 自动化、测试、电商、邮箱相关项目
+2. 免费 token、模型额度、云服务器/云资源额度、GPU 额度、免费试用、会员体验、内测邀请等福利活动
+3. Product Hunt、Hugging Face、GitHub Blog、Cloudflare Blog 等来源里的新工具和活动
+```
+
+核心文件：
+
+```text
+scripts/hot-monitor.js
+scripts/install-hot-monitor.sh
+/var/lib/openclaw-homework/hot-monitor-state.json
+/var/lib/openclaw-homework/hot-monitor-latest.json
+```
+
+安装到 Hermes：
+
+```bash
+bash scripts/install-hot-monitor.sh \
+  --unit-name hermes-hot-monitor \
+  --env-file /etc/hermes-feishu-bridge.env \
+  --state-file /var/lib/openclaw-homework/hot-monitor-state.json \
+  --output-file /var/lib/openclaw-homework/hot-monitor-latest.json \
+  --on-calendar '*:0/10'
+```
+
+常用环境变量：
+
+```text
+HOT_MONITOR_FEISHU_NOTIFY_ENABLED=true
+HOT_MONITOR_MIN_SCORE=80
+HOT_MONITOR_MIN_DELTA_STARS=30
+HOT_MONITOR_MIN_STARS_TODAY=50
+HOT_MONITOR_ALERT_COOLDOWN_MINUTES=360
+HOT_MONITOR_MAX_ALERTS=8
+HOT_MONITOR_NOTIFY_EMPTY=false
+HOT_MONITOR_BENEFIT_QUERIES=free credits,cloud credits,AI credits,GPU credits,LLM API credits,free trial,student credits,startup credits
+```
+
+行为规则：
+
+```text
+首次运行会建立 baseline。
+后续每 10 分钟对比上一轮快照。
+只有新增高价值活动、明显涨星、今日新增 stars 达标、或综合分数达标时才飞书提醒。
+默认不会每 10 分钟无条件发空报告，避免刷屏。
+```
+
+排查命令：
+
+```bash
+systemctl list-timers '*hot-monitor*' --no-pager
+systemctl status hermes-hot-monitor.timer --no-pager -l
+journalctl -u hermes-hot-monitor --since '2 hours ago' --no-pager
+node scripts/hot-monitor.js --dry-run --force --env-file /etc/hermes-feishu-bridge.env --state-file /var/lib/openclaw-homework/hot-monitor-state.json --output-file /var/lib/openclaw-homework/hot-monitor-latest.json
+```
+
 ### 每日流水线和 state 文件策略
 
 每日流水线脚本是 `scripts/daily-agent-pipeline.js`，安装脚本是 `scripts/install-daily-agent-pipeline.sh`。2026-05-07 后，流水线已经纳入 `trend-intel` 和 `trend-token-factory`。当前顺序是：
