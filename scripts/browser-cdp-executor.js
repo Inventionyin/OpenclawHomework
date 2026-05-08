@@ -435,15 +435,18 @@ function evaluateUrlSafety(url) {
     "projectku.local",
     "projectku.com",
     "www.projectku.com",
+    "evanshine.me",
+    "www.evanshine.me",
   ]);
 
   const allowBySuffix = [".local", ".internal", ".lan", ".test"];
   const isLoopback =
     hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
   const explicitlyAllowed = allowedHosts.has(hostname);
+  const evanshineSubdomain = hostname.endsWith(".evanshine.me");
   const suffixAllowed = allowBySuffix.some((suffix) => hostname.endsWith(suffix));
 
-  if (isLoopback || explicitlyAllowed || suffixAllowed) {
+  if (isLoopback || explicitlyAllowed || evanshineSubdomain || suffixAllowed) {
     return { allowed: true, reason: null };
   }
 

@@ -55,6 +55,33 @@ test("unknown external registration platform is blocked with clear reason", () =
   assert.match(plan.reason, /allowlist|self-owned|localhost|domain/i);
 });
 
+test("self-owned evanshine domain is allowed for browser automation", () => {
+  const request = parseBrowserAutomationRequest(
+    "真实执行打开 https://shop.evanshine.me/login 页面检查并抓包"
+  );
+  const plan = buildBrowserAutomationPlan(request);
+
+  assert.equal(plan.allowed, true);
+  assert.equal(plan.blocked, false);
+});
+
+test("external ecommerce giants remain blocked by allowlist safety", () => {
+  const jdPlan = buildBrowserAutomationPlan(
+    parseBrowserAutomationRequest("打开 https://www.jd.com 登录页并抓包")
+  );
+  const pddPlan = buildBrowserAutomationPlan(
+    parseBrowserAutomationRequest("打开 https://mobile.yangkeduo.com 页面检查")
+  );
+
+  assert.equal(jdPlan.allowed, false);
+  assert.equal(jdPlan.blocked, true);
+  assert.match(jdPlan.reason, /allowlist|self-owned|localhost|domain/i);
+
+  assert.equal(pddPlan.allowed, false);
+  assert.equal(pddPlan.blocked, true);
+  assert.match(pddPlan.reason, /allowlist|self-owned|localhost|domain/i);
+});
+
 test("live execution uses injected browser factory and captures browser artifacts", async () => {
   const events = { console: [], response: [] };
   const page = {
