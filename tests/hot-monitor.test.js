@@ -36,6 +36,16 @@ test('scoreHotItem rewards star growth and benefit keywords', () => {
   assert(score.score >= 200);
 });
 
+test('scoreHotItem does not treat first-seen total stars as short-window growth', () => {
+  const score = scoreHotItem(
+    { title: 'popular old agent toolkit', stars: 44150, starsToday: 0 },
+    {},
+  );
+
+  assert.equal(score.deltaStars, 0);
+  assert.equal(score.isNew, true);
+});
+
 test('selectAlertItems reports new benefit and GitHub star growth', () => {
   const now = new Date('2026-05-08T10:00:00.000Z');
   const previousState = {
@@ -97,6 +107,38 @@ test('selectAlertItems respects alert cooldown', () => {
   assert.equal(selectAlertItems(snapshot, previousState, {
     HOT_MONITOR_ALERT_COOLDOWN_MINUTES: '360',
   }).length, 0);
+});
+
+test('buildHotMonitorSnapshot preserves prior seen items outside the current fetch window', () => {
+  const now = new Date('2026-05-08T10:10:00.000Z');
+  const previousState = {
+    items: {
+      'github:repo-a': {
+        id: 'github:repo-a',
+        title: 'repo-a',
+        stars: 1000,
+        firstSeenAt: '2026-05-08T09:50:00.000Z',
+        lastSeenAt: '2026-05-08T09:50:00.000Z',
+      },
+    },
+    seen: {
+      'github:repo-a': {
+        firstSeenAt: '2026-05-08T09:50:00.000Z',
+        lastSeenAt: '2026-05-08T09:50:00.000Z',
+      },
+    },
+  };
+
+  const snapshot = buildHotMonitorSnapshot([{
+    id: 'github:repo-b',
+    title: 'repo-b agent',
+    source: 'GitHub Trending',
+    kind: 'github-trending',
+    stars: 2000,
+  }], previousState, {}, { now });
+
+  assert.equal(snapshot.seen['github:repo-a'].firstSeenAt, '2026-05-08T09:50:00.000Z');
+  assert.equal(snapshot.items['github:repo-b'].deltaStars, 0);
 });
 
 test('shouldAlertItem requires score or specific benefit/star triggers', () => {

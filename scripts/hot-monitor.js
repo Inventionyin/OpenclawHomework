@@ -208,8 +208,9 @@ function keywordScore(item = {}) {
 
 function scoreHotItem(item = {}, previous = {}) {
   const stars = Number(item.stars || 0);
-  const previousStars = Number(previous.stars || 0);
-  const deltaStars = Math.max(0, stars - previousStars);
+  const hasPreviousStars = previous.firstSeenAt && Number.isFinite(Number(previous.stars));
+  const previousStars = hasPreviousStars ? Number(previous.stars) : stars;
+  const deltaStars = hasPreviousStars ? Math.max(0, stars - previousStars) : 0;
   const starsToday = Number(item.starsToday || 0);
   const isNew = !previous.firstSeenAt;
   const score = Math.round(
@@ -365,8 +366,16 @@ function shouldAlertItem(item = {}, env = process.env, options = {}) {
 function buildHotMonitorSnapshot(rawItems = [], previousState = {}, env = process.env, options = {}) {
   const now = options.now || new Date();
   const previousItems = previousState.items || {};
+  const previousSeen = previousState.seen || Object.fromEntries(Object.entries(previousItems).map(([id, item]) => [
+    id,
+    {
+      firstSeenAt: item.firstSeenAt,
+      lastSeenAt: item.lastSeenAt,
+      stars: item.stars,
+    },
+  ]));
   const normalized = rawItems
-    .map((item) => normalizeHotItem(item, previousItems[itemKey(item)], now))
+    .map((item) => normalizeHotItem(item, previousItems[itemKey(item)] || previousSeen[itemKey(item)], now))
     .filter((item) => item.title)
     .sort((a, b) => b.score - a.score || b.deltaStars - a.deltaStars || String(a.title).localeCompare(String(b.title)));
   const maxTracked = Number(env.HOT_MONITOR_MAX_TRACKED_ITEMS || 300);
@@ -374,10 +383,21 @@ function buildHotMonitorSnapshot(rawItems = [], previousState = {}, env = proces
   for (const item of normalized.slice(0, maxTracked)) {
     items[item.id] = item;
   }
+  const seen = { ...previousSeen };
+  for (const item of normalized) {
+    seen[item.id] = {
+      firstSeenAt: item.firstSeenAt,
+      lastSeenAt: item.lastSeenAt,
+      stars: item.stars,
+      source: item.source,
+      title: item.title,
+    };
+  }
   return {
     generatedAt: now.toISOString(),
     total: normalized.length,
     items,
+    seen,
     ordered: normalized,
   };
 }
@@ -501,6 +521,7 @@ async function runHotMonitor(config = {}, options = {}) {
       lastRunAt: now.toISOString(),
       lastTotal: snapshot.total,
       items: snapshot.items,
+      seen: snapshot.seen,
       alerts: { ...(previousState.alerts || {}) },
     };
     if (alertItems.length && !config.dryRun) {
