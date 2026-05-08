@@ -503,7 +503,7 @@ async function runHotMonitor(config = {}, options = {}) {
       items: snapshot.items,
       alerts: { ...(previousState.alerts || {}) },
     };
-    if (alertItems.length) {
+    if (alertItems.length && !config.dryRun) {
       for (const item of alertItems) {
         nextState.alerts[item.id] = now.toISOString();
       }

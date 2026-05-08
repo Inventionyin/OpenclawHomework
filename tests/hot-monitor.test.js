@@ -209,3 +209,30 @@ test('runHotMonitor dry-run does not send Feishu message', async () => {
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('runHotMonitor dry-run does not update alert cooldown timestamps', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'hot-monitor-dry-cooldown-'));
+  try {
+    const stateFile = join(tempDir, 'state.json');
+    const result = await runHotMonitor({
+      stateFile,
+      outputFile: join(tempDir, 'latest.json'),
+      dryRun: true,
+    }, {
+      now: new Date('2026-05-08T10:00:00.000Z'),
+      env: { LOCAL_PROJECT_DIR: tempDir },
+      collectItems: async () => [
+        { id: 'benefit:credits', title: 'Free server credits', source: 'RSS', kind: 'benefit-rss' },
+      ],
+      sendFeishuTextMessage: async () => {
+        throw new Error('should not send');
+      },
+    });
+
+    assert.equal(result.alertCount, 1);
+    const state = JSON.parse(readFileSync(stateFile, 'utf8'));
+    assert.deepEqual(state.alerts, {});
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
