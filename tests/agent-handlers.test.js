@@ -228,8 +228,50 @@ test('buildBrowserAgentReply renders protocol asset report with injected reporte
   assert.match(reply, /协议资产/);
   assert.match(reply, /线索定位/);
   assert.match(reply, /下一步/);
+  assert.match(reply, /可直接回复/);
   assert.match(reply, /最近资产：3 条/);
   assert.match(reply, /POST \/api\/login 200/);
+});
+
+test('buildBrowserAgentReply renders grouped protocol report from stored assets', async () => {
+  const assetDir = mkdtempSync(join(tmpdir(), 'agent-protocol-assets-'));
+  try {
+    writeFileSync(join(assetDir, 'asset-login.json'), JSON.stringify({
+      id: 'asset-login',
+      createdAt: '2026-05-07T10:03:00.000Z',
+      method: 'POST',
+      url: 'https://shop.evanshine.me/api/login',
+      status: 401,
+      tags: ['auth', 'login'],
+      summaryText: 'Login failed',
+    }));
+    writeFileSync(join(assetDir, 'asset-order.json'), JSON.stringify({
+      id: 'asset-order',
+      createdAt: '2026-05-07T10:02:00.000Z',
+      method: 'POST',
+      url: 'https://api.evanshine.me/api/order',
+      status: 500,
+      tags: ['order'],
+      summaryText: 'Create order failed',
+    }));
+
+    const reply = await buildBrowserAgentReply({
+      action: 'protocol-assets-report',
+      rawText: '最近抓到哪些接口',
+    }, {
+      env: { PROTOCOL_ASSET_DIR: assetDir },
+    });
+
+    assert.match(reply, /按域名/);
+    assert.match(reply, /shop\.evanshine\.me=1/);
+    assert.match(reply, /api\.evanshine\.me=1/);
+    assert.match(reply, /异常优先排查/);
+    assert.match(reply, /POST shop\.evanshine\.me\/api\/login 401/);
+    assert.match(reply, /POST api\.evanshine\.me\/api\/order 500/);
+    assert.match(reply, /可直接回复：把最近抓到的接口整理成测试用例/);
+  } finally {
+    rmSync(assetDir, { recursive: true, force: true });
+  }
 });
 
 test('buildBrowserAgentReply renders protocol assets as reusable test cases', async () => {

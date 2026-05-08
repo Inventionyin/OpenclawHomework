@@ -108,6 +108,7 @@ test('summarizeProtocolAsset normalizes method url status content type duration 
 
   assert.deepEqual(summary, {
     method: 'PATCH',
+    host: 'api.example.com',
     normalizedPath: '/v1/users/42',
     status: 204,
     contentType: 'application/json',
@@ -203,6 +204,52 @@ test('buildProtocolAssetReport returns concise aggregates and recent summaries',
     assert.equal(report.recent.length, 2);
     assert.deepEqual(report.recent.map((item) => item.summaryText), ['Create session', 'Read session']);
     assert.deepEqual(report.topPaths, [{ path: '/v1/sessions', count: 2 }]);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('buildProtocolAssetReport highlights hosts, abnormal assets and next actions', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'protocol-assets-diagnosis-'));
+  try {
+    saveProtocolAsset({
+      method: 'GET',
+      url: 'https://shop.evanshine.me/api/products',
+      status: 200,
+      tags: ['catalog'],
+      summaryText: 'List products',
+      createdAt: '2026-05-07T10:04:00.000Z',
+    }, { dir: tempDir });
+    saveProtocolAsset({
+      method: 'POST',
+      url: 'https://shop.evanshine.me/api/login',
+      status: 401,
+      tags: ['auth', 'login'],
+      summaryText: 'Login failed',
+      createdAt: '2026-05-07T10:03:00.000Z',
+    }, { dir: tempDir });
+    saveProtocolAsset({
+      method: 'POST',
+      url: 'https://api.evanshine.me/api/order',
+      status: 500,
+      tags: ['order'],
+      summaryText: 'Create order failed',
+      createdAt: '2026-05-07T10:02:00.000Z',
+    }, { dir: tempDir });
+
+    const report = buildProtocolAssetReport({}, { dir: tempDir });
+
+    assert.deepEqual(report.byHost, {
+      'shop.evanshine.me': 2,
+      'api.evanshine.me': 1,
+    });
+    assert.equal(report.abnormal.length, 2);
+    assert.deepEqual(report.abnormal.map((item) => item.path), ['/api/login', '/api/order']);
+    assert.deepEqual(report.nextActions, [
+      '优先复盘 5xx 接口：POST api.evanshine.me/api/order 500',
+      '检查登录/鉴权链路：POST shop.evanshine.me/api/login 401',
+      '把异常接口转成回归用例：把最近抓到的接口整理成测试用例',
+    ]);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

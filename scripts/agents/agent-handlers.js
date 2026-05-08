@@ -63,6 +63,7 @@ const {
   buildIntentDiagnosis,
 } = require('./intent-diagnoser');
 const {
+  buildProtocolAssetReport,
   buildProtocolTestCases,
   listProtocolAssets,
 } = require('../protocol-asset-store');
@@ -318,7 +319,46 @@ function formatClueCard(diagnosis = {}, fallback = {}) {
     `证据：${evidenceText}`,
     `- 命中依据：${signals}`,
     `下一步建议：${sanitizeReplyField(card.nextStep || diagnosis.nextStep || fallback.nextStep || '给出目标 URL 后执行截图、console 和接口抓包。', 300)}`,
+    `可直接回复：${sanitizeReplyField(card.suggestedReply || fallback.suggestedReply || '真实执行 <你的URL> 并截图抓接口', 300)}`,
   ].join('\n');
+}
+
+function formatCountMap(map = {}, limit = 6) {
+  return Object.entries(map || {})
+    .sort((a, b) => Number(b[1]) - Number(a[1]) || String(a[0]).localeCompare(String(b[0])))
+    .slice(0, limit)
+    .map(([key, count]) => `${key}=${count}`)
+    .join('、');
+}
+
+function formatProtocolAssetReportLines(report = {}) {
+  const lines = [];
+  const byHost = formatCountMap(report.byHost);
+  const byStatus = formatCountMap(report.byStatusClass);
+  const byMethod = formatCountMap(report.byMethod);
+  if (byHost) {
+    lines.push(`- 按域名：${byHost}`);
+  }
+  if (byStatus) {
+    lines.push(`- 按状态：${byStatus}`);
+  }
+  if (byMethod) {
+    lines.push(`- 按方法：${byMethod}`);
+  }
+  if (Array.isArray(report.abnormal) && report.abnormal.length) {
+    lines.push('', '异常优先排查：');
+    report.abnormal.slice(0, 5).forEach((item, index) => {
+      const host = item.host ? `${item.host}` : '';
+      lines.push(`${index + 1}. ${item.method || 'GET'} ${host}${item.path || '/'} ${item.status || '-'}`);
+    });
+  }
+  if (Array.isArray(report.nextActions) && report.nextActions.length) {
+    lines.push('', '建议动作：');
+    report.nextActions.slice(0, 4).forEach((item, index) => {
+      lines.push(`${index + 1}. ${item}`);
+    });
+  }
+  return lines;
 }
 
 async function buildBrowserAgentReply(route = {}, options = {}) {
@@ -348,6 +388,9 @@ async function buildBrowserAgentReply(route = {}, options = {}) {
         nextStep: cases.length
           ? '优先把这些用例接到 UI 自动化或接口契约测试里。'
           : '先说“真实执行 + URL + 抓接口”，生成协议资产后再转测试用例。',
+        suggestedReply: cases.length
+          ? '把这些协议测试用例接到 UI 自动化'
+          : '真实执行 https://evanshine.me 并截图抓接口',
       },
     };
     const preview = cases.slice(0, 5).map((item, index) => {
@@ -369,19 +412,23 @@ async function buildBrowserAgentReply(route = {}, options = {}) {
 
   if (route.action === 'protocol-assets-report') {
     const reporter = options.protocolAssetReporter || ((request = {}) => {
-      const assets = listProtocolAssets({ env: request.env || process.env });
       const query = String(request.query || '').toLowerCase();
-      const filtered = query.includes('登录')
-        ? assets.filter((item) => /login|登录/i.test(String(item.summary?.normalizedPath || item.url || '')))
-        : assets;
-      const top = filtered.slice(0, 8);
+      const reportQuery = query.includes('登录') ? { text: 'login 登录' } : {};
+      const report = buildProtocolAssetReport(reportQuery, { env: request.env || process.env });
+      const assets = query.includes('登录')
+        ? listProtocolAssets({ env: request.env || process.env })
+          .filter((item) => /login|登录/i.test(String(item.summary?.normalizedPath || item.url || item.summaryText || '')))
+        : listProtocolAssets({ env: request.env || process.env });
+      const top = assets.slice(0, 8);
       return {
-        summary: `最近协议资产 ${filtered.length} 条`,
+        summary: `最近协议资产 ${report.total} 条`,
+        report,
         lines: top.map((item, index) => {
           const method = item.summary?.method || item.method || 'GET';
+          const host = item.summary?.host ? `${item.summary.host}` : '';
           const path = item.summary?.normalizedPath || item.url || '/';
           const status = item.summary?.status || item.status || '-';
-          return `${index + 1}. ${method} ${path} ${status}`;
+          return `${index + 1}. ${method} ${host}${path} ${status}`;
         }),
       };
     });
@@ -391,6 +438,8 @@ async function buildBrowserAgentReply(route = {}, options = {}) {
     });
     const summary = sanitizeReplyField(report?.summary || '协议资产库暂时为空');
     const lines = Array.isArray(report?.lines) ? report.lines : [];
+    const structuredReport = report?.report || null;
+    const structuredLines = structuredReport ? formatProtocolAssetReportLines(structuredReport) : [];
     const diagnosis = {
       ...baseDiagnosis,
       clueCard: {
@@ -404,6 +453,9 @@ async function buildBrowserAgentReply(route = {}, options = {}) {
         nextStep: lines.length
           ? '先看状态码异常、登录/验证码相关接口，再决定是否转成测试用例。'
           : '先说“真实执行 + URL + 抓接口”，让浏览器/CDP 写入协议资产。',
+        suggestedReply: lines.length
+          ? '把最近抓到的接口整理成测试用例'
+          : '真实执行 https://evanshine.me 并截图抓接口',
       },
     };
     return [
@@ -411,6 +463,7 @@ async function buildBrowserAgentReply(route = {}, options = {}) {
       '',
       '协议资产报告：',
       `- 概览：${summary}`,
+      ...(structuredLines.length ? ['', ...structuredLines.map((line) => sanitizeReplyField(line, 800))] : []),
       ...(lines.length ? ['', ...lines.map((line) => sanitizeReplyField(line, 800))] : []),
     ].join('\n');
   }
@@ -449,6 +502,11 @@ async function buildBrowserAgentReply(route = {}, options = {}) {
         : (result.mode === 'live' || result.executed)
           ? '优先看 console 错误、失败接口和已入库协议资产，再转测试用例。'
           : '确认计划后说“真实执行 + URL + 截图/抓接口”。',
+      suggestedReply: plan.blocked || result.mode === 'blocked'
+        ? '这是我的自有域名/学校靶场，允许加入白名单：<域名>'
+        : (result.mode === 'live' || result.executed)
+          ? '最近抓到哪些接口'
+          : `真实执行 ${plan.url || result.request?.url || '<你的URL>'} 并截图抓接口`,
     },
   };
   const lines = [

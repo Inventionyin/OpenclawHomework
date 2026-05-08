@@ -42,6 +42,17 @@ function normalizePath(urlValue) {
   return compact.endsWith('/') ? compact.slice(0, -1) : compact;
 }
 
+function normalizeHost(urlValue) {
+  if (!urlValue || typeof urlValue !== 'string') {
+    return '';
+  }
+  try {
+    return new URL(urlValue).host.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
 function normalizeContentType(asset = {}) {
   const headers = asset.response?.headers || asset.headers || {};
   const key = Object.keys(headers).find((name) => name.toLowerCase() === 'content-type');
@@ -70,9 +81,11 @@ function normalizeDurationMs(asset = {}) {
 }
 
 function summarizeProtocolAsset(asset = {}) {
+  const urlValue = asset.url || asset.request?.url || '';
   return {
     method: String(asset.method || asset.request?.method || 'GET').toUpperCase(),
-    normalizedPath: normalizePath(asset.url || asset.request?.url || ''),
+    host: normalizeHost(urlValue),
+    normalizedPath: normalizePath(urlValue),
     status: normalizeStatus(asset),
     contentType: normalizeContentType(asset),
     durationMs: normalizeDurationMs(asset),
@@ -215,23 +228,68 @@ function toStatusClass(status = 0) {
   return 'unknown';
 }
 
+function isAuthLikeAsset(asset = {}, summary = summarizeProtocolAsset(asset)) {
+  const text = [
+    summary.normalizedPath,
+    String(asset.summaryText || ''),
+    getSummaryTags(asset).join(' '),
+  ].join(' ').toLowerCase();
+  return /(login|signin|auth|session|captcha|token|登录|鉴权|验证码)/i.test(text);
+}
+
+function buildProtocolNextActions(abnormal = []) {
+  const actions = [];
+  const serverError = abnormal.find((item) => item.status >= 500);
+  if (serverError) {
+    actions.push(`优先复盘 5xx 接口：${serverError.method} ${serverError.host}${serverError.path} ${serverError.status}`);
+  }
+  const authError = abnormal.find((item) => item.authLike || (item.status >= 400 && item.status < 500));
+  if (authError) {
+    actions.push(`检查登录/鉴权链路：${authError.method} ${authError.host}${authError.path} ${authError.status}`);
+  }
+  if (abnormal.length) {
+    actions.push('把异常接口转成回归用例：把最近抓到的接口整理成测试用例');
+  } else {
+    actions.push('当前未发现 4xx/5xx 异常，下一步可以按业务流程补抓登录、下单、支付回调等关键接口。');
+  }
+  return actions;
+}
+
 function buildProtocolAssetReport(query = {}, options = {}) {
   const assets = findProtocolAssets(query, options);
   const byMethod = {};
   const byStatusClass = {};
+  const byHost = {};
   const pathCount = {};
+  const abnormal = [];
   for (const asset of assets) {
     const summary = summarizeProtocolAsset(asset);
     byMethod[summary.method] = (byMethod[summary.method] || 0) + 1;
+    if (summary.host) {
+      byHost[summary.host] = (byHost[summary.host] || 0) + 1;
+    }
     const klass = toStatusClass(summary.status);
     byStatusClass[klass] = (byStatusClass[klass] || 0) + 1;
     pathCount[summary.normalizedPath] = (pathCount[summary.normalizedPath] || 0) + 1;
+    if (summary.status >= 400) {
+      abnormal.push({
+        id: asset.id || '',
+        createdAt: asset.createdAt || '',
+        summaryText: String(asset.summaryText || ''),
+        method: summary.method,
+        host: summary.host,
+        path: summary.normalizedPath,
+        status: summary.status,
+        authLike: isAuthLikeAsset(asset, summary),
+      });
+    }
   }
   const recent = assets.slice(0, 5).map((asset) => ({
     id: asset.id || '',
     createdAt: asset.createdAt || '',
     summaryText: String(asset.summaryText || ''),
     method: summarizeProtocolAsset(asset).method,
+    host: summarizeProtocolAsset(asset).host,
     path: summarizeProtocolAsset(asset).normalizedPath,
     status: summarizeProtocolAsset(asset).status,
   }));
@@ -244,8 +302,11 @@ function buildProtocolAssetReport(query = {}, options = {}) {
     total: assets.length,
     byMethod,
     byStatusClass,
+    byHost,
+    abnormal: abnormal.slice(0, 5),
     recent,
     topPaths,
+    nextActions: buildProtocolNextActions(abnormal),
   };
 }
 
