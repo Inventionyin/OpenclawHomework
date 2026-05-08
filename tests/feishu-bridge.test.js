@@ -1680,6 +1680,39 @@ test('buildRoutedAgentReply can send clerk daily summary email when explicitly r
   assert.match(reply.replyText, /agent4\.daily@claw\.163\.com/);
 });
 
+test('buildRoutedAgentReply awaits async clerk article replies', async () => {
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+        message: {
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '文员，公众号草稿：推荐几个 API 中转站' }),
+        },
+      },
+    },
+    {
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+    },
+    {
+      publishWechatMpArticle: async () => ({
+        ok: true,
+        mode: 'draft',
+        title: '今日 API 中转站和白嫖福利观察',
+        mediaId: 'draft-media-1',
+      }),
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /公众号文章处理完成/);
+  assert.doesNotMatch(reply.replyText, /\[object Promise\]/);
+});
+
 test('buildRoutedAgentReply passes browser-agent protocol asset reporter through bridge', async () => {
   const reply = await buildRoutedAgentReply(
     {

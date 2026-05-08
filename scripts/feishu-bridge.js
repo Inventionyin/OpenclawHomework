@@ -4209,7 +4209,7 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
           diagnosis.reason,
           status,
           '',
-          buildClerkAgentReply(route, { env }),
+          await buildClerkAgentReply(route, { env }),
         ].join('\n'),
       };
     }
@@ -4222,13 +4222,16 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
           `原因：${diagnosis.reason}`,
           diagnosis.nextStep,
           '',
-          buildClerkAgentReply(route, { env }),
+          await buildClerkAgentReply(route, { env }),
         ].filter(Boolean).join('\n'),
       };
     }
     return {
       handled: true,
-      replyText: buildClerkAgentReply(route, { env }),
+      replyText: await buildClerkAgentReply(route, {
+        env,
+        publishWechatMpArticle: options.publishWechatMpArticle,
+      }),
     };
   }
 
