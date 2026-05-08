@@ -480,7 +480,7 @@ FEISHU_USAGE_LEDGER_PATH=/var/log/openclaw-homework/usage-ledger.jsonl
 `scripts/hot-monitor.js` 是独立于每日流水线的短周期监听器。它不是每天总结一次，而是每 10 分钟扫描一次，适合发现：
 
 ```text
-1. GitHub / HN / RSS / Tavily / Brave / SerpApi 上突然变热的 AI Agent、UI 自动化、测试、电商、邮箱相关项目
+1. GitHub / HN / RSS / Tavily / Brave / SerpApi / SearXNG 上突然变热的 AI Agent、UI 自动化、测试、电商、邮箱相关项目
 2. 免费 token、模型额度、云服务器/云资源额度、GPU 额度、免费试用、会员体验、内测邀请等福利活动
 3. Product Hunt、Hugging Face、GitHub Blog、Cloudflare Blog、Linux.do/V2EX/贴吧等可搜索来源里的新工具和活动
 4. 英文热点会补中文理解和中文摘要，方便直接看结论
@@ -525,8 +525,13 @@ HOT_MONITOR_TAVILY_API_KEY=...
 HOT_MONITOR_BRAVE_API_KEY=...
 HOT_MONITOR_SERPAPI_API_KEY=...
 HOT_MONITOR_SERPAPI_ENGINE=baidu
+HOT_MONITOR_SEARXNG_URL=https://your-searxng.example.com
+HOT_MONITOR_SEARXNG_ENABLED=true
+HOT_MONITOR_SEARXNG_COUNT=5
+HOT_MONITOR_SEARXNG_SAFESEARCH=1
 HOT_MONITOR_SEARCH_LANG=zh-hans
 HOT_MONITOR_SEARCH_COUNTRY=HK
+PROTOCOL_ASSET_DIR=/var/lib/openclaw-homework/protocol-assets
 ```
 
 行为规则：
@@ -537,6 +542,8 @@ HOT_MONITOR_SEARCH_COUNTRY=HK
 只有新增高价值活动、明显涨星、或今日新增 stars 达标时才飞书提醒；不会再仅因为总分高就提醒。
 默认不会每 10 分钟无条件发空报告，避免刷屏。
 搜索 API 单源失败不会拖垮整轮；失败项会被过滤或写入摘要，密钥会脱敏。
+SearXNG 是搜索聚合器，不是全网索引；适合统一入口。真正长期沉淀靠协议资产库。
+热点候选可保存为 protocol-assets，后续用浏览器验证、抓包、生成接口契约测试。
 ```
 
 排查命令：
@@ -546,7 +553,19 @@ systemctl list-timers '*hot-monitor*' --no-pager
 systemctl status hermes-hot-monitor.timer --no-pager -l
 journalctl -u hermes-hot-monitor --since '2 hours ago' --no-pager
 node scripts/hot-monitor.js --dry-run --force --env-file /etc/hermes-feishu-bridge.env --state-file /var/lib/openclaw-homework/hot-monitor-state.json --output-file /var/lib/openclaw-homework/hot-monitor-latest.json
-grep -E 'HOT_MONITOR_SEARCH|TAVILY_API_KEY|BRAVE_SEARCH_API_KEY|SERPAPI_API_KEY|HOT_MONITOR_TAVILY|HOT_MONITOR_BRAVE|HOT_MONITOR_SERPAPI' /etc/hermes-feishu-bridge.env | sed -E 's/=.*/=***/'
+grep -E 'HOT_MONITOR_SEARCH|TAVILY_API_KEY|BRAVE_SEARCH_API_KEY|SERPAPI_API_KEY|HOT_MONITOR_TAVILY|HOT_MONITOR_BRAVE|HOT_MONITOR_SERPAPI|SEARXNG|PROTOCOL_ASSET_DIR' /etc/hermes-feishu-bridge.env | sed -E 's/=.*/=***/'
+```
+
+电商自动化高级玩法：
+
+```text
+搜索 API / SearXNG 发现热点、福利、浏览器自动化项目
+hot-monitor 中文化、去重、过滤过期活动
+protocol-asset-store 保存候选链接和浏览器抓包
+browser-agent 对自有电商平台页面做截图、console、network/CDP 验证
+buildProtocolTestCases 把协议资产转成接口契约测试
+OpenClaw 触发 UItest GitHub Actions 跑电商 UI 自动化
+Hermes 文员 Agent 生成客服训练数据、日报、失败复盘
 ```
 
 ### 每日流水线和 state 文件策略

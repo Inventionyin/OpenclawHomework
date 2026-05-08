@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { mkdtempSync, readFileSync, rmSync } = require('node:fs');
+const { mkdtempSync, readFileSync, readdirSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const test = require('node:test');
@@ -9,6 +9,7 @@ const {
   classifyHotItem,
   fetchBraveSearchItems,
   fetchSerpApiSearchItems,
+  fetchSearxngSearchItems,
   fetchTavilySearchItems,
   formatHotMonitorMessage,
   isExpiredBenefitItem,
@@ -344,12 +345,40 @@ test('fetchSerpApiSearchItems maps organic search results', async () => {
   assert.equal(items[0].source, 'SerpApi baidu 搜索: site:tieba.baidu.com 免费 token');
 });
 
+test('fetchSearxngSearchItems maps open search aggregator results', async () => {
+  const calls = [];
+  const items = await fetchSearxngSearchItems({
+    HOT_MONITOR_SEARXNG_URL: 'https://search.example.com',
+    HOT_MONITOR_SEARCH_QUERIES: 'free ai credits',
+    HOT_MONITOR_SEARCH_PER_QUERY: '2',
+  }, async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      text: async () => JSON.stringify({
+        results: [{
+          title: 'Free AI credits thread',
+          url: 'https://example.com/free-ai',
+          content: 'Fresh credits for developers.',
+          engine: 'brave',
+        }],
+      }),
+    };
+  });
+
+  assert.match(calls[0].url, /^https:\/\/search\.example\.com\/search/);
+  assert.match(calls[0].url, /format=json/);
+  assert.equal(items[0].id, 'search:searxng:https://example.com/free-ai');
+  assert.equal(items[0].source, 'SearXNG 搜索: free ai credits');
+});
+
 test('runHotMonitor writes state output task record and sends when alerts exist', async () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'hot-monitor-'));
   const sent = [];
   try {
     const stateFile = join(tempDir, 'state.json');
     const outputFile = join(tempDir, 'latest.json');
+    const protocolDir = join(tempDir, 'protocol-assets');
     const result = await runHotMonitor({
       stateFile,
       outputFile,
@@ -357,6 +386,7 @@ test('runHotMonitor writes state output task record and sends when alerts exist'
       now: new Date('2026-05-08T10:00:00.000Z'),
       env: {
         LOCAL_PROJECT_DIR: tempDir,
+        PROTOCOL_ASSET_DIR: protocolDir,
         HOT_MONITOR_FEISHU_RECEIVE_ID: 'chat-a',
         HOT_MONITOR_FEISHU_RECEIVE_ID_TYPE: 'chat_id',
       },
@@ -383,6 +413,9 @@ test('runHotMonitor writes state output task record and sends when alerts exist'
     assert.equal(Boolean(state.items['benefit:credits']), true);
     const output = JSON.parse(readFileSync(outputFile, 'utf8'));
     assert.equal(output.alertCount, 1);
+    assert.equal(result.protocolAssets.saved.length, 1);
+    assert.equal(result.protocolAssets.saved[0].summary.normalizedPath, '/credits');
+    assert.equal(readdirSync(protocolDir).filter((name) => name.endsWith('.json')).length, 1);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

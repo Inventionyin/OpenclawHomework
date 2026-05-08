@@ -12,6 +12,9 @@ const {
 const {
   sendFeishuTextMessage,
 } = require('./feishu-bridge');
+const {
+  saveHotMonitorCandidatesAsProtocolAssets,
+} = require('./protocol-asset-store');
 
 const DEFAULT_BENEFIT_QUERIES = [
   'free credits',
@@ -417,10 +420,16 @@ function getSearchQueries(env = process.env) {
 function normalizeSearchResult(provider, query, result = {}) {
   const link = result.url || result.link || result.href || '';
   const title = result.title || result.name || link;
+  const providerLabel = {
+    tavily: 'Tavily',
+    brave: 'Brave',
+    serpapi: `SerpApi ${result.engine || 'google'}`,
+    searxng: 'SearXNG',
+  }[provider] || `${provider[0].toUpperCase()}${provider.slice(1)}`;
   return {
     id: `search:${provider}:${link || `${query}:${title}`}`,
     title,
-    source: `${provider === 'serpapi' ? `SerpApi ${result.engine || 'google'}` : provider[0].toUpperCase() + provider.slice(1)} 搜索: ${query}`,
+    source: `${providerLabel} 搜索: ${query}`,
     kind: 'benefit-search',
     link,
     summary: result.content || result.description || result.snippet || result.text || '',
@@ -535,14 +544,44 @@ async function fetchSerpApiSearchItems(env = process.env, fetchImpl = fetch) {
   return items;
 }
 
+async function fetchSearxngSearchItems(env = process.env, fetchImpl = fetch) {
+  const baseUrl = env.HOT_MONITOR_SEARXNG_URL || env.SEARXNG_URL;
+  if (!baseUrl || String(env.HOT_MONITOR_SEARXNG_ENABLED || 'true').toLowerCase() === 'false') return [];
+  const perQuery = Number(env.HOT_MONITOR_SEARCH_PER_QUERY || env.HOT_MONITOR_SEARXNG_COUNT || 5);
+  const items = [];
+  for (const query of getSearchQueries(env)) {
+    try {
+      const url = new URL('/search', String(baseUrl).replace(/\/+$/, ''));
+      url.searchParams.set('q', query);
+      url.searchParams.set('format', 'json');
+      url.searchParams.set('language', env.HOT_MONITOR_SEARCH_LANG || 'zh-CN');
+      url.searchParams.set('safesearch', env.HOT_MONITOR_SEARXNG_SAFESEARCH || '1');
+      const json = await fetchJson(url.toString(), fetchImpl);
+      const results = Array.isArray(json.results) ? json.results : [];
+      items.push(...results.slice(0, perQuery).map((result) => normalizeSearchResult('searxng', query, result)));
+    } catch (error) {
+      items.push({
+        id: `search-error:searxng:${query}`,
+        title: `SearXNG 搜索失败：${query}`,
+        source: 'SearXNG 搜索',
+        kind: 'benefit-error',
+        summary: maskSensitiveUrl(error.message),
+        topic: query,
+      });
+    }
+  }
+  return items;
+}
+
 async function fetchExternalSearchItems(env = process.env, fetchImpl = fetch) {
   if (String(env.HOT_MONITOR_SEARCH_ENABLED || 'true').toLowerCase() === 'false') return [];
-  const [tavilyItems, braveItems, serpApiItems] = await Promise.all([
+  const [tavilyItems, braveItems, serpApiItems, searxngItems] = await Promise.all([
     fetchTavilySearchItems(env, fetchImpl),
     fetchBraveSearchItems(env, fetchImpl),
     fetchSerpApiSearchItems(env, fetchImpl),
+    fetchSearxngSearchItems(env, fetchImpl),
   ]);
-  return [...tavilyItems, ...braveItems, ...serpApiItems];
+  return [...tavilyItems, ...braveItems, ...serpApiItems, ...searxngItems];
 }
 
 async function fetchHackerNewsBenefitItems(env = process.env, fetchImpl = fetch) {
@@ -818,6 +857,23 @@ async function runHotMonitor(config = {}, options = {}) {
       top: snapshot.ordered.slice(0, 20),
       message,
     });
+    let protocolAssets = { saved: [], skipped: [], reason: 'disabled' };
+    if (
+      alertItems.length
+      && !config.dryRun
+      && toBool(env.HOT_MONITOR_PROTOCOL_ASSETS_ENABLED, true)
+    ) {
+      protocolAssets = await Promise.resolve(
+        (options.saveProtocolAssets || saveHotMonitorCandidatesAsProtocolAssets)(alertItems, {
+          dir: env.PROTOCOL_ASSET_DIR,
+          now: now.toISOString(),
+        }),
+      ).catch((error) => ({
+        saved: [],
+        skipped: [],
+        reason: error.message,
+      }));
+    }
     let notification = { sent: false, reason: shouldNotify ? 'dry_run' : 'no_alerts' };
     if (shouldNotify && !config.dryRun && toBool(env.HOT_MONITOR_FEISHU_NOTIFY_ENABLED, true)) {
       notification = await sendHotMonitorNotification(env, message, options).catch((error) => ({
@@ -836,8 +892,9 @@ async function runHotMonitor(config = {}, options = {}) {
           total: snapshot.total,
           alertCount: alertItems.length,
           sent: Boolean(notification.sent),
+          protocolAssetsSaved: protocolAssets.saved.length,
         },
-        filesPatch: { outputFile },
+        filesPatch: { outputFile, protocolAssetDir: env.PROTOCOL_ASSET_DIR || null },
       }, { env });
     }
     return {
@@ -848,6 +905,7 @@ async function runHotMonitor(config = {}, options = {}) {
       notification,
       stateFile,
       outputFile,
+      protocolAssets,
       message,
     };
   } catch (error) {
@@ -900,6 +958,7 @@ module.exports = {
   fetchExternalSearchItems,
   fetchHackerNewsBenefitItems,
   fetchSerpApiSearchItems,
+  fetchSearxngSearchItems,
   fetchTavilySearchItems,
   formatHotMonitorMessage,
   isExpiredBenefitItem,

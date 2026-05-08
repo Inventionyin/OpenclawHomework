@@ -7,6 +7,7 @@ const test = require('node:test');
 const {
   buildProtocolTestCases,
   buildProtocolAssetReport,
+  saveHotMonitorCandidatesAsProtocolAssets,
   findProtocolAssets,
   listProtocolAssets,
   normalizeProtocolAssetInput,
@@ -260,6 +261,35 @@ test('buildProtocolTestCases turns captured assets into reusable contract cases'
     assert.deepEqual(result.cases[0].assertions, [
       { field: 'status', op: 'equals', value: 201 },
     ]);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('saveHotMonitorCandidatesAsProtocolAssets stores searchable hot monitor links', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'hot-candidates-protocol-'));
+  try {
+    const result = saveHotMonitorCandidatesAsProtocolAssets([
+      {
+        id: 'benefit:gpu',
+        title: 'Free GPU credits',
+        titleZh: 'GPU 额度福利线索',
+        summary: 'Apply before May 30.',
+        source: 'Tavily 搜索',
+        kind: 'benefit-search',
+        link: 'https://example.com/gpu',
+        categories: ['benefit'],
+        score: 120,
+      },
+    ], { dir: tempDir, now: '2026-05-08T10:00:00.000Z' });
+
+    assert.equal(result.saved.length, 1);
+    assert.equal(result.saved[0].summary.normalizedPath, '/gpu');
+    assert(result.saved[0].tags.includes('hot-monitor'));
+    assert(result.saved[0].tags.includes('benefit'));
+    assert.match(result.saved[0].summaryText, /GPU 额度福利线索/);
+    const report = buildProtocolAssetReport({ tag: 'hot-monitor' }, { dir: tempDir });
+    assert.equal(report.total, 1);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

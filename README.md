@@ -57,6 +57,30 @@ Useful Feishu examples:
 文员，发送今天日报到邮箱
 ```
 
+## Hot Monitor And Ecommerce Agent Playbook
+
+The hot monitor can use GitHub/HN/RSS plus optional Tavily, Brave, SerpApi, and SearXNG sources. Search candidates are translated into Chinese summaries, filtered for expired benefits, and can be saved into protocol assets for later browser verification and contract test generation.
+
+The ecommerce workflow is:
+
+```text
+hot monitor
+  -> browser verification / CDP capture
+  -> protocol asset store
+  -> protocol test cases
+  -> GitHub Actions UI automation
+  -> customer-service training data and daily report
+```
+
+Useful commands:
+
+```text
+帮我搜今天电商测试和 AI 客服相关福利，过期的不要提醒
+把最新福利候选做浏览器验证并协议入库
+打开自有电商平台登录页做浏览器验证和抓包
+把最近协议资产转成接口契约测试用例
+```
+
 ## ClawEmail Workbench
 
 The Feishu clerk agent now has a lightweight ClawEmail workbench. It reads recent inbox snapshots from the ClawEmail inbox notifier, combines them with the outbound mail ledger, classifies messages, and shows pending approval items before any risky reply is sent.

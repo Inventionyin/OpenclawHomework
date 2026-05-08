@@ -23,9 +23,41 @@ data/qa-assets/customer-service-cases.json  144 条电商客服用例
 data/qa-assets/ui-automation-matrix.json     60 条 UI 自动化测试矩阵
 data/qa-assets/email-playbook.json           10 条邮箱动作玩法
 data/qa-assets/submailbox-registration-pool.json  6 条子邮箱测试账号池规则
+data/qa-assets/ecommerce-agent-playbook.json  电商 Agent 高级玩法编排
 ```
 
 这些是第一批种子数据。后续可以让 Hermes 用 LongCat Flash-Lite 批量扩展，Thinking-2601 负责抽检评分。
+
+## 1.1 电商 Agent 高级玩法
+
+`ecommerce-agent-playbook.json` 把你现在的几条线串成一个可演示流程：
+
+```text
+热点雷达 -> 浏览器验证 -> 协议入库 -> UI 自动化 -> 客服训练数据 -> 日报复盘
+```
+
+推荐玩法：
+
+```text
+1. Hermes 用 Tavily/SearXNG/GitHub/HN/RSS 搜电商测试、AI 客服、浏览器自动化、免费额度线索。
+2. hot-monitor 过滤过期活动，补中文理解和中文摘要。
+3. 候选链接保存到 protocol-assets，作为可检索的资料库。
+4. browser-agent 打开自有电商平台页面，截图、抓 console、抓 network/CDP。
+5. protocol-asset-store 把请求响应转成 contract cases。
+6. OpenClaw 触发 UItest GitHub Actions 跑 UI 自动化。
+7. Hermes 文员把失败样本变成客服训练数据和明日计划。
+```
+
+常用自然语言：
+
+```text
+帮我搜今天电商测试和 AI 客服相关福利，过期的不要提醒
+把最新福利候选做浏览器验证并协议入库
+打开自有电商平台登录页做浏览器验证和抓包
+把最近协议资产转成接口契约测试用例
+跑 main 分支 UI 自动化并把 Allure 报告发邮箱
+基于今天失败样本生成一批电商客服训练数据
+```
 
 ## 2. LongCat 模型分工
 

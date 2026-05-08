@@ -283,12 +283,58 @@ function buildProtocolTestCases(query = {}, options = {}) {
   };
 }
 
+function saveHotMonitorCandidatesAsProtocolAssets(candidates = [], options = {}) {
+  const saved = [];
+  const skipped = [];
+  for (const candidate of candidates) {
+    const link = String(candidate.link || '').trim();
+    if (!link) {
+      skipped.push({ id: candidate.id || '', reason: 'missing_link' });
+      continue;
+    }
+    const tags = [
+      'hot-monitor',
+      candidate.kind,
+      ...(Array.isArray(candidate.categories) ? candidate.categories : []),
+    ].filter(Boolean);
+    const summaryText = [
+      candidate.titleZh || candidate.title,
+      candidate.summaryZh,
+      candidate.summary,
+      candidate.source,
+    ].filter(Boolean).join(' | ');
+    saved.push(saveProtocolAsset({
+      id: candidate.id ? `hot-${String(candidate.id).replace(/[^a-z0-9_-]+/gi, '-').slice(0, 80)}` : undefined,
+      method: 'GET',
+      url: link,
+      status: 0,
+      source: candidate.source || 'hot-monitor',
+      kind: candidate.kind || 'hot-monitor',
+      tags,
+      summaryText,
+      hotMonitor: {
+        id: candidate.id || '',
+        title: candidate.title || '',
+        titleZh: candidate.titleZh || '',
+        score: candidate.score || 0,
+        alertReason: candidate.alertReason || '',
+      },
+      createdAt: options.now || new Date().toISOString(),
+    }, options));
+  }
+  return {
+    saved,
+    skipped,
+  };
+}
+
 module.exports = {
   buildProtocolTestCases,
   buildProtocolAssetReport,
   findProtocolAssets,
   normalizeProtocolAssetInput,
   redactProtocolAsset,
+  saveHotMonitorCandidatesAsProtocolAssets,
   summarizeProtocolAsset,
   saveProtocolAsset,
   listProtocolAssets,

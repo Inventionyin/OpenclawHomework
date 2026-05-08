@@ -5,6 +5,7 @@ const {
   buildAgentEvalTasks,
   buildCustomerServiceCases,
   buildEmailPlaybook,
+  buildEcommerceAgentPlaybook,
   buildSubmailboxRegistrationPool,
   buildUiAutomationMatrix,
 } = require('../scripts/qa-assets');
@@ -56,4 +57,16 @@ test('buildSubmailboxRegistrationPool separates registration-safe and internal m
   assert(pool.some((item) => item.mailbox === 'evasan.account@claw.163.com' && item.policy === 'allowed'));
   assert(pool.some((item) => item.group === 'archive' && item.policy === 'internal-only'));
   assert(pool.every((item) => item.platformRule && item.statusFields.includes('verification_result')));
+});
+
+test('buildEcommerceAgentPlaybook connects search radar browser verification and UI automation', () => {
+  const playbook = buildEcommerceAgentPlaybook();
+
+  assert.equal(playbook.domain, 'ecommerce-ai-testing');
+  assert(playbook.stages.some((stage) => stage.id === 'hot-radar'));
+  assert(playbook.stages.some((stage) => stage.id === 'browser-verification'));
+  assert(playbook.stages.some((stage) => stage.id === 'ui-automation'));
+  assert(playbook.commands.some((command) => /福利/.test(command.say)));
+  assert(playbook.commands.some((command) => /浏览器验证/.test(command.say)));
+  assert(playbook.outputs.includes('protocol-assets'));
 });

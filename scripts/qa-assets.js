@@ -145,6 +145,68 @@ function buildSubmailboxRegistrationPool() {
   }));
 }
 
+function buildEcommerceAgentPlaybook() {
+  return {
+    domain: 'ecommerce-ai-testing',
+    positioning: '用搜索雷达找电商/AI客服/测试自动化玩法，用浏览器验证公开页面，用协议资产沉淀接口线索，再转成自有电商项目的 UI 自动化和客服训练任务。',
+    stages: [
+      {
+        id: 'hot-radar',
+        name: '热点和福利雷达',
+        owner: 'Hermes',
+        input: 'Tavily / SearXNG / GitHub / HN / RSS 候选链接',
+        output: '去重后的热点、福利、浏览器自动化项目和电商测试玩法线索',
+      },
+      {
+        id: 'browser-verification',
+        name: '浏览器验证',
+        owner: 'Hermes browser-agent',
+        input: '热点链接或自有电商页面 URL',
+        output: '页面标题、正文摘要、过期判断、截图、网络协议资产',
+      },
+      {
+        id: 'protocol-assets',
+        name: '协议入库',
+        owner: 'protocol-asset-store',
+        input: '浏览器捕获的请求/响应、热点候选链接',
+        output: '可查询、可转接口契约用例的协议资产',
+      },
+      {
+        id: 'ui-automation',
+        name: '电商 UI 自动化',
+        owner: 'OpenClaw',
+        input: 'projectku-web、UItest、协议资产、邮箱验证码测试账号',
+        output: 'GitHub Actions、Allure 报告、失败截图、复盘邮件',
+      },
+      {
+        id: 'customer-service-training',
+        name: 'AI 客服训练数据',
+        owner: 'Hermes clerk-agent',
+        input: '客服邮件、失败样本、退款/物流/优惠券/账号问题',
+        output: '训练样本、评测集、日报和明日计划',
+      },
+    ],
+    commands: [
+      { say: '帮我搜今天电商测试和 AI 客服相关福利，过期的不要提醒', route: 'hot-monitor' },
+      { say: '把最新福利候选做浏览器验证并协议入库', route: 'browser-agent' },
+      { say: '打开自有电商平台登录页做浏览器验证和抓包', route: 'browser-agent' },
+      { say: '把最近协议资产转成接口契约测试用例', route: 'browser-agent' },
+      { say: '跑 main 分支 UI 自动化并把 Allure 报告发邮箱', route: 'ui-test-agent' },
+      { say: '基于今天失败样本生成一批电商客服训练数据', route: 'clerk-agent' },
+    ],
+    outputs: [
+      'hot-monitor-latest',
+      'browser-screenshot',
+      'protocol-assets',
+      'protocol-test-cases',
+      'github-actions-run',
+      'allure-report',
+      'customer-service-cases',
+      'daily-summary-email',
+    ],
+  };
+}
+
 function writeJson(file, data) {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`);
@@ -158,6 +220,7 @@ function generateQaAssets(outputDir = join(process.cwd(), 'data', 'qa-assets')) 
     uiAutomationMatrix: buildUiAutomationMatrix(),
     emailPlaybook: buildEmailPlaybook(),
     submailboxRegistrationPool: buildSubmailboxRegistrationPool(),
+    ecommerceAgentPlaybook: buildEcommerceAgentPlaybook(),
   };
 
   writeJson(join(outputDir, 'agent-eval-tasks.json'), assets.agentEvalTasks);
@@ -165,6 +228,7 @@ function generateQaAssets(outputDir = join(process.cwd(), 'data', 'qa-assets')) 
   writeJson(join(outputDir, 'ui-automation-matrix.json'), assets.uiAutomationMatrix);
   writeJson(join(outputDir, 'email-playbook.json'), assets.emailPlaybook);
   writeJson(join(outputDir, 'submailbox-registration-pool.json'), assets.submailboxRegistrationPool);
+  writeJson(join(outputDir, 'ecommerce-agent-playbook.json'), assets.ecommerceAgentPlaybook);
   return assets;
 }
 
@@ -178,12 +242,14 @@ if (require.main === module) {
     uiAutomationMatrix: assets.uiAutomationMatrix.length,
     emailPlaybook: assets.emailPlaybook.length,
     submailboxRegistrationPool: assets.submailboxRegistrationPool.length,
+    ecommerceAgentPlaybook: Boolean(assets.ecommerceAgentPlaybook),
   }, null, 2));
 }
 
 module.exports = {
   buildAgentEvalTasks,
   buildCustomerServiceCases,
+  buildEcommerceAgentPlaybook,
   buildEmailPlaybook,
   buildSubmailboxRegistrationPool,
   buildUiAutomationMatrix,
