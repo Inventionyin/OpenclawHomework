@@ -2880,6 +2880,171 @@ function getFeishuPayloadMode(payload, env = process.env, fallbackMode = 'opencl
   return fallbackMode;
 }
 
+function getWechatMpConfig(env = process.env) {
+  return {
+    appId: env.WECHAT_MP_APP_ID || '',
+    token: env.WECHAT_MP_TOKEN || '',
+    allowedOpenIds: String(env.WECHAT_MP_ALLOWED_OPENIDS || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean),
+    replyTimeoutMs: Number(env.WECHAT_MP_REPLY_TIMEOUT_MS || 4500),
+    maxReplyChars: Number(env.WECHAT_MP_MAX_REPLY_CHARS || 900),
+  };
+}
+
+function verifyWechatMpSignature(query = {}, token = '') {
+  const signature = String(query.signature || '');
+  const timestamp = String(query.timestamp || '');
+  const nonce = String(query.nonce || '');
+  if (!signature || !timestamp || !nonce || !token) {
+    return false;
+  }
+  const digest = createHash('sha1')
+    .update([token, timestamp, nonce].sort().join(''))
+    .digest('hex');
+  return digest === signature;
+}
+
+function escapeWechatXml(value = '') {
+  return String(value ?? '').replace(/[<>&'"]/g, (char) => ({
+    '<': '&lt;',
+    '>': '&gt;',
+    '&': '&amp;',
+    "'": '&apos;',
+    '"': '&quot;',
+  }[char]));
+}
+
+function extractWechatXmlTag(xml = '', tag = '') {
+  const match = String(xml || '').match(new RegExp(`<${tag}><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>|<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+  if (!match) {
+    return '';
+  }
+  return String(match[1] ?? match[2] ?? '').trim();
+}
+
+function parseWechatMpXml(xml = '') {
+  return {
+    toUserName: extractWechatXmlTag(xml, 'ToUserName'),
+    fromUserName: extractWechatXmlTag(xml, 'FromUserName'),
+    createTime: Number(extractWechatXmlTag(xml, 'CreateTime') || 0),
+    msgType: extractWechatXmlTag(xml, 'MsgType'),
+    content: extractWechatXmlTag(xml, 'Content'),
+    event: extractWechatXmlTag(xml, 'Event'),
+    msgId: extractWechatXmlTag(xml, 'MsgId'),
+  };
+}
+
+function buildWechatMpTextReplyXml(message = {}, content = '') {
+  const now = Math.floor(Date.now() / 1000);
+  return [
+    '<xml>',
+    `<ToUserName><![CDATA[${escapeWechatXml(message.fromUserName || '')}]]></ToUserName>`,
+    `<FromUserName><![CDATA[${escapeWechatXml(message.toUserName || '')}]]></FromUserName>`,
+    `<CreateTime>${now}</CreateTime>`,
+    '<MsgType><![CDATA[text]]></MsgType>',
+    `<Content><![CDATA[${escapeWechatXml(content || '收到')}]]></Content>`,
+    '</xml>',
+  ].join('');
+}
+
+function buildWechatSyntheticFeishuPayload(message = {}) {
+  const text = message.content || (message.event === 'subscribe' ? '你好' : '');
+  return {
+    header: {
+      event_type: 'wechat.mp.message',
+    },
+    event: {
+      sender: {
+        sender_id: {
+          user_id: message.fromUserName || '',
+          open_id: message.fromUserName || '',
+        },
+      },
+      message: {
+        message_id: message.msgId || `${message.fromUserName || 'wechat'}:${message.createTime || Date.now()}`,
+        chat_id: message.fromUserName || '',
+        message_type: 'text',
+        content: JSON.stringify({ text }),
+      },
+    },
+  };
+}
+
+function buildWechatMpRouteEnv(env = process.env, message = {}) {
+  const routeEnv = buildRouteEnv('hermes', env);
+  const config = getWechatMpConfig(env);
+  routeEnv.FEISHU_ASSISTANT_NAME = env.WECHAT_MP_ASSISTANT_NAME || routeEnv.FEISHU_ASSISTANT_NAME || 'Hermes';
+  routeEnv.FEISHU_ALLOWED_USER_IDS = config.allowedOpenIds.join(',');
+  routeEnv.FEISHU_ALLOWED_USER_IDS_ENV_KEY = 'WECHAT_MP_ALLOWED_OPENIDS';
+  routeEnv.FEISHU_REQUIRE_BINDING = config.allowedOpenIds.length
+    ? ''
+    : (env.WECHAT_MP_REQUIRE_BINDING || 'true');
+  routeEnv.WECHAT_MP_FROM_OPENID = message.fromUserName || '';
+  return routeEnv;
+}
+
+function trimWechatReply(text = '', limit = 900) {
+  const value = String(text || '').trim() || '收到。';
+  if (value.length <= limit) {
+    return value;
+  }
+  return `${value.slice(0, Math.max(0, limit - 20))}\n\n（内容较长，已截断）`;
+}
+
+function withWechatTimeout(promise, timeoutMs = 4500) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => {
+      setTimeout(() => resolve({
+        handled: true,
+        replyText: '收到，Hermes 正在处理。这个任务可能超过微信公众号被动回复时间限制，请稍后再发“任务状态”或到飞书查看。',
+      }), Math.max(1000, timeoutMs));
+    }),
+  ]);
+}
+
+async function handleWechatMpWebhook(request, response, env = process.env, options = {}) {
+  const config = getWechatMpConfig(env);
+  const url = new URL(String(request.url || '/'), 'http://127.0.0.1');
+  const query = Object.fromEntries(url.searchParams.entries());
+  if (!verifyWechatMpSignature(query, config.token)) {
+    response.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+    response.end('invalid signature');
+    return true;
+  }
+
+  if (request.method === 'GET') {
+    response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+    response.end(String(query.echostr || ''));
+    return true;
+  }
+
+  if (request.method !== 'POST') {
+    response.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' });
+    response.end('method not allowed');
+    return true;
+  }
+
+  const rawBody = await readRequestBody(request);
+  const message = parseWechatMpXml(rawBody);
+  const payload = buildWechatSyntheticFeishuPayload(message);
+  const routeEnv = buildWechatMpRouteEnv(env, message);
+  const text = extractFeishuText(payload);
+  const routeResolver = options.resolveAgentRoute || resolveAgentRoute;
+  const routedReplyBuilder = options.buildRoutedAgentReply || buildRoutedAgentReply;
+  const route = await routeResolver(text, routeEnv, options);
+  const routed = await withWechatTimeout(
+    routedReplyBuilder(payload, routeEnv, options, route),
+    config.replyTimeoutMs,
+  );
+  const replyText = trimWechatReply(routed?.replyText || '收到。', config.maxReplyChars);
+  response.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8' });
+  response.end(buildWechatMpTextReplyXml(message, replyText));
+  return true;
+}
+
 function buildRouteOptions(mode, options = {}) {
   if (mode !== 'hermes') {
     return options;
@@ -4274,6 +4439,12 @@ function createServer(env = process.env, options = {}) {
       return;
     }
 
+    if (getRequestPath(request.url) === '/webhook/wechat/mp') {
+      if (await handleWechatMpWebhook(request, response, env, options)) {
+        return;
+      }
+    }
+
     const routeMode = getFeishuRouteMode(request.url);
     if (request.method !== 'POST' || !routeMode) {
       sendJson(response, 404, { ok: false, message: 'Not found' });
@@ -4393,6 +4564,7 @@ function main() {
   server.listen(port, () => {
     console.log(`Feishu bridge listening on http://127.0.0.1:${port}`);
     console.log('Webhook path: POST /webhook/feishu');
+    console.log('WeChat MP path: GET/POST /webhook/wechat/mp');
   });
 }
 
@@ -4419,19 +4591,25 @@ module.exports = {
   writeDailySummaryState,
   appendDailySummaryRun,
   buildFeishuCardMessage,
+  buildWechatMpTextReplyXml,
   buildFeishuTextMessage,
   buildRouteEnv,
+  buildWechatMpRouteEnv,
   createServer,
   downloadFeishuMessageImage,
   extractFeishuText,
   extractFeishuImageKeys,
   getFeishuDedupKeys,
   getFeishuRouteMode,
+  getWechatMpConfig,
   handleDashboardRequest,
   handleFeishuWebhook,
+  handleWechatMpWebhook,
   isDuplicateFeishuEvent,
   notifyFeishuRunResult,
+  parseWechatMpXml,
   resolveAgentRoute,
+  verifyWechatMpSignature,
   scheduleFeishuResultNotification,
   parseOpenClawChatOutput,
   parseSmallTalkMessage,

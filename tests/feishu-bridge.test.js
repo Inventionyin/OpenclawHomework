@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
@@ -49,6 +50,10 @@ const {
   readDailySummaryState,
   writeDailySummaryState,
   appendDailySummaryRun,
+  buildWechatMpTextReplyXml,
+  getWechatMpConfig,
+  parseWechatMpXml,
+  verifyWechatMpSignature,
 } = require('../scripts/feishu-bridge');
 const {
   readMailLedgerEntries,
@@ -68,6 +73,43 @@ async function waitForCondition(checker, options = {}) {
 
   throw new Error('Timed out waiting for async condition');
 }
+
+function buildWechatSignature(token, timestamp, nonce) {
+  return createHash('sha1')
+    .update([token, timestamp, nonce].sort().join(''))
+    .digest('hex');
+}
+
+test('wechat mp helpers verify signature parse xml and build text reply', () => {
+  const token = 'wechat-test-token';
+  const timestamp = '1710000000';
+  const nonce = 'nonce-1';
+  const signature = buildWechatSignature(token, timestamp, nonce);
+
+  assert.equal(verifyWechatMpSignature({ signature, timestamp, nonce }, token), true);
+  assert.equal(verifyWechatMpSignature({ signature: 'bad', timestamp, nonce }, token), false);
+  assert.deepEqual(getWechatMpConfig({
+    WECHAT_MP_APP_ID: 'wx-demo',
+    WECHAT_MP_TOKEN: token,
+    WECHAT_MP_ALLOWED_OPENIDS: 'openid-a, openid-b',
+  }).allowedOpenIds, ['openid-a', 'openid-b']);
+
+  const message = parseWechatMpXml([
+    '<xml>',
+    '<ToUserName><![CDATA[gh_test]]></ToUserName>',
+    '<FromUserName><![CDATA[openid-a]]></FromUserName>',
+    '<CreateTime>1710000001</CreateTime>',
+    '<MsgType><![CDATA[text]]></MsgType>',
+    '<Content><![CDATA[服务器状态]]></Content>',
+    '<MsgId>42</MsgId>',
+    '</xml>',
+  ].join(''));
+
+  assert.equal(message.toUserName, 'gh_test');
+  assert.equal(message.fromUserName, 'openid-a');
+  assert.equal(message.content, '服务器状态');
+  assert.match(buildWechatMpTextReplyXml(message, '收到 <ok>'), /&lt;ok&gt;/);
+});
 
 test('parseRunUiTestCommand parses branch and run mode', () => {
   assert.deepEqual(parseRunUiTestCommand('/run-ui-test develop smoke'), {
@@ -3103,6 +3145,58 @@ test('createServer responds to Feishu challenge on Hermes route', async () => {
 
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { challenge: 'hermes-challenge' });
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('createServer handles wechat mp verification and text reply', async () => {
+  const token = 'wechat-test-token';
+  const timestamp = '1710000000';
+  const nonce = 'nonce-1';
+  const signature = buildWechatSignature(token, timestamp, nonce);
+  const server = createServer({
+    WECHAT_MP_TOKEN: token,
+    WECHAT_MP_ALLOWED_OPENIDS: 'openid-a',
+    WECHAT_MP_REPLY_TIMEOUT_MS: '1000',
+  }, {
+    buildRoutedAgentReply: async () => ({
+      handled: true,
+      replyText: '服务器状态：正常',
+    }),
+  });
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const verifyResponse = await fetch(`http://127.0.0.1:${port}/webhook/wechat/mp?signature=${signature}&timestamp=${timestamp}&nonce=${nonce}&echostr=hello`, {
+      method: 'GET',
+    });
+
+    assert.equal(verifyResponse.status, 200);
+    assert.equal(await verifyResponse.text(), 'hello');
+
+    const postResponse = await fetch(`http://127.0.0.1:${port}/webhook/wechat/mp?signature=${signature}&timestamp=${timestamp}&nonce=${nonce}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/xml',
+      },
+      body: [
+        '<xml>',
+        '<ToUserName><![CDATA[gh_test]]></ToUserName>',
+        '<FromUserName><![CDATA[openid-a]]></FromUserName>',
+        '<CreateTime>1710000001</CreateTime>',
+        '<MsgType><![CDATA[text]]></MsgType>',
+        '<Content><![CDATA[服务器状态]]></Content>',
+        '<MsgId>42</MsgId>',
+        '</xml>',
+      ].join(''),
+    });
+
+    assert.equal(postResponse.status, 200);
+    const body = await postResponse.text();
+    assert.match(body, /服务器状态：正常/);
+    assert.match(body, /<!\[CDATA\[text\]\]>/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
