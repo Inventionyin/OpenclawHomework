@@ -315,6 +315,69 @@ function buildAlertReason(item = {}, metrics = {}, categories = []) {
   return reasons.join('，');
 }
 
+function parseMonthName(value) {
+  const month = String(value || '').toLowerCase().slice(0, 3);
+  return {
+    jan: 1,
+    feb: 2,
+    mar: 3,
+    apr: 4,
+    may: 5,
+    jun: 6,
+    jul: 7,
+    aug: 8,
+    sep: 9,
+    oct: 10,
+    nov: 11,
+    dec: 12,
+  }[month] || 0;
+}
+
+function buildLocalDate(year, month, day) {
+  return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 23, 59, 59));
+}
+
+function extractDeadlineDates(text = '', referenceDate = new Date()) {
+  const source = String(text || '');
+  const dates = [];
+  const referenceYear = referenceDate.getUTCFullYear();
+  const chinesePattern = /(?:(20\d{2})\s*年\s*)?(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]?\s*(?:开奖|截止|结束|过期|前|之前|报名截止|申请截止|领取截止)/g;
+  for (const match of source.matchAll(chinesePattern)) {
+    dates.push(buildLocalDate(match[1] || referenceYear, match[2], match[3]));
+  }
+  const englishPattern = /(?:before|until|ends?|deadline|expires?|apply before)\s+([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:,\s*(20\d{2}))?/gi;
+  for (const match of source.matchAll(englishPattern)) {
+    const month = parseMonthName(match[1]);
+    if (month) dates.push(buildLocalDate(match[3] || referenceYear, month, match[2]));
+  }
+  const isoPattern = /(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\s*(?:开奖|截止|结束|过期|前|之前|deadline|expires?|end)?/gi;
+  for (const match of source.matchAll(isoPattern)) {
+    dates.push(buildLocalDate(match[1], match[2], match[3]));
+  }
+  return dates.filter((date) => Number.isFinite(date.getTime()));
+}
+
+function isExpiredBenefitItem(item = {}, referenceDate = new Date()) {
+  const text = [
+    item.title,
+    item.summary,
+    item.titleZh,
+    item.summaryZh,
+    item.topic,
+  ].join(' ');
+  const deadlines = extractDeadlineDates(text, referenceDate);
+  if (!deadlines.length) return false;
+  const referenceEnd = new Date(Date.UTC(
+    referenceDate.getUTCFullYear(),
+    referenceDate.getUTCMonth(),
+    referenceDate.getUTCDate(),
+    0,
+    0,
+    0,
+  ));
+  return deadlines.some((deadline) => deadline.getTime() < referenceEnd.getTime());
+}
+
 async function fetchText(url, fetchImpl = fetch, options = {}) {
   const response = await fetchImpl(url, {
     headers: {
@@ -613,6 +676,7 @@ function selectAlertItems(snapshot = {}, previousState = {}, env = process.env, 
   const maxAlerts = Number(options.maxAlerts ?? env.HOT_MONITOR_MAX_ALERTS ?? 8);
   const cooldownMinutes = Number(options.cooldownMinutes ?? env.HOT_MONITOR_ALERT_COOLDOWN_MINUTES ?? 360);
   const nowMs = Date.parse(snapshot.generatedAt || new Date().toISOString());
+  const referenceDate = options.now || new Date(snapshot.generatedAt || Date.now());
   const alerts = previousState.alerts || {};
   return (snapshot.ordered || [])
     .map((item) => {
@@ -625,6 +689,9 @@ function selectAlertItems(snapshot = {}, previousState = {}, env = process.env, 
     .filter((item) => {
       const lastAlert = Date.parse(alerts[item.id] || '');
       if (Number.isFinite(lastAlert) && nowMs - lastAlert < cooldownMinutes * 60 * 1000) {
+        return false;
+      }
+      if (item.categories?.includes('benefit') && isExpiredBenefitItem(item, referenceDate)) {
         return false;
       }
       return shouldAlertItem(item, env, options);
@@ -835,6 +902,7 @@ module.exports = {
   fetchSerpApiSearchItems,
   fetchTavilySearchItems,
   formatHotMonitorMessage,
+  isExpiredBenefitItem,
   parseCliArgs,
   runHotMonitor,
   scoreHotItem,

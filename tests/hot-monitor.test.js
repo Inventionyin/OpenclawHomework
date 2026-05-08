@@ -11,6 +11,7 @@ const {
   fetchSerpApiSearchItems,
   fetchTavilySearchItems,
   formatHotMonitorMessage,
+  isExpiredBenefitItem,
   runHotMonitor,
   scoreHotItem,
   selectAlertItems,
@@ -170,6 +171,46 @@ test('shouldAlertItem ignores tiny GitHub movement below short-window thresholds
     HOT_MONITOR_MIN_DELTA_STARS: '30',
     HOT_MONITOR_MIN_STARS_TODAY: '50',
   }), false);
+});
+
+test('isExpiredBenefitItem detects old giveaway deadline text', () => {
+  assert.equal(isExpiredBenefitItem({
+    title: '免费领小龙虾 AI 主机',
+    summary: '转发朋友圈，3 月 17 日开奖。',
+    publishedAt: '2026-03-10T00:00:00.000Z',
+  }, new Date('2026-05-08T00:00:00.000Z')), true);
+
+  assert.equal(isExpiredBenefitItem({
+    title: 'Free GPU credits for developers',
+    summary: 'Apply before May 30 to claim credits.',
+    publishedAt: '2026-05-01T00:00:00.000Z',
+  }, new Date('2026-05-08T00:00:00.000Z')), false);
+});
+
+test('selectAlertItems filters expired benefit activities', () => {
+  const now = new Date('2026-05-08T10:00:00.000Z');
+  const snapshot = buildHotMonitorSnapshot([
+    {
+      id: 'benefit:expired',
+      title: '免费领小龙虾 AI 主机',
+      source: 'Tavily 搜索',
+      kind: 'benefit-search',
+      summary: '转发朋友圈，3 月 17 日开奖。',
+      publishedAt: '2026-03-10T00:00:00.000Z',
+    },
+    {
+      id: 'benefit:active',
+      title: 'Free GPU credits for developers',
+      source: 'Tavily 搜索',
+      kind: 'benefit-search',
+      summary: 'Apply before May 30 to claim credits.',
+      publishedAt: '2026-05-01T00:00:00.000Z',
+    },
+  ], { items: {}, alerts: {} }, {}, { now });
+
+  const alerts = selectAlertItems(snapshot, { items: {}, alerts: {} }, {}, { now });
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0].id, 'benefit:active');
 });
 
 test('formatHotMonitorMessage separates benefits and technical hotspots', () => {
