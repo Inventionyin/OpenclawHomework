@@ -19,6 +19,7 @@ const {
   buildMemoryAgentReply,
   buildOpsAgentReply,
   buildPlannerClarifyReply,
+  buildDifyTestingAssistantReply,
   buildQaAgentReply,
   sanitizeReplyField,
 } = require('../scripts/agents/agent-handlers');
@@ -1114,6 +1115,37 @@ test('buildQaAgentReply answers customer service training requests naturally', (
   assert.match(reply, /144/);
   assert.match(reply, /customer-service-cases\.json/);
   assert.doesNotMatch(reply, /\/status/);
+});
+
+test('buildDifyTestingAssistantReply formats remote answer', () => {
+  const reply = buildDifyTestingAssistantReply(
+    { action: 'dify-testing-assistant', query: '请根据需求生成测试用例' },
+    { ok: true, mode: 'remote', answer: '测试目标：验证登录。' },
+  );
+
+  assert.match(reply, /Dify 测试助理结果/);
+  assert.match(reply, /测试目标：验证登录/);
+  assert.match(reply, /OpenClaw/);
+});
+
+test('buildDifyTestingAssistantReply formats fallback without leaking secrets', () => {
+  const reply = buildDifyTestingAssistantReply(
+    { action: 'dify-testing-assistant', query: '请根据需求生成测试用例' },
+    {
+      ok: false,
+      mode: 'fallback',
+      reason: 'error',
+      message: 'Dify error with [REDACTED]',
+      config: { apiKey: '[REDACTED]' },
+    },
+  );
+
+  assert.match(reply, /Dify 测试助理暂不可用/);
+  assert.match(reply, /测试目标/);
+  assert.match(reply, /测试用例/);
+  assert.match(reply, /改进建议/);
+  assert.doesNotMatch(reply, /app-/);
+  assert.doesNotMatch(reply, /secret/);
 });
 
 test('buildOpsAgentReply formats whitelisted check results', async () => {

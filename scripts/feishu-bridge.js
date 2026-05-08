@@ -29,8 +29,12 @@ const {
   buildMemoryAgentReply,
   buildOpsAgentReply,
   buildPlannerClarifyReply,
+  buildDifyTestingAssistantReply,
   buildQaAgentReply,
 } = require('./agents/agent-handlers');
+const {
+  askDifyTestingAssistant,
+} = require('./dify-testing-assistant');
 const {
   buildIntentDiagnosis,
 } = require('./agents/intent-diagnoser');
@@ -3693,6 +3697,17 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
   }
 
   if (route.agent === 'qa-agent') {
+    if (route.action === 'dify-testing-assistant') {
+      const difyRunner = options.difyTestingAssistantRunner || askDifyTestingAssistant;
+      const result = await difyRunner(route.query || text, {
+        env,
+        fetchImpl: options.fetchImpl,
+      });
+      return {
+        handled: true,
+        replyText: buildDifyTestingAssistantReply({ ...route, rawText: text }, result),
+      };
+    }
     return {
       handled: true,
       replyText: buildQaAgentReply(route),

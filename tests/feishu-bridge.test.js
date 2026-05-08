@@ -1616,7 +1616,7 @@ test('buildRoutedAgentReply can send clerk daily summary email when explicitly r
       },
     },
     {
-      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
       EMAIL_NOTIFY_ENABLED: 'true',
     },
     {
@@ -1651,7 +1651,7 @@ test('buildRoutedAgentReply passes browser-agent protocol asset reporter through
       },
     },
     {
-      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
     },
     {
       protocolAssetReporter: async (request) => {
@@ -1715,6 +1715,118 @@ test('buildRoutedAgentReply can turn captured protocol assets into test cases', 
   assert.equal(reply.handled, true);
   assert.match(reply.replyText, /协议资产已整理成测试用例/);
   assert.match(reply.replyText, /POST \/api\/login -> 200/);
+});
+
+test('buildRoutedAgentReply routes Dify testing assistant through injected runner', async () => {
+  let receivedQuery;
+  let receivedEnv;
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-dify-test-cases',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '请根据需求文档帮我生成测试用例' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      DIFY_TESTING_ASSISTANT_ENABLED: 'true',
+    },
+    {
+      difyTestingAssistantRunner: async (query, options) => {
+        receivedQuery = query;
+        receivedEnv = options.env;
+        return {
+          ok: true,
+          mode: 'remote',
+          answer: '测试目标：验证购物车结算；测试用例：登录、加购、下单。',
+        };
+      },
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.equal(receivedQuery, '请根据需求文档帮我生成测试用例');
+  assert.equal(receivedEnv.DIFY_TESTING_ASSISTANT_ENABLED, 'true');
+  assert.match(reply.replyText, /Dify 测试助理结果/);
+  assert.match(reply.replyText, /购物车结算/);
+});
+
+test('buildRoutedAgentReply returns structured Dify fallback when runner is unavailable', async () => {
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-dify-fallback',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '帮我做一下线上缺陷分析并给出复现建议' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {
+      difyTestingAssistantRunner: async () => ({
+        ok: false,
+        mode: 'fallback',
+        reason: 'unconfigured',
+        message: 'Dify testing assistant is not configured.',
+        config: { apiKey: '[REDACTED]' },
+      }),
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /Dify 测试助理暂不可用/);
+  assert.match(reply.replyText, /问题清单/);
+  assert.match(reply.replyText, /改进建议/);
+  assert.doesNotMatch(reply.replyText, /API_KEY|app-/);
+});
+
+test('buildRoutedAgentReply blocks unauthorized Dify testing assistant requests', async () => {
+  let called = false;
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-dify-unauthorized',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '请根据需求文档帮我生成测试用例' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-b',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+    },
+    {
+      difyTestingAssistantRunner: async () => {
+        called = true;
+        return { ok: true, answer: 'should not run' };
+      },
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.equal(called, false);
+  assert.match(reply.replyText, /未授权/);
 });
 
 test('buildRoutedAgentReply executes safe multi-intent routes and merges replies', async () => {

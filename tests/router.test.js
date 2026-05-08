@@ -224,6 +224,33 @@ test('routeAgentIntent routes natural-language QA asset requests', () => {
   });
 });
 
+test('routeAgentIntent routes Dify testing assistant intents', () => {
+  assert.deepEqual(routeAgentIntent('请根据需求文档帮我生成测试用例'), {
+    agent: 'qa-agent',
+    action: 'dify-testing-assistant',
+    query: '请根据需求文档帮我生成测试用例',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('帮我做一下线上缺陷分析并给出复现建议'), {
+    agent: 'qa-agent',
+    action: 'dify-testing-assistant',
+    query: '帮我做一下线上缺陷分析并给出复现建议',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('把这周测试报告整理一下，按模块输出结论'), {
+    agent: 'qa-agent',
+    action: 'dify-testing-assistant',
+    query: '把这周测试报告整理一下，按模块输出结论',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('Dify 工作流问答：回归测试策略怎么设计更稳妥'), {
+    agent: 'qa-agent',
+    action: 'dify-testing-assistant',
+    query: 'Dify 工作流问答：回归测试策略怎么设计更稳妥',
+    requiresAuth: true,
+  });
+});
+
 test('routeAgentIntent routes safe combined requests to multi-intent planner', () => {
   const route = routeAgentIntent('看看两台服务器内存硬盘，顺便看今天失败任务，再统计 token 用量');
 

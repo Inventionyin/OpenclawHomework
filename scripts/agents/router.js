@@ -208,7 +208,20 @@ function routeNaturalLanguageOps(text) {
 }
 
 function routeQaAssetIntent(text) {
-  const normalized = String(text ?? '').trim().toLowerCase();
+  const original = String(text ?? '').trim();
+  const normalized = original.toLowerCase();
+
+  if (/(dify).{0,12}(工作流|workflow|问答|qa)/i.test(normalized)
+    || /(需求|需求文档|prd|spec).{0,30}(测试用例|用例|测试点|场景)/i.test(normalized)
+    || /(缺陷|bug|故障|问题).{0,30}(分析|定位|复现|排查)/i.test(normalized)
+    || /(测试报告|报告).{0,20}(整理|汇总|归纳|总结)/i.test(normalized)) {
+    return {
+      agent: 'qa-agent',
+      action: 'dify-testing-assistant',
+      query: original,
+      requiresAuth: true,
+    };
+  }
 
   if (/(客服|客户|售后|support).{0,20}(训练|语料|数据|案例|用例|评测|评分)/i.test(normalized)
     || /(训练|生成|整理).{0,20}(电商|商城|购物).{0,20}(客服|售后)/i.test(normalized)) {

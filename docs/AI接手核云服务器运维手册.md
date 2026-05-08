@@ -77,6 +77,52 @@ https://hermes.evanshine.me/webhook/feishu
   -> 飞书结果卡片
 ```
 
+## 2.0 Dify 测试助手集成约定（Task C）
+
+统一角色边界：
+
+```text
+Hermes   = coordinator，负责对话编排、任务分解、流程协调
+Dify     = testing knowledge/generation，负责测试知识检索、测试内容生成
+OpenClaw = execution，负责命令执行、流水线触发、结果回传
+```
+
+建议环境变量（只保留变量名，不记录真实密钥）：
+
+```text
+DIFY_TESTING_ASSISTANT_ENABLED=true
+DIFY_TESTING_ASSISTANT_URL=http://127.0.0.1
+DIFY_TESTING_ASSISTANT_API_KEY=app-xxxx
+DIFY_TESTING_ASSISTANT_TIMEOUT_MS=30000
+DIFY_TESTING_ASSISTANT_RESPONSE_MODE=blocking
+HERMES_COORDINATOR_ENABLED=true
+OPENCLAW_EXECUTION_ENABLED=true
+```
+
+`DIFY_TESTING_ASSISTANT_URL` 可以填 Dify 服务 base URL（如 `http://127.0.0.1`），也可以填完整接口 `http://127.0.0.1/v1/chat-messages`；程序会自动归一化。
+
+飞书交互示例：
+
+```text
+文员，Dify 先给这次发布生成测试清单，OpenClaw 再跑 smoke。
+文员，让 Dify 复盘这次失败并输出修复建议，再交给 OpenClaw 执行验证。
+文员，这个需求按 Hermes 协调：Dify 出用例，OpenClaw 执行。
+```
+
+localhost 约束：
+
+```text
+飞书平台无法直接访问开发机 localhost/127.0.0.1 回调地址。
+本地调试必须通过公网 HTTPS 可达地址（内网穿透或服务器部署）。
+```
+
+安全红线：
+
+```text
+不要在文档、提交记录、飞书消息里写入任何 API key 或 secret 明文。
+敏感配置只存在 /etc/*.env（或等价密钥系统），最小权限读取。
+```
+
 关键点：
 
 - OpenClaw 和 Hermes 已经拆成两台核云服务器。

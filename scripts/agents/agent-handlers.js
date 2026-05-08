@@ -178,6 +178,9 @@ function buildCapabilityGuideReply(assistantName = 'OpenClaw') {
     '- 帮我生成一批电商客服训练数据',
     '- 帮我做一轮 OpenClaw 和 Hermes 的能力评测',
     '- 把报告和截图走文件通道：文员，把失败样本归档到 files',
+    '- 请根据需求文档生成测试用例',
+    '- 帮我分析这个缺陷原因',
+    '- Dify 工作流问答：回归测试策略怎么设计',
     '',
     '补充能力：',
     '- 画一张商品主图：生成一张图片：极简科技风商品主图',
@@ -1445,6 +1448,40 @@ function buildQaAgentReply(route = {}) {
   ].join('\n');
 }
 
+function buildDifyTestingAssistantFallback(result = {}, route = {}) {
+  const reason = sanitizeReplyField(result.reason || 'unavailable', 120);
+  const detail = sanitizeReplyField(result.message || 'Dify 测试助理暂不可用。', 500);
+  const query = sanitizeReplyField(route.query || route.rawText || '', 240);
+  return [
+    'Dify 测试助理暂不可用，先用本地结构化模板继续。',
+    `- 状态：${reason}`,
+    `- 详情：${detail}`,
+    query ? `- 原始需求：${query}` : null,
+    '',
+    '测试目标：围绕用户需求明确本次要验证的业务目标和质量风险。',
+    '测试范围：功能主流程、异常分支、数据边界、权限/登录态、关键兼容性。',
+    '测试用例：先拆 P0 冒烟用例，再补 P1 回归用例；每条用例要包含前置条件、步骤、预期结果。',
+    '执行步骤：Dify 负责生成方案；OpenClaw/Hermes 执行浏览器/API/GitHub Actions 验证；文员汇总报告。',
+    '预期结果：核心流程可稳定通过，失败点能定位到页面、接口、日志或测试数据。',
+    '实际结果：等待真实执行结果回填。',
+    '问题清单：执行失败后记录复现步骤、截图/trace、接口响应、日志摘要。',
+    '改进建议：优先修复阻塞 P0 的缺陷，再补自动化断言和报告归档。',
+  ].filter(Boolean).join('\n');
+}
+
+function buildDifyTestingAssistantReply(route = {}, result = {}) {
+  if (result?.ok) {
+    return [
+      'Dify 测试助理结果：',
+      trimForReply(result.answer || '', 2400),
+      '',
+      '下一步建议：如果这份方案要落地执行，可以继续说“交给 OpenClaw 跑冒烟验证”或“把这些用例转成 Playwright”。',
+    ].join('\n');
+  }
+
+  return buildDifyTestingAssistantFallback(result, route);
+}
+
 function targetLabel(target) {
   if (target === 'hermes') return 'Hermes';
   if (target === 'openclaw') return 'OpenClaw';
@@ -1631,6 +1668,7 @@ module.exports = {
   buildMemoryAgentReply,
   buildOpsAgentReply,
   buildPlannerClarifyReply,
+  buildDifyTestingAssistantReply,
   buildQaAgentReply,
   isSafeOpsText,
   sanitizeReplyField,
