@@ -31,6 +31,16 @@ const DEFAULT_BENEFIT_FEEDS = [
   { source: 'Cloudflare Blog', url: 'https://blog.cloudflare.com/rss/' },
 ];
 
+const DEFAULT_SEARCH_QUERIES = [
+  'free LLM API credits',
+  'AI credits free trial',
+  'GPU credits for developers',
+  'cloud server credits startup',
+  'site:linux.do token 免费 额度',
+  'site:v2ex.com 免费 token 服务器',
+  'site:tieba.baidu.com AI 免费 token',
+];
+
 const BENEFIT_KEYWORDS = [
   'free',
   'credit',
@@ -174,6 +184,47 @@ function includesAny(text, keywords) {
   return keywords.some((keyword) => lowered.includes(String(keyword).toLowerCase()));
 }
 
+function maskSensitiveUrl(url) {
+  return String(url || '')
+    .replace(/([?&](?:api_key|key|token|access_token)=)[^&]+/gi, '$1***')
+    .replace(/(Bearer\s+)[A-Za-z0-9._:-]+/gi, '$1***');
+}
+
+function buildChineseUnderstanding(item = {}, categories = classifyHotItem(item)) {
+  const text = [
+    item.title,
+    item.summary,
+    item.topic,
+    item.source,
+  ].join(' ');
+  const lowered = text.toLowerCase();
+  const focus = [];
+  if (/gpu|算力/.test(lowered)) focus.push('GPU/算力');
+  if (/server|cloud|服务器|云/.test(lowered)) focus.push('云服务器/云资源');
+  if (/token|api|llm|model|模型|额度|credits?/.test(lowered)) focus.push('模型 API 额度');
+  if (/trial|beta|invite|试用|内测|邀请/.test(lowered)) focus.push('试用/内测/邀请');
+  if (/playwright|cypress|selenium|testing|测试|自动化/.test(lowered)) focus.push('UI 自动化/测试');
+  if (/agent|mcp|dify|langgraph|openhands/.test(lowered)) focus.push('AI Agent 工作流');
+  if (/email|smtp|imap|邮箱/.test(lowered)) focus.push('邮箱平台');
+  const uniqueFocus = [...new Set(focus)].slice(0, 3);
+  if (categories.includes('benefit')) {
+    return {
+      titleZh: `${uniqueFocus.length ? uniqueFocus.join('、') : '开发者资源'}相关福利线索`,
+      summaryZh: '疑似包含免费额度、试用资格、邀请名额或云资源活动，建议先核验来源和领取条件。',
+    };
+  }
+  if (categories.includes('github') || categories.includes('tech')) {
+    return {
+      titleZh: `${uniqueFocus.length ? uniqueFocus.join('、') : '技术项目'}相关热点`,
+      summaryZh: '适合加入开源学习雷达，后续可让 token 工厂分析 README、架构和可借鉴点。',
+    };
+  }
+  return {
+    titleZh: '待核验热点线索',
+    summaryZh: '需要结合原文和来源判断是否与你的测试、Agent、邮箱平台或福利领取目标相关。',
+  };
+}
+
 function classifyHotItem(item = {}) {
   const text = [
     item.title,
@@ -231,13 +282,16 @@ function scoreHotItem(item = {}, previous = {}) {
 function normalizeHotItem(item = {}, previous = {}, now = new Date()) {
   const metrics = scoreHotItem(item, previous);
   const categories = classifyHotItem(item);
+  const chinese = buildChineseUnderstanding(item, categories);
   return {
     id: itemKey(item),
     title: normalizeText(item.title).slice(0, 180),
+    titleZh: normalizeText(item.titleZh || chinese.titleZh).slice(0, 180),
     source: normalizeText(item.source || item.kind || 'hot-monitor').slice(0, 120),
     kind: normalizeText(item.kind || 'hot').slice(0, 80),
     link: normalizeText(item.link).slice(0, 500),
     summary: normalizeText(item.summary).slice(0, 260),
+    summaryZh: normalizeText(item.summaryZh || chinese.summaryZh).slice(0, 260),
     topic: normalizeText(item.topic).slice(0, 100),
     stars: Number.isFinite(Number(item.stars)) ? Number(item.stars) : undefined,
     starsToday: Number.isFinite(Number(item.starsToday)) ? Number(item.starsToday) : undefined,
@@ -270,9 +324,162 @@ async function fetchText(url, fetchImpl = fetch, options = {}) {
     },
   });
   if (!response.ok) {
-    throw new Error(`Fetch failed ${response.status} ${response.statusText}: ${url}`);
+    throw new Error(`Fetch failed ${response.status} ${response.statusText}: ${maskSensitiveUrl(url)}`);
   }
   return response.text();
+}
+
+async function fetchJson(url, fetchImpl = fetch, options = {}) {
+  const response = await fetchImpl(url, {
+    method: options.method || 'GET',
+    headers: {
+      'User-Agent': 'OpenclawHomework-HotMonitor/1.0',
+      Accept: 'application/json',
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.headers || {}),
+    },
+    ...(options.body ? { body: options.body } : {}),
+  });
+  if (!response.ok) {
+    throw new Error(`Fetch failed ${response.status} ${response.statusText}: ${maskSensitiveUrl(url)}`);
+  }
+  return JSON.parse(await response.text());
+}
+
+function getSearchQueries(env = process.env) {
+  return parseListEnv(env.HOT_MONITOR_SEARCH_QUERIES, DEFAULT_SEARCH_QUERIES)
+    .slice(0, Number(env.HOT_MONITOR_SEARCH_MAX_QUERIES || 8));
+}
+
+function normalizeSearchResult(provider, query, result = {}) {
+  const link = result.url || result.link || result.href || '';
+  const title = result.title || result.name || link;
+  return {
+    id: `search:${provider}:${link || `${query}:${title}`}`,
+    title,
+    source: `${provider === 'serpapi' ? `SerpApi ${result.engine || 'google'}` : provider[0].toUpperCase() + provider.slice(1)} 搜索: ${query}`,
+    kind: 'benefit-search',
+    link,
+    summary: result.content || result.description || result.snippet || result.text || '',
+    topic: query,
+    publishedAt: result.published_date || result.date || '',
+    externalScore: result.score,
+  };
+}
+
+async function fetchTavilySearchItems(env = process.env, fetchImpl = fetch) {
+  const apiKey = env.HOT_MONITOR_TAVILY_API_KEY || env.TAVILY_API_KEY;
+  if (!apiKey || String(env.HOT_MONITOR_TAVILY_ENABLED || 'true').toLowerCase() === 'false') return [];
+  const perQuery = Number(env.HOT_MONITOR_SEARCH_PER_QUERY || env.HOT_MONITOR_TAVILY_MAX_RESULTS || 5);
+  const items = [];
+  for (const query of getSearchQueries(env)) {
+    try {
+      const json = await fetchJson(env.HOT_MONITOR_TAVILY_URL || 'https://api.tavily.com/search', fetchImpl, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          query,
+          search_depth: env.HOT_MONITOR_TAVILY_SEARCH_DEPTH || 'basic',
+          max_results: perQuery,
+          include_answer: false,
+          include_raw_content: false,
+        }),
+      });
+      const results = Array.isArray(json.results) ? json.results : [];
+      items.push(...results.slice(0, perQuery).map((result) => normalizeSearchResult('tavily', query, result)));
+    } catch (error) {
+      items.push({
+        id: `search-error:tavily:${query}`,
+        title: `Tavily 搜索失败：${query}`,
+        source: 'Tavily 搜索',
+        kind: 'benefit-error',
+        summary: maskSensitiveUrl(error.message),
+        topic: query,
+      });
+    }
+  }
+  return items;
+}
+
+async function fetchBraveSearchItems(env = process.env, fetchImpl = fetch) {
+  const apiKey = env.HOT_MONITOR_BRAVE_API_KEY || env.BRAVE_SEARCH_API_KEY;
+  if (!apiKey || String(env.HOT_MONITOR_BRAVE_ENABLED || 'true').toLowerCase() === 'false') return [];
+  const perQuery = Number(env.HOT_MONITOR_SEARCH_PER_QUERY || env.HOT_MONITOR_BRAVE_COUNT || 5);
+  const items = [];
+  for (const query of getSearchQueries(env)) {
+    try {
+      const url = new URL(env.HOT_MONITOR_BRAVE_URL || 'https://api.search.brave.com/res/v1/web/search');
+      url.searchParams.set('q', query);
+      url.searchParams.set('count', String(perQuery));
+      url.searchParams.set('freshness', env.HOT_MONITOR_BRAVE_FRESHNESS || 'pw');
+      url.searchParams.set('search_lang', env.HOT_MONITOR_SEARCH_LANG || 'zh-hans');
+      url.searchParams.set('country', env.HOT_MONITOR_SEARCH_COUNTRY || 'HK');
+      const json = await fetchJson(url.toString(), fetchImpl, {
+        headers: { 'X-Subscription-Token': apiKey },
+      });
+      const results = Array.isArray(json.web?.results) ? json.web.results : [];
+      items.push(...results.slice(0, perQuery).map((result) => normalizeSearchResult('brave', query, result)));
+    } catch (error) {
+      items.push({
+        id: `search-error:brave:${query}`,
+        title: `Brave 搜索失败：${query}`,
+        source: 'Brave 搜索',
+        kind: 'benefit-error',
+        summary: maskSensitiveUrl(error.message),
+        topic: query,
+      });
+    }
+  }
+  return items;
+}
+
+async function fetchSerpApiSearchItems(env = process.env, fetchImpl = fetch) {
+  const apiKey = env.HOT_MONITOR_SERPAPI_API_KEY || env.SERPAPI_API_KEY;
+  if (!apiKey || String(env.HOT_MONITOR_SERPAPI_ENABLED || 'true').toLowerCase() === 'false') return [];
+  const perQuery = Number(env.HOT_MONITOR_SEARCH_PER_QUERY || env.HOT_MONITOR_SERPAPI_NUM || 5);
+  const engine = env.HOT_MONITOR_SERPAPI_ENGINE || 'google';
+  const items = [];
+  for (const query of getSearchQueries(env)) {
+    try {
+      const url = new URL(env.HOT_MONITOR_SERPAPI_URL || 'https://serpapi.com/search.json');
+      url.searchParams.set('engine', engine);
+      url.searchParams.set('q', query);
+      url.searchParams.set('api_key', apiKey);
+      url.searchParams.set('num', String(perQuery));
+      if (env.HOT_MONITOR_SEARCH_LOCATION) url.searchParams.set('location', env.HOT_MONITOR_SEARCH_LOCATION);
+      if (engine === 'baidu') url.searchParams.set('rn', String(perQuery));
+      const json = await fetchJson(url.toString(), fetchImpl);
+      const rawResults = Array.isArray(json.organic_results)
+        ? json.organic_results
+        : Array.isArray(json.news_results)
+          ? json.news_results
+          : [];
+      items.push(...rawResults.slice(0, perQuery).map((result) => normalizeSearchResult('serpapi', query, {
+        ...result,
+        engine,
+      })));
+    } catch (error) {
+      items.push({
+        id: `search-error:serpapi:${query}`,
+        title: `SerpApi 搜索失败：${query}`,
+        source: `SerpApi ${engine}`,
+        kind: 'benefit-error',
+        summary: maskSensitiveUrl(error.message),
+        topic: query,
+      });
+    }
+  }
+  return items;
+}
+
+async function fetchExternalSearchItems(env = process.env, fetchImpl = fetch) {
+  if (String(env.HOT_MONITOR_SEARCH_ENABLED || 'true').toLowerCase() === 'false') return [];
+  const [tavilyItems, braveItems, serpApiItems] = await Promise.all([
+    fetchTavilySearchItems(env, fetchImpl),
+    fetchBraveSearchItems(env, fetchImpl),
+    fetchSerpApiSearchItems(env, fetchImpl),
+  ]);
+  return [...tavilyItems, ...braveItems, ...serpApiItems];
 }
 
 async function fetchHackerNewsBenefitItems(env = process.env, fetchImpl = fetch) {
@@ -340,15 +547,16 @@ async function fetchBenefitRssItems(env = process.env, fetchImpl = fetch) {
 }
 
 async function collectHotMonitorItems(env = process.env, fetchImpl = fetch, options = {}) {
-  const [trendItems, hnBenefits, rssBenefits] = await Promise.all([
+  const [trendItems, hnBenefits, rssBenefits, externalSearchItems] = await Promise.all([
     collectTrendIntel(env, fetchImpl, {
       limit: env.HOT_MONITOR_TREND_LIMIT || 60,
       now: options.now,
     }),
     fetchHackerNewsBenefitItems(env, fetchImpl),
     fetchBenefitRssItems(env, fetchImpl),
+    fetchExternalSearchItems(env, fetchImpl),
   ]);
-  return [...trendItems, ...hnBenefits, ...rssBenefits]
+  return [...trendItems, ...hnBenefits, ...rssBenefits, ...externalSearchItems]
     .filter((item) => item && item.title && !/抓取失败|Fetch failed/i.test(item.title));
 }
 
@@ -439,8 +647,11 @@ function formatHotMonitorMessage(alertItems = [], snapshot = {}, options = {}) {
   if (benefits.length) {
     lines.push('', '福利/免费活动：');
     benefits.forEach((item, index) => {
-      lines.push(`${index + 1}. ${item.title}`);
+      lines.push(`${index + 1}. ${item.titleZh || item.title}`);
+      if (item.titleZh && item.titleZh !== item.title) lines.push(`   原标题：${item.title}`);
       lines.push(`   原因：${item.alertReason}；分数 ${item.score}`);
+      if (item.titleZh) lines.push(`   中文理解：${item.titleZh}`);
+      if (item.summaryZh) lines.push(`   中文摘要：${item.summaryZh}`);
       if (item.summary) lines.push(`   摘要：${item.summary}`);
       if (item.link) lines.push(`   链接：${item.link}`);
     });
@@ -448,8 +659,11 @@ function formatHotMonitorMessage(alertItems = [], snapshot = {}, options = {}) {
   if (tech.length) {
     lines.push('', '技术热点：');
     tech.forEach((item, index) => {
-      lines.push(`${index + 1}. ${item.title}`);
+      lines.push(`${index + 1}. ${item.titleZh || item.title}`);
+      if (item.titleZh && item.titleZh !== item.title) lines.push(`   原标题：${item.title}`);
       lines.push(`   原因：${item.alertReason}；分数 ${item.score}`);
+      if (item.titleZh) lines.push(`   中文理解：${item.titleZh}`);
+      if (item.summaryZh) lines.push(`   中文摘要：${item.summaryZh}`);
       if (item.stars || item.deltaStars || item.starsToday) {
         lines.push(`   热度：总 stars ${item.stars || '未知'}，本轮增量 ${item.deltaStars || 0}，今日新增 ${item.starsToday || 0}`);
       }
@@ -608,12 +822,18 @@ module.exports = {
   BENEFIT_KEYWORDS,
   DEFAULT_BENEFIT_FEEDS,
   DEFAULT_BENEFIT_QUERIES,
+  DEFAULT_SEARCH_QUERIES,
+  buildChineseUnderstanding,
   buildHotMonitorSnapshot,
   buildNotificationTarget,
   classifyHotItem,
   collectHotMonitorItems,
   fetchBenefitRssItems,
+  fetchBraveSearchItems,
+  fetchExternalSearchItems,
   fetchHackerNewsBenefitItems,
+  fetchSerpApiSearchItems,
+  fetchTavilySearchItems,
   formatHotMonitorMessage,
   parseCliArgs,
   runHotMonitor,

@@ -7,6 +7,9 @@ const test = require('node:test');
 const {
   buildHotMonitorSnapshot,
   classifyHotItem,
+  fetchBraveSearchItems,
+  fetchSerpApiSearchItems,
+  fetchTavilySearchItems,
   formatHotMonitorMessage,
   runHotMonitor,
   scoreHotItem,
@@ -194,6 +197,110 @@ test('formatHotMonitorMessage separates benefits and technical hotspots', () => 
   assert.match(text, /技术热点/);
   assert.match(text, /Free GPU credits/);
   assert.match(text, /microsoft\/playwright/);
+});
+
+test('formatHotMonitorMessage includes Chinese understanding for English items', () => {
+  const text = formatHotMonitorMessage([
+    {
+      title: 'Free GPU credits for AI agents',
+      titleZh: '免费 GPU 额度，适合 AI Agent 相关实验',
+      summaryZh: '可能是算力、模型额度或试用活动，适合先核验领取条件。',
+      categories: ['benefit', 'tech'],
+      alertReason: '疑似免费/额度/试用活动',
+      score: 120,
+      link: 'https://example.com/gpu',
+    },
+  ], { total: 1 }, { assistantName: 'Hermes' });
+
+  assert.match(text, /原标题：Free GPU credits/);
+  assert.match(text, /中文理解：免费 GPU 额度/);
+  assert.match(text, /中文摘要：可能是算力/);
+});
+
+test('fetchTavilySearchItems maps API results into benefit search items', async () => {
+  const calls = [];
+  const items = await fetchTavilySearchItems({
+    HOT_MONITOR_TAVILY_API_KEY: 'tvly-test',
+    HOT_MONITOR_SEARCH_QUERIES: 'free llm credits',
+    HOT_MONITOR_SEARCH_PER_QUERY: '2',
+  }, async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      text: async () => JSON.stringify({
+        results: [{
+          title: 'Free LLM API credits',
+          url: 'https://example.com/credits',
+          content: 'Developers can claim trial credits.',
+          score: 0.92,
+        }],
+      }),
+    };
+  });
+
+  assert.equal(calls[0].url, 'https://api.tavily.com/search');
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer tvly-test');
+  assert.equal(items[0].id, 'search:tavily:https://example.com/credits');
+  assert.equal(items[0].kind, 'benefit-search');
+  assert.equal(items[0].source, 'Tavily 搜索: free llm credits');
+  assert.match(items[0].summary, /trial credits/);
+});
+
+test('fetchBraveSearchItems maps web search results', async () => {
+  const calls = [];
+  const items = await fetchBraveSearchItems({
+    HOT_MONITOR_BRAVE_API_KEY: 'brave-test',
+    HOT_MONITOR_SEARCH_QUERIES: 'site:linux.do token',
+    HOT_MONITOR_SEARCH_PER_QUERY: '1',
+  }, async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      text: async () => JSON.stringify({
+        web: {
+          results: [{
+            title: 'Linux.do token 福利',
+            url: 'https://linux.do/t/topic/1',
+            description: '新的模型额度活动',
+          }],
+        },
+      }),
+    };
+  });
+
+  assert.match(calls[0].url, /^https:\/\/api\.search\.brave\.com\/res\/v1\/web\/search/);
+  assert.equal(calls[0].options.headers['X-Subscription-Token'], 'brave-test');
+  assert.equal(items[0].id, 'search:brave:https://linux.do/t/topic/1');
+  assert.equal(items[0].source, 'Brave 搜索: site:linux.do token');
+});
+
+test('fetchSerpApiSearchItems maps organic search results', async () => {
+  const calls = [];
+  const items = await fetchSerpApiSearchItems({
+    HOT_MONITOR_SERPAPI_API_KEY: 'serp-test',
+    HOT_MONITOR_SEARCH_QUERIES: 'site:tieba.baidu.com 免费 token',
+    HOT_MONITOR_SEARCH_PER_QUERY: '1',
+    HOT_MONITOR_SERPAPI_ENGINE: 'baidu',
+  }, async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      text: async () => JSON.stringify({
+        organic_results: [{
+          title: '贴吧免费 token 线索',
+          link: 'https://tieba.baidu.com/p/1',
+          snippet: '有人整理了 AI 额度活动。',
+        }],
+      }),
+    };
+  });
+
+  assert.match(calls[0].url, /^https:\/\/serpapi\.com\/search\.json/);
+  assert.match(calls[0].url, /engine=baidu/);
+  assert.match(calls[0].url, /api_key=serp-test/);
+  assert.equal(items[0].id, 'search:serpapi:https://tieba.baidu.com/p/1');
+  assert.equal(items[0].source, 'SerpApi baidu 搜索: site:tieba.baidu.com 免费 token');
 });
 
 test('runHotMonitor writes state output task record and sends when alerts exist', async () => {
