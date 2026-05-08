@@ -1668,6 +1668,9 @@ test('buildRoutedAgentReply passes browser-agent protocol asset reporter through
   );
 
   assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /线索定位/);
+  assert.match(reply.replyText, /当前状态/);
+  assert.match(reply.replyText, /下一步建议/);
   assert.match(reply.replyText, /协议资产报告/);
   assert.match(reply.replyText, /总数 2/);
   assert.match(reply.replyText, /POST \/api\/login 200 pa-login/);

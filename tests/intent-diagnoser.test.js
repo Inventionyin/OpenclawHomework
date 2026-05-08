@@ -120,3 +120,40 @@ test('buildIntentDiagnosis marks broad planner request as clarify', () => {
   assert.match(diagnosis.reason, /范围较大/);
   assert.deepEqual(diagnosis.missing, ['scope', 'priority']);
 });
+
+test('buildIntentDiagnosis creates precise browser clue card for live page debugging', () => {
+  const diagnosis = buildIntentDiagnosis(
+    '真实执行打开 https://shop.evanshine.me/login 页面检查，截图，抓 console，抓接口',
+    {
+      agent: 'browser-agent',
+      action: 'browser-live-run',
+      requiresAuth: true,
+    },
+  );
+
+  assert.equal(diagnosis.intentLabel, '浏览器/CDP 页面定位');
+  assert.equal(diagnosis.canExecute, true);
+  assert.equal(diagnosis.clueCard.targetUrl, 'https://shop.evanshine.me/login');
+  assert.equal(diagnosis.clueCard.executionMode, '真实浏览器/CDP 执行');
+  assert(diagnosis.clueCard.matchedSignals.includes('截图'));
+  assert(diagnosis.clueCard.matchedSignals.includes('console'));
+  assert(diagnosis.clueCard.matchedSignals.includes('接口/抓包'));
+  assert.match(diagnosis.nextStep, /截图|console|协议资产/);
+});
+
+test('buildIntentDiagnosis asks for target url when browser request is too vague', () => {
+  const diagnosis = buildIntentDiagnosis(
+    '这个 CTF 页面怎么下手，帮我定位一下',
+    {
+      agent: 'browser-agent',
+      action: 'browser-dry-run',
+      requiresAuth: true,
+    },
+  );
+
+  assert.equal(diagnosis.outcome, 'clarify');
+  assert.equal(diagnosis.canExecute, false);
+  assert.deepEqual(diagnosis.missing, ['targetUrl']);
+  assert.match(diagnosis.reason, /缺少目标 URL/);
+  assert.match(diagnosis.nextStep, /CTF 靶场地址/);
+});

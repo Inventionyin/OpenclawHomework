@@ -102,6 +102,9 @@ test('buildBrowserAgentReply renders browser automation dry-run plan', async () 
   });
 
   assert.match(reply, /浏览器自动化计划/);
+  assert.match(reply, /定位结果/);
+  assert.match(reply, /当前状态/);
+  assert.match(reply, /下一步/);
   assert.match(reply, /localhost:3000/);
   assert.match(reply, /captureNetworkOrProtocol/);
   assert.match(reply, /dry-run/);
@@ -123,7 +126,9 @@ test('buildBrowserAgentReply renders blocked state naturally', async () => {
   });
 
   assert.match(reply, /已拦截/);
+  assert.match(reply, /定位结果/);
   assert.match(reply, /目标不在允许列表/);
+  assert.match(reply, /CTF 靶场地址|自有域名/);
 });
 
 test('buildBrowserAgentReply renders live-run mode with injected runner', async () => {
@@ -221,6 +226,8 @@ test('buildBrowserAgentReply renders protocol asset report with injected reporte
   });
 
   assert.match(reply, /协议资产/);
+  assert.match(reply, /线索定位/);
+  assert.match(reply, /下一步/);
   assert.match(reply, /最近资产：3 条/);
   assert.match(reply, /POST \/api\/login 200/);
 });

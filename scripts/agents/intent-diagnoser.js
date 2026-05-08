@@ -34,7 +34,104 @@ function inferIntentLabel(route = {}) {
     return '查看或写入项目记忆';
   }
 
+  if (route.agent === 'browser-agent') {
+    if (route.action === 'protocol-assets-report') {
+      return '协议资产线索定位';
+    }
+    if (route.action === 'protocol-assets-to-tests') {
+      return '协议资产转测试用例';
+    }
+    return '浏览器/CDP 页面定位';
+  }
+
   return '自然语言请求';
+}
+
+function extractFirstUrl(text = '') {
+  const match = String(text || '').match(/https?:\/\/[^\s)]+/i);
+  return match ? match[0] : '';
+}
+
+function isBrowserProtocolRequest(route = {}, text = '') {
+  return route.agent === 'browser-agent'
+    || /(浏览器|页面|网页|cdp|har|协议|接口|network|console|控制台|截图|验证码|登录页|注册页|登录流程|注册流程|抓包|抓一下|打开\s*https?:\/\/|https?:\/\/)/i.test(String(text || ''));
+}
+
+function buildBrowserClueCard(text = '', route = {}) {
+  const rawText = String(text || '');
+  const targetUrl = String(route.url || extractFirstUrl(rawText) || '').trim();
+  const signals = [];
+  const lower = rawText.toLowerCase();
+
+  if (/截图|snapshot|screenshot/.test(rawText)) signals.push('截图');
+  if (/console|控制台|日志/.test(rawText)) signals.push('console');
+  if (/接口|抓包|network|har|协议|请求|响应|cdp/.test(rawText)) signals.push('接口/抓包');
+  if (/登录|注册|验证码|auth|login|register/.test(lower)) signals.push('登录/注册');
+
+  let status = 'ok';
+  let reasonCode = 'ok';
+  let reasonText = '已识别到浏览器/CDP 线索，可以继续定位。';
+  let nextStep = '先打开目标页面，再看截图、console、network/CDP 和协议资产。';
+  let missing = [];
+  let executionMode = '浏览器/CDP 分析';
+
+  if (['browser-dry-run', 'browser-live-run', 'protocol-capture-plan'].includes(String(route.action || '')) && !targetUrl && !route.targetUrl) {
+    status = 'clarify';
+    reasonCode = 'missing_target_url';
+    reasonText = /ctf/i.test(rawText)
+      ? '我识别到这是 CTF/靶场类页面，但缺少目标 URL，所以还不能直接定位。'
+      : '我识别到你在做页面定位，但缺少目标 URL，所以还不能直接定位。';
+    nextStep = /ctf/i.test(rawText)
+      ? '请直接给我 CTF 靶场地址，比如：https://ctf.example.edu/login'
+      : '请直接给我目标地址，比如：https://shop.evanshine.me/login';
+    missing = ['targetUrl'];
+  } else if (route.action === 'protocol-assets-report') {
+    executionMode = '协议资产检索';
+    status = 'ok';
+    reasonCode = 'protocol_asset_query';
+    reasonText = '我识别到你在查协议资产线索，会按方法、路径、状态码和最近样本给你看。';
+    nextStep = '如果你要进一步定位页面问题，可以直接说“真实执行 + URL + 抓接口”。';
+  } else if (route.action === 'protocol-assets-to-tests') {
+    executionMode = '协议资产转测试用例';
+    status = 'ok';
+    reasonCode = 'protocol_asset_to_tests';
+    reasonText = '我识别到你要把协议资产转成测试用例。';
+    nextStep = '我会先按方法、路径、状态码和来源资产生成测试用例。';
+  } else if (route.action === 'browser-live-run') {
+    executionMode = '真实浏览器/CDP 执行';
+    status = 'ok';
+    reasonCode = 'live_browser_run';
+    reasonText = '我识别到你要真实执行浏览器/CDP 页面检查。';
+    nextStep = '我会先打开目标页面，再采集截图、console 和接口。';
+  } else if (route.action === 'protocol-capture-plan') {
+    executionMode = 'dry-run 抓包计划';
+    status = 'ok';
+    reasonCode = 'protocol_capture_plan';
+    reasonText = '我识别到你要做协议抓包和页面定位。';
+    nextStep = '我会先给出可执行步骤，再把 console、network/CDP 和截图写进协议资产。';
+  }
+
+  return {
+    targetUrl,
+    executionMode,
+    status,
+    reasonCode,
+    reasonText,
+    nextStep,
+    matchedSignals: signals,
+    evidence: {
+      urlPresent: Boolean(targetUrl),
+      urlHost: targetUrl ? (() => {
+        try {
+          return new URL(targetUrl).hostname;
+        } catch {
+          return '';
+        }
+      })() : '',
+      signalCount: signals.length,
+    },
+    missing,
+  };
 }
 
 function buildOpsClarifyExamples(route = {}) {
@@ -136,6 +233,28 @@ function buildIntentDiagnosis(text = '', route = {}) {
   if (route.agent === 'clerk-agent' && route.action === 'token-factory') {
     diagnosis.reason = '我识别到你要继续推进 token 工厂，会按生成、评测、归档的流水线继续。';
     diagnosis.nextStep = '我会延续昨天未完成部分，并在结束后回报进度与产出。';
+    return diagnosis;
+  }
+
+  if (isBrowserProtocolRequest(route, text)) {
+    const clueCard = buildBrowserClueCard(text, route);
+    diagnosis.clueCard = clueCard;
+    diagnosis.intentLabel = clueCard.status === 'clarify'
+      ? '浏览器/CDP 页面定位'
+      : diagnosis.intentLabel;
+
+    if (clueCard.status === 'clarify') {
+      diagnosis.outcome = 'clarify';
+      diagnosis.canExecute = false;
+      diagnosis.reason = clueCard.reasonText;
+      diagnosis.missing = clueCard.missing;
+      diagnosis.blockedBy = ['missing_target_url'];
+      diagnosis.nextStep = clueCard.nextStep;
+      return diagnosis;
+    }
+
+    diagnosis.reason = clueCard.reasonText;
+    diagnosis.nextStep = clueCard.nextStep;
     return diagnosis;
   }
 

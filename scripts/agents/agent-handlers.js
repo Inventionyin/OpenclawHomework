@@ -60,6 +60,9 @@ const {
   runBrowserAutomationTask,
 } = require('../browser-cdp-executor');
 const {
+  buildIntentDiagnosis,
+} = require('./intent-diagnoser');
+const {
   buildProtocolTestCases,
   listProtocolAssets,
 } = require('../protocol-asset-store');
@@ -292,7 +295,35 @@ function buildMultiIntentPlanReply(route = {}) {
   return lines.join('\n');
 }
 
+function formatClueCard(diagnosis = {}, fallback = {}) {
+  const card = diagnosis.clueCard || {};
+  const target = card.targetUrl || fallback.target || '未提供 URL';
+  const signals = Array.isArray(card.matchedSignals) && card.matchedSignals.length
+    ? card.matchedSignals.join('、')
+    : '未命中特定信号';
+  const evidence = card.evidence || {};
+  const evidenceText = [
+    evidence.urlHost ? `host=${sanitizeReplyField(evidence.urlHost, 120)}` : null,
+    evidence.assetCount !== undefined ? `资产=${evidence.assetCount}` : null,
+    evidence.caseCount !== undefined ? `用例=${evidence.caseCount}` : null,
+    evidence.networkCount !== undefined ? `接口=${evidence.networkCount}` : null,
+    evidence.consoleCount !== undefined ? `console=${evidence.consoleCount}` : null,
+  ].filter(Boolean).join('，') || '等待执行后补证据';
+  return [
+    '线索定位：',
+    `定位结果：${sanitizeReplyField(diagnosis.intentLabel || '浏览器/CDP 页面定位', 120)}`,
+    `- 目标：${sanitizeReplyField(target, 300)}`,
+    `- 执行方式：${sanitizeReplyField(card.executionMode || fallback.executionMode || '浏览器/CDP 分析', 120)}`,
+    `当前状态：${sanitizeReplyField(card.status || fallback.status || '待执行', 80)}${card.reasonCode ? `（${sanitizeReplyField(card.reasonCode, 80)}）` : ''}`,
+    `证据：${evidenceText}`,
+    `- 命中依据：${signals}`,
+    `下一步建议：${sanitizeReplyField(card.nextStep || diagnosis.nextStep || fallback.nextStep || '给出目标 URL 后执行截图、console 和接口抓包。', 300)}`,
+  ].join('\n');
+}
+
 async function buildBrowserAgentReply(route = {}, options = {}) {
+  const rawText = route.rawText || options.text || '';
+  const baseDiagnosis = buildIntentDiagnosis(rawText, route);
   if (route.action === 'protocol-assets-to-tests') {
     const builder = options.protocolTestCaseBuilder || ((request = {}) => buildProtocolTestCases(
       { text: request.query || '' },
@@ -303,6 +334,22 @@ async function buildBrowserAgentReply(route = {}, options = {}) {
       env: options.env || process.env,
     });
     const cases = Array.isArray(result?.cases) ? result.cases : [];
+    const diagnosis = {
+      ...baseDiagnosis,
+      clueCard: {
+        ...(baseDiagnosis.clueCard || {}),
+        status: cases.length ? 'ok' : 'empty',
+        reasonCode: cases.length ? 'protocol_cases_ready' : 'no_assets',
+        evidence: {
+          ...(baseDiagnosis.clueCard?.evidence || {}),
+          assetCount: Number(result?.totalAssets || 0),
+          caseCount: cases.length,
+        },
+        nextStep: cases.length
+          ? '优先把这些用例接到 UI 自动化或接口契约测试里。'
+          : '先说“真实执行 + URL + 抓接口”，生成协议资产后再转测试用例。',
+      },
+    };
     const preview = cases.slice(0, 5).map((item, index) => {
       const method = sanitizeReplyField(item.method || 'GET', 20);
       const path = sanitizeReplyField(item.path || '/', 120);
@@ -311,6 +358,8 @@ async function buildBrowserAgentReply(route = {}, options = {}) {
       return `${index + 1}. ${method} ${path} -> ${status}${source}`;
     });
     return [
+      formatClueCard(diagnosis, { executionMode: '协议资产转测试用例' }),
+      '',
       '协议资产已整理成测试用例：',
       `- 共生成 ${cases.length} 条，来源资产 ${Number(result?.totalAssets || cases.length)} 条`,
       ...(result?.savedFile ? [`- 保存：${sanitizeReplyField(result.savedFile, 240)}`] : []),
@@ -342,7 +391,24 @@ async function buildBrowserAgentReply(route = {}, options = {}) {
     });
     const summary = sanitizeReplyField(report?.summary || '协议资产库暂时为空');
     const lines = Array.isArray(report?.lines) ? report.lines : [];
+    const diagnosis = {
+      ...baseDiagnosis,
+      clueCard: {
+        ...(baseDiagnosis.clueCard || {}),
+        status: lines.length ? 'ok' : 'empty',
+        reasonCode: lines.length ? 'protocol_assets_found' : 'no_assets',
+        evidence: {
+          ...(baseDiagnosis.clueCard?.evidence || {}),
+          assetCount: lines.length,
+        },
+        nextStep: lines.length
+          ? '先看状态码异常、登录/验证码相关接口，再决定是否转成测试用例。'
+          : '先说“真实执行 + URL + 抓接口”，让浏览器/CDP 写入协议资产。',
+      },
+    };
     return [
+      formatClueCard(diagnosis, { executionMode: '协议资产检索' }),
+      '',
       '协议资产报告：',
       `- 概览：${summary}`,
       ...(lines.length ? ['', ...lines.map((line) => sanitizeReplyField(line, 800))] : []),
@@ -352,7 +418,7 @@ async function buildBrowserAgentReply(route = {}, options = {}) {
   const runner = options.browserAutomationRunner || runBrowserAutomationTask;
   const dryRun = route.action === 'browser-live-run' ? false : route.dryRun !== false;
   const result = await runner({
-    text: route.rawText || options.text || '',
+    text: rawText,
     dryRun,
     env: options.env || process.env,
     browserFactory: options.browserFactory,
@@ -361,7 +427,36 @@ async function buildBrowserAgentReply(route = {}, options = {}) {
     screenshotPath: options.screenshotPath,
   });
   const plan = result.plan || {};
+  const artifacts = result.artifacts || {};
+  const savedAssets = Array.isArray(artifacts.savedProtocolAssets) ? artifacts.savedProtocolAssets : [];
+  const protocolAssets = Array.isArray(artifacts.protocolAssets) ? artifacts.protocolAssets : result.networkAssets || [];
+  const diagnosis = {
+    ...baseDiagnosis,
+    clueCard: {
+      ...(baseDiagnosis.clueCard || {}),
+      targetUrl: plan.url || result.request?.url || baseDiagnosis.clueCard?.targetUrl || '',
+      status: plan.blocked || result.mode === 'blocked' ? 'blocked' : (result.mode === 'live' || result.executed ? 'ok' : 'planned'),
+      reasonCode: plan.blocked || result.mode === 'blocked' ? 'allowlist_or_policy_blocked' : (result.mode || 'dry-run'),
+      reasonText: result.reason || plan.reason || baseDiagnosis.reason,
+      evidence: {
+        ...(baseDiagnosis.clueCard?.evidence || {}),
+        networkCount: protocolAssets.length,
+        consoleCount: Array.isArray(result.consoleMessages) ? result.consoleMessages.length : 0,
+        assetCount: savedAssets.length,
+      },
+      nextStep: plan.blocked || result.mode === 'blocked'
+        ? '确认这是你的自有域名或学校 CTF 靶场地址后，把域名加入白名单；不要对京东/拼多多真实站点做自动化。'
+        : (result.mode === 'live' || result.executed)
+          ? '优先看 console 错误、失败接口和已入库协议资产，再转测试用例。'
+          : '确认计划后说“真实执行 + URL + 截图/抓接口”。',
+    },
+  };
   const lines = [
+    formatClueCard(diagnosis, {
+      target: plan.url || result.request?.url,
+      executionMode: dryRun ? 'dry-run 计划' : '真实浏览器/CDP 执行',
+    }),
+    '',
     '浏览器自动化计划：',
     `- 模式：${result.mode || 'dry-run'}`,
     `- 目标：${plan.url || result.request?.url || '未提供 URL，会先做页面检查计划'}`,
@@ -382,9 +477,6 @@ async function buildBrowserAgentReply(route = {}, options = {}) {
   }
 
   if (result.mode === 'live' || result.executed) {
-    const artifacts = result.artifacts || {};
-    const savedAssets = Array.isArray(artifacts.savedProtocolAssets) ? artifacts.savedProtocolAssets : [];
-    const protocolAssets = Array.isArray(artifacts.protocolAssets) ? artifacts.protocolAssets : result.networkAssets || [];
     lines.push('', '执行结果：');
     lines.push(`- Console：${Array.isArray(result.consoleMessages) ? result.consoleMessages.length : 0}`);
     lines.push(`- 抓到接口：${protocolAssets.length}`);
