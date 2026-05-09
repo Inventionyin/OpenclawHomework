@@ -270,6 +270,37 @@ function looksLikeTaskCenterBrainIntent(text) {
     || /(今天任务).{0,8}(全景图|全景|驾驶舱)/i.test(normalized);
 }
 
+function detectDayRange(text) {
+  const normalized = String(text ?? '').trim().toLowerCase();
+  if (/(昨天|昨日|昨晚|前一天|上一天)/i.test(normalized)) return 'yesterday';
+  if (/(今天|今日|今儿|当天)/i.test(normalized)) return 'today';
+  if (/(最近|近几次|近期|这几次|刚才)/i.test(normalized)) return 'recent';
+  return undefined;
+}
+
+function looksLikeTokenUsageSummaryIntent(text) {
+  const normalized = String(text ?? '').trim().toLowerCase();
+  const hasTokenSubject = /(token|tokens|额度|模型调用|模型用量|调用用量|usage)/i.test(normalized);
+  if (!hasTokenSubject) return false;
+
+  return /(耗时|用量|账本|谁更费|谁更省|统计|对比|消耗情况|用了多少|用掉多少|花了多少|消耗了多少|用了几|花了几)/i.test(normalized)
+    || /(token|tokens|额度|模型调用|模型用量|调用用量|usage)\s*(用量|消耗|统计|账本|对比|耗时|用了多少|花了多少)/i.test(normalized)
+    || /(用了|用掉|花了|消耗了|烧了).{0,12}(多少|几).{0,8}(token|tokens|额度)/i.test(normalized)
+    || /(token|tokens|额度).{0,12}(用了|用掉|花了|消耗了|烧了).{0,12}(多少|几)/i.test(normalized)
+    || /(多少|几).{0,8}(token|tokens|额度).{0,12}(用掉|用了|花了|消耗了|烧了)?/i.test(normalized);
+}
+
+function buildTokenUsageSummaryRoute(text) {
+  if (!looksLikeTokenUsageSummaryIntent(text)) return null;
+  const dayRange = detectDayRange(text);
+  return {
+    agent: 'clerk-agent',
+    action: 'token-summary',
+    ...(dayRange ? { dayRange } : {}),
+    requiresAuth: true,
+  };
+}
+
 function routeClerkIntent(text) {
   const original = stripMention(String(text ?? '').trim());
   const normalized = original.toLowerCase();
@@ -283,6 +314,11 @@ function routeClerkIntent(text) {
 
   if (looksLikeTaskCenterBrainIntent(original)) {
     return { agent: 'clerk-agent', action: 'task-center-brain', requiresAuth: true };
+  }
+
+  const tokenUsageRoute = buildTokenUsageSummaryRoute(original);
+  if (tokenUsageRoute) {
+    return tokenUsageRoute;
   }
 
   const wechatArticleMatch = original.match(/(?:文员|秘书|助理|clerk|office)[，,\s]*(公众号)(草稿|直接发布|发布)?[:：\s]*(.+)$/i);
@@ -477,8 +513,8 @@ function routeClerkIntent(text) {
     return { agent: 'clerk-agent', action: 'token-lab', requiresAuth: true };
   }
 
-  if (/(耗时|用量|账本|谁更费|谁更省|统计|对比|token\s*(用量|消耗|统计|账本|对比))/i.test(normalized)) {
-    return { agent: 'clerk-agent', action: 'token-summary', requiresAuth: true };
+  if (looksLikeTokenUsageSummaryIntent(normalized)) {
+    return buildTokenUsageSummaryRoute(normalized);
   }
 
   const looksLikeDailyDeliveryWithInvalidEmail = (
@@ -574,8 +610,8 @@ function routeOfficeIntent(text) {
     return { agent: 'clerk-agent', action: 'continue-context', requiresAuth: true };
   }
 
-  if (/(耗时|用量|账本|谁更费|谁更省|统计|对比|token\s*(用量|消耗|统计|账本|对比)).{0,30}(hermes|openclaw|模型|调用|今天|最近)?/i.test(normalized)) {
-    return { agent: 'clerk-agent', action: 'token-summary', requiresAuth: true };
+  if (looksLikeTokenUsageSummaryIntent(normalized)) {
+    return buildTokenUsageSummaryRoute(normalized);
   }
 
   const looksLikeDailyDeliveryWithInvalidEmail = (

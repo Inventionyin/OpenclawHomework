@@ -313,6 +313,25 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
   assert.deepEqual(routeAgentIntent('文员，统计今天 Hermes 和 OpenClaw 谁更费 token'), {
     agent: 'clerk-agent',
     action: 'token-summary',
+    dayRange: 'today',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，昨天用了多少 token'), {
+    agent: 'clerk-agent',
+    action: 'token-summary',
+    dayRange: 'yesterday',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，今天花了多少 token'), {
+    agent: 'clerk-agent',
+    action: 'token-summary',
+    dayRange: 'today',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，昨天消耗了多少额度'), {
+    agent: 'clerk-agent',
+    action: 'token-summary',
+    dayRange: 'yesterday',
     requiresAuth: true,
   });
   assert.deepEqual(routeAgentIntent('文员，整理一下还没完成的待办'), {
@@ -590,6 +609,12 @@ test('routeAgentIntent routes office work without requiring clerk wake word', ()
   assert.deepEqual(routeAgentIntent('统计 Hermes 和 OpenClaw 谁更费 token'), {
     agent: 'clerk-agent',
     action: 'token-summary',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('昨天用了多少 token'), {
+    agent: 'clerk-agent',
+    action: 'token-summary',
+    dayRange: 'yesterday',
     requiresAuth: true,
   });
   assert.deepEqual(routeAgentIntent('把今天日报发到邮箱'), {

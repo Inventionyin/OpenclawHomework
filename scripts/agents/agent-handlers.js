@@ -642,17 +642,55 @@ function summarizeUsageLedger(entries = []) {
     .sort((a, b) => b.totalTokens - a.totalTokens || b.calls - a.calls);
 }
 
-function buildTokenSummaryReply(entries = []) {
-  if (!entries.length) {
+function toLocalUsageDayKey(input, timezoneOffsetMinutes = 480) {
+  const date = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(date.getTime())) return '';
+  const shifted = new Date(date.getTime() + Number(timezoneOffsetMinutes || 0) * 60 * 1000);
+  return shifted.toISOString().slice(0, 10);
+}
+
+function getRelativeUsageDayKey(now = new Date(), dayOffset = 0, timezoneOffsetMinutes = 480) {
+  const shifted = new Date(now.getTime() + Number(timezoneOffsetMinutes || 0) * 60 * 1000);
+  shifted.setUTCDate(shifted.getUTCDate() + dayOffset);
+  return shifted.toISOString().slice(0, 10);
+}
+
+function filterUsageLedgerByRange(entries = [], route = {}, options = {}) {
+  const dayRange = route.dayRange || route.range || '';
+  if (!['today', 'yesterday'].includes(dayRange)) {
+    return entries;
+  }
+
+  const env = options.env || process.env;
+  const timezoneOffsetMinutes = Number(env.MAIL_LEDGER_TIMEZONE_OFFSET_MINUTES || env.USAGE_LEDGER_TIMEZONE_OFFSET_MINUTES || 480);
+  const targetDay = getRelativeUsageDayKey(options.now || new Date(), dayRange === 'yesterday' ? -1 : 0, timezoneOffsetMinutes);
+  return entries.filter((entry) => {
+    const timestamp = entry.timestamp || entry.createdAt || entry.time;
+    return timestamp && toLocalUsageDayKey(timestamp, timezoneOffsetMinutes) === targetDay;
+  });
+}
+
+function describeUsageRange(route = {}) {
+  if (route.dayRange === 'today') return '今天';
+  if (route.dayRange === 'yesterday') return '昨天';
+  return '最近';
+}
+
+function buildTokenSummaryReply(entries = [], options = {}) {
+  const route = options.route || {};
+  const filteredEntries = filterUsageLedgerByRange(entries, route, options);
+  const rangeLabel = describeUsageRange(route);
+
+  if (!filteredEntries.length) {
     return [
-      '文员统计：现在还没有可用的 token/耗时账本记录。',
+      `文员统计：${route.dayRange ? `${rangeLabel}没有可用的 token/耗时账本记录。` : '现在还没有可用的 token/耗时账本记录。'}`,
       '你先和 Hermes/OpenClaw 普通聊几句，之后我就能对比谁更费 token、谁更慢。',
     ].join('\n');
   }
 
-  const rows = summarizeUsageLedger(entries);
+  const rows = summarizeUsageLedger(filteredEntries);
   const lines = [
-    `文员统计：最近 ${entries.length} 次普通聊天用量如下。`,
+    `文员统计：${rangeLabel} ${filteredEntries.length} 次普通聊天用量如下。`,
   ];
 
   rows.forEach((row, index) => {
@@ -1237,7 +1275,7 @@ async function buildWechatMpArticleReply(route = {}, options = {}) {
 function buildClerkAgentReply(route = {}, options = {}) {
   if (route.action === 'token-summary') {
     const entries = (options.readUsageLedger || defaultReadUsageLedger)(options.env || process.env);
-    return buildTokenSummaryReply(entries);
+    return buildTokenSummaryReply(entries, { ...options, route });
   }
 
   if (route.action === 'workbench') {

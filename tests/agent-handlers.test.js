@@ -368,6 +368,38 @@ test('buildClerkAgentReply does not claim token winner when every entry lacks us
   assert.doesNotMatch(reply, /token 用量最高/);
 });
 
+test('buildClerkAgentReply filters token summary by yesterday range', () => {
+  const reply = buildClerkAgentReply({
+    action: 'token-summary',
+    dayRange: 'yesterday',
+  }, {
+    now: new Date('2026-05-09T01:00:00.000Z'),
+    env: { MAIL_LEDGER_TIMEZONE_OFFSET_MINUTES: '480' },
+    readUsageLedger: () => [
+      {
+        timestamp: '2026-05-08T02:00:00.000Z',
+        assistant: 'Hermes',
+        model: 'LongCat-Flash-Chat',
+        totalTokens: 88,
+        modelElapsedMs: 1000,
+      },
+      {
+        timestamp: '2026-05-09T02:00:00.000Z',
+        assistant: 'OpenClaw',
+        model: 'astron-code-latest',
+        totalTokens: 20,
+        modelElapsedMs: 1000,
+      },
+    ],
+  });
+
+  assert.match(reply, /昨天/);
+  assert.match(reply, /1 次/);
+  assert.match(reply, /Hermes/);
+  assert.match(reply, /88 tokens/);
+  assert.doesNotMatch(reply, /OpenClaw/);
+});
+
 test('buildClerkAgentReply keeps todo summary behavior in the handler', () => {
   const todoReply = buildClerkAgentReply({ action: 'todo-summary' }, {
     summarizeDailyPlan: () => ({
