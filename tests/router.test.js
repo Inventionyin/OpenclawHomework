@@ -334,6 +334,16 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     dayRange: 'yesterday',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，总共加起来用了多少'), {
+    agent: 'clerk-agent',
+    action: 'token-summary',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，一共消耗了多少'), {
+    agent: 'clerk-agent',
+    action: 'token-summary',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，整理一下还没完成的待办'), {
     agent: 'clerk-agent',
     action: 'todo-summary',
@@ -615,6 +625,16 @@ test('routeAgentIntent routes office work without requiring clerk wake word', ()
     agent: 'clerk-agent',
     action: 'token-summary',
     dayRange: 'yesterday',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('总共加起来用了多少'), {
+    agent: 'clerk-agent',
+    action: 'token-summary',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('一共消耗了多少'), {
+    agent: 'clerk-agent',
+    action: 'token-summary',
     requiresAuth: true,
   });
   assert.deepEqual(routeAgentIntent('把今天日报发到邮箱'), {

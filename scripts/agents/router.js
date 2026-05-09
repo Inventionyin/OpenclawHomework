@@ -294,13 +294,15 @@ function detectDayRange(text) {
 function looksLikeTokenUsageSummaryIntent(text) {
   const normalized = String(text ?? '').trim().toLowerCase();
   const hasTokenSubject = /(token|tokens|额度|模型调用|模型用量|调用用量|usage)/i.test(normalized);
-  if (!hasTokenSubject) return false;
+  const hasImplicitUsageSubject = /(总共|一共|合计|加起来|累计|全部).{0,12}(用了|用掉|花了|消耗了|烧了|用了多少|多少)|(用了|用掉|花了|消耗了|烧了).{0,12}(总共|一共|合计|加起来|累计|全部).{0,12}(多少|几)?/i.test(normalized);
+  if (!hasTokenSubject && !hasImplicitUsageSubject) return false;
 
   return /(耗时|用量|账本|谁更费|谁更省|统计|对比|消耗情况|用了多少|用掉多少|花了多少|消耗了多少|用了几|花了几)/i.test(normalized)
     || /(token|tokens|额度|模型调用|模型用量|调用用量|usage)\s*(用量|消耗|统计|账本|对比|耗时|用了多少|花了多少)/i.test(normalized)
     || /(用了|用掉|花了|消耗了|烧了).{0,12}(多少|几).{0,8}(token|tokens|额度)/i.test(normalized)
     || /(token|tokens|额度).{0,12}(用了|用掉|花了|消耗了|烧了).{0,12}(多少|几)/i.test(normalized)
-    || /(多少|几).{0,8}(token|tokens|额度).{0,12}(用掉|用了|花了|消耗了|烧了)?/i.test(normalized);
+    || /(多少|几).{0,8}(token|tokens|额度).{0,12}(用掉|用了|花了|消耗了|烧了)?/i.test(normalized)
+    || hasImplicitUsageSubject;
 }
 
 function buildTokenUsageSummaryRoute(text) {
