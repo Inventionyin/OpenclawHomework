@@ -920,8 +920,273 @@ test('buildRoutedAgentReply passes capability menu mode to guide builder', async
 
   assert.equal(reply.handled, true);
   assert.match(reply.replyText, /Hermes/);
+  assert.match(reply.replyText, /执行前识别/);
+  assert.match(reply.replyText, /capability-agent \/ guide/);
   assert.match(reply.replyText, /Skill 总控菜单/);
   assert.match(reply.replyText, /大神版/);
+});
+
+test('buildRoutedAgentReply prefixes clerk skill replies with execution diagnosis card', async () => {
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-skill-diagnosis',
+          content: JSON.stringify({ text: '文员，邮箱平台怎么玩' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {
+      buildMailWorkbenchReportFromEnv: () => ({
+        inbox: [],
+        outgoing: [],
+        summary: {
+          inboxCount: 0,
+          sentCount: 0,
+          failedCount: 0,
+          pendingApprovalCount: 0,
+        },
+      }),
+    },
+    {
+      agent: 'clerk-agent',
+      action: 'mailbox-workbench',
+      skillId: 'mailbox-workbench',
+      requiresAuth: true,
+      riskLevel: 'low',
+      autoRun: true,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /执行前识别/);
+  assert.match(reply.replyText, /邮箱工作台/);
+  assert.match(reply.replyText, /clerk-agent \/ mailbox-workbench/);
+  assert.match(reply.replyText, /风险：low/);
+});
+
+test('buildRoutedAgentReply prefixes task center brain replies with execution diagnosis card', async () => {
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-task-brain-diagnosis',
+          content: JSON.stringify({ text: '文员，看看总控脑' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {},
+    {
+      agent: 'clerk-agent',
+      action: 'task-center-brain',
+      requiresAuth: true,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /执行前识别/);
+  assert.match(reply.replyText, /任务中枢主控脑/);
+  assert.match(reply.replyText, /Skill：无（非注册 skill 路由）/);
+});
+
+test('buildRoutedAgentReply does not prefix ordinary chat replies with execution diagnosis card', async () => {
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-chat-no-diagnosis',
+          content: JSON.stringify({ text: '你好' }),
+        },
+      },
+    },
+    {
+      OPENCLAW_CHAT_ENABLED: 'true',
+    },
+    {
+      chat: async () => '你好，我在。',
+    },
+    {
+      agent: 'chat-agent',
+      action: 'chat',
+      requiresAuth: false,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.doesNotMatch(reply.replyText, /执行前识别/);
+});
+
+test('buildRoutedAgentReply keeps card-only clerk replies without execution diagnosis text', async () => {
+  const sent = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-card-only-no-diagnosis',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '打开看板' }),
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {
+      receiptSender: async (message) => {
+        sent.push(message);
+        return { data: { message_id: 'sent-card' } };
+      },
+      dashboardStateBuilder: async () => ({}),
+    },
+    {
+      agent: 'clerk-agent',
+      action: 'dashboard-card',
+      skillId: 'dashboard-card',
+      requiresAuth: false,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.equal(reply.replyText, null);
+  assert.equal(sent.length, 1);
+  assert.doesNotMatch(JSON.stringify(sent[0]), /执行前识别/);
+});
+
+test('buildRoutedAgentReply truncates execution diagnosis replies when max length is configured', async () => {
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-diagnosis-truncate',
+          content: JSON.stringify({ text: '文员，邮箱平台怎么玩' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      FEISHU_EXECUTION_DIAGNOSIS_MAX_REPLY_CHARS: '180',
+    },
+    {
+      buildMailWorkbenchReportFromEnv: () => ({
+        inbox: [],
+        outgoing: [],
+        summary: {
+          inboxCount: 0,
+          sentCount: 0,
+          failedCount: 0,
+          pendingApprovalCount: 0,
+        },
+      }),
+    },
+    {
+      agent: 'clerk-agent',
+      action: 'mailbox-workbench',
+      skillId: 'mailbox-workbench',
+      requiresAuth: true,
+      riskLevel: 'low',
+      autoRun: true,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /执行前识别/);
+  assert.match(reply.replyText, /回复过长，已截断/);
+  assert.ok(reply.replyText.length <= 180);
+});
+
+test('buildRoutedAgentReply keeps execution diagnosis truncation under a very small hard limit', async () => {
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-diagnosis-hard-limit',
+          content: JSON.stringify({ text: '大神版菜单' }),
+        },
+      },
+    },
+    {
+      FEISHU_ASSISTANT_NAME: 'Hermes',
+      FEISHU_EXECUTION_DIAGNOSIS_MAX_REPLY_CHARS: '80',
+    },
+    {},
+    {
+      agent: 'capability-agent',
+      action: 'guide',
+      mode: 'pro',
+      requiresAuth: false,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /执行前识别/);
+  assert.ok(reply.replyText.length <= 80);
+});
+
+test('buildRoutedAgentReply falls back to default execution diagnosis max when env is invalid', async () => {
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-diagnosis-invalid-limit',
+          content: JSON.stringify({ text: '文员，邮箱平台怎么玩' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      FEISHU_EXECUTION_DIAGNOSIS_MAX_REPLY_CHARS: 'abc',
+    },
+    {
+      buildMailWorkbenchReportFromEnv: () => ({
+        inbox: [],
+        outgoing: [],
+        summary: {
+          inboxCount: 0,
+          sentCount: 0,
+          failedCount: 0,
+          pendingApprovalCount: 0,
+        },
+      }),
+    },
+    {
+      agent: 'clerk-agent',
+      action: 'mailbox-workbench',
+      skillId: 'mailbox-workbench',
+      requiresAuth: true,
+      riskLevel: 'low',
+      autoRun: true,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /执行前识别/);
+  assert.doesNotMatch(reply.replyText, /回复过长，已截断/);
 });
 
 test('resolveAgentRoute reads default persisted context for the same Feishu conversation', async () => {
@@ -2410,6 +2675,8 @@ test('buildRoutedAgentReply can send clerk daily summary email to explicit user 
   assert.equal(reply.handled, true);
   assert.equal(sent.length, 1);
   assert.deepEqual(sent[0].to, ['1693457391@qq.com', 'agent4.daily@claw.163.com']);
+  assert.match(reply.replyText, /执行前识别/);
+  assert.match(reply.replyText, /clerk-agent \/ daily-email/);
   assert.match(reply.replyText, /1693457391@qq\.com/);
 });
 
@@ -2480,10 +2747,18 @@ test('buildRoutedAgentReply explains daily report preview is not yet an email se
         contextWrites.push({ payload, route });
       },
     },
+    {
+      agent: 'clerk-agent',
+      action: 'daily-report',
+      skillId: 'daily-report-preview',
+      requiresAuth: true,
+    },
   );
 
   assert.equal(reply.handled, true);
   assert.equal(contextWrites.length, 0);
+  assert.match(reply.replyText, /执行前识别/);
+  assert.match(reply.replyText, /clerk-agent \/ daily-report/);
   assert.match(reply.replyText, /我理解你想查看日报预览/);
   assert.match(reply.replyText, /先没执行发送/);
   assert.match(reply.replyText, /发送今天日报到邮箱/);
@@ -2521,6 +2796,8 @@ test('buildRoutedAgentReply clarifies daily email defaults before sending when n
 
   assert.equal(reply.handled, true);
   assert.equal(sent.length, 1);
+  assert.match(reply.replyText, /执行前识别/);
+  assert.match(reply.replyText, /clerk-agent \/ daily-email/);
   assert.match(reply.replyText, /默认外发/);
   assert.match(reply.replyText, /1693457391@qq\.com/);
   assert.match(reply.replyText, /指定收件人/);

@@ -36,8 +36,13 @@ const {
   askDifyTestingAssistant,
 } = require('./dify-testing-assistant');
 const {
+  buildExecutionDiagnosisCard,
   buildIntentDiagnosis,
 } = require('./agents/intent-diagnoser');
+const {
+  findRegisteredSkill,
+  findRegisteredSkillByAction,
+} = require('./skills/skill-registry');
 const {
   buildIntentPlannerPrompt,
   parseIntentPlannerOutput,
@@ -3957,6 +3962,39 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
 
   const text = extractFeishuText(payload);
   const diagnosis = buildIntentDiagnosis(text, route);
+  const withExecutionDiagnosis = (replyText) => {
+    if (!replyText) return replyText;
+    const registeredSkill = findRegisteredSkill(route.skillId || '')
+      || findRegisteredSkillByAction(route.action || '');
+    const executionDiagnosisCard = buildExecutionDiagnosisCard(text, route);
+    const shouldPrefix = route.agent === 'capability-agent'
+      || (route.agent === 'clerk-agent' && (
+        route.skillId
+        || registeredSkill?.agent === route.agent
+        || route.action === 'task-center-brain'
+      ));
+    if (!shouldPrefix) return replyText;
+    const parsedMaxChars = Number(env.FEISHU_EXECUTION_DIAGNOSIS_MAX_REPLY_CHARS || 9000);
+    const maxChars = Number.isFinite(parsedMaxChars) && parsedMaxChars > 0 ? parsedMaxChars : 9000;
+    const combinedReply = [executionDiagnosisCard, '', replyText].join('\n');
+    if (combinedReply.length > maxChars) {
+      const suffix = '...(回复过长，已截断)';
+      const compactCard = [
+        '执行前识别：',
+        ...executionDiagnosisCard.split('\n').slice(1, 4),
+      ].join('\n');
+      const prefix = compactCard.length + suffix.length + 2 <= maxChars
+        ? compactCard
+        : '执行前识别：';
+      const remaining = Math.max(0, maxChars - prefix.length - suffix.length - 2);
+      return [
+        prefix,
+        replyText.slice(0, remaining),
+        suffix,
+      ].filter(Boolean).join('\n').slice(0, maxChars);
+    }
+    return combinedReply;
+  };
   if (route.requiresAuth && !isAuthorized(payload, env)) {
     return {
       handled: true,
@@ -3975,7 +4013,7 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
   if (route.agent === 'capability-agent') {
     return {
       handled: true,
-      replyText: buildCapabilityGuideReply(getAssistantName(env), { mode: route.mode || 'pro' }),
+      replyText: withExecutionDiagnosis(buildCapabilityGuideReply(getAssistantName(env), { mode: route.mode || 'pro' })),
     };
   }
 
@@ -4394,12 +4432,12 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
       return {
         handled: true,
         intentContext: messages.length ? undefined : false,
-        replyText: [
+        replyText: withExecutionDiagnosis([
           diagnosis.reason,
           status,
           '',
           await buildClerkAgentReply(route, { env }),
-        ].join('\n'),
+        ].join('\n')),
       };
     }
     if (route.action === 'daily-report' && diagnosis.outcome === 'clarify') {
@@ -4407,22 +4445,22 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
         handled: true,
         outcome: 'clarify',
         intentContext: false,
-        replyText: [
+        replyText: withExecutionDiagnosis([
           `我理解你想${diagnosis.intentLabel}。`,
           '这次我先没执行发送。',
           `原因：${diagnosis.reason}`,
           diagnosis.nextStep,
           '',
           await buildClerkAgentReply(route, { env }),
-        ].filter(Boolean).join('\n'),
+        ].filter(Boolean).join('\n')),
       };
     }
     return {
       handled: true,
-      replyText: await buildClerkAgentReply(route, {
+      replyText: withExecutionDiagnosis(await buildClerkAgentReply(route, {
         env,
         publishWechatMpArticle: options.publishWechatMpArticle,
-      }),
+      })),
     };
   }
 

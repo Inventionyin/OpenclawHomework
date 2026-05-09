@@ -3,6 +3,7 @@ const test = require('node:test');
 
 const {
   buildIntentDiagnosis,
+  buildExecutionDiagnosisCard,
 } = require('../scripts/agents/intent-diagnoser');
 
 test('buildIntentDiagnosis explains invalid daily email recipient clearly', () => {
@@ -158,4 +159,51 @@ test('buildIntentDiagnosis asks for target url when browser request is too vague
   assert.deepEqual(diagnosis.missing, ['targetUrl']);
   assert.match(diagnosis.reason, /缺少目标 URL/);
   assert.match(diagnosis.nextStep, /CTF 靶场地址/);
+});
+
+test('buildExecutionDiagnosisCard explains selected skill metadata before execution', () => {
+  const card = buildExecutionDiagnosisCard('把今天日报发到 1693457391@qq.com', {
+    agent: 'clerk-agent',
+    action: 'daily-email',
+    skillId: 'daily-email',
+    recipientEmail: '1693457391@qq.com',
+    confidence: 'high',
+    riskLevel: 'medium',
+    autoRun: false,
+    requiresAuth: true,
+  });
+
+  assert.match(card, /执行前识别/);
+  assert.match(card, /日报邮件/);
+  assert.match(card, /clerk-agent \/ daily-email/);
+  assert.match(card, /置信度：high/);
+  assert.match(card, /风险：medium/);
+  assert.match(card, /执行方式：需要明确指令/);
+  assert.match(card, /触发依据：发送日报|发到邮箱/);
+  assert.match(card, /收件人：1693457391@qq\.com/);
+});
+
+test('buildExecutionDiagnosisCard explains non-skill capability and task brain routes', () => {
+  const capabilityCard = buildExecutionDiagnosisCard('大神版菜单', {
+    agent: 'capability-agent',
+    action: 'guide',
+    mode: 'pro',
+    requiresAuth: false,
+  });
+
+  assert.match(capabilityCard, /能力菜单/);
+  assert.match(capabilityCard, /capability-agent \/ guide/);
+  assert.match(capabilityCard, /Skill：无（非注册 skill 路由）/);
+  assert.match(capabilityCard, /无需授权/);
+
+  const brainCard = buildExecutionDiagnosisCard('看看总控脑', {
+    agent: 'clerk-agent',
+    action: 'task-center-brain',
+    requiresAuth: true,
+  });
+
+  assert.match(brainCard, /任务中枢主控脑/);
+  assert.match(brainCard, /clerk-agent \/ task-center-brain/);
+  assert.match(brainCard, /Skill：无（非注册 skill 路由）/);
+  assert.match(brainCard, /需要授权/);
 });

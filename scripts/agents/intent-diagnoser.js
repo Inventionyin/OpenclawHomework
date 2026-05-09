@@ -1,3 +1,8 @@
+const {
+  findRegisteredSkill,
+  findRegisteredSkillByAction,
+} = require('../skills/skill-registry');
+
 function inferIntentLabel(route = {}) {
   if (route.agent === 'clerk-agent') {
     if (route.action === 'daily-email' || route.action === 'daily-email-invalid-recipient') {
@@ -45,6 +50,57 @@ function inferIntentLabel(route = {}) {
   }
 
   return '自然语言请求';
+}
+
+function inferRouteDisplayName(route = {}) {
+  const skill = findRegisteredSkill(route.skillId || '')
+    || findRegisteredSkillByAction(route.action || '');
+  if (skill) return skill.name;
+  if (route.agent === 'capability-agent' && route.action === 'guide') return '能力菜单';
+  if (route.agent === 'clerk-agent' && route.action === 'task-center-brain') return '任务中枢主控脑';
+  return inferIntentLabel(route);
+}
+
+function resolveRouteSkill(route = {}) {
+  return findRegisteredSkill(route.skillId || '')
+    || findRegisteredSkillByAction(route.action || '')
+    || null;
+}
+
+function buildExecutionDiagnosisCard(text = '', route = {}) {
+  const skill = resolveRouteSkill(route);
+  const confidence = route.confidence || 'high';
+  const riskLevel = route.riskLevel || skill?.riskLevel || (route.requiresAuth ? 'medium' : 'low');
+  const autoRun = route.autoRun ?? skill?.autoRun ?? false;
+  const authText = route.requiresAuth ? '需要授权' : '无需授权';
+  const executionText = autoRun
+    ? '可自动执行'
+    : route.requiresAuth
+      ? '需要明确指令'
+      : '只读说明';
+  const triggers = skill?.triggers?.length
+    ? skill.triggers.slice(0, 3).join(' / ')
+    : route.agent === 'capability-agent'
+      ? '大神版菜单 / 能力菜单 / 你会什么'
+      : route.action === 'task-center-brain'
+        ? '总控脑 / 主控脑 / 任务驾驶舱'
+        : '自然语言匹配';
+
+  const details = [];
+  if (route.recipientEmail) details.push(`- 收件人：${route.recipientEmail}`);
+  if (route.target) details.push(`- 目标：${route.target}`);
+  if (route.mode) details.push(`- 模式：${route.mode}`);
+
+  return [
+    '执行前识别：',
+    `- 目标能力：${inferRouteDisplayName(route)}`,
+    `- 路由：${route.agent || 'unknown'} / ${route.action || 'unknown'}`,
+    skill ? `- Skill：${skill.id}（${skill.category || '未分类'}）` : '- Skill：无（非注册 skill 路由）',
+    `- 置信度：${confidence}`,
+    `- 风险：${riskLevel}；权限：${authText}；执行方式：${executionText}`,
+    `- 触发依据：${triggers}`,
+    ...details,
+  ].filter(Boolean).join('\n');
 }
 
 function extractFirstUrl(text = '') {
@@ -274,5 +330,6 @@ function buildIntentDiagnosis(text = '', route = {}) {
 }
 
 module.exports = {
+  buildExecutionDiagnosisCard,
   buildIntentDiagnosis,
 };
