@@ -1734,7 +1734,8 @@ function buildClarifyReply(route) {
 function buildLowConfidenceOpsReply() {
   return [
     '我没完全听懂你想让我看哪台服务器，或者要做什么操作。',
-    '可以这样说：',
+    '这次先不执行，避免误操作。',
+    '你可以直接说：',
     '- 你现在内存多少',
     '- 你硬盘还剩多少',
     '- 看看 Hermes 的服务器状态',

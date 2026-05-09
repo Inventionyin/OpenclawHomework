@@ -1001,11 +1001,49 @@ test('routeAgentIntent handles boss-style natural-language control phrases', () 
     action: 'todo-summary',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('今天还有哪些没完成'), {
+    agent: 'clerk-agent',
+    action: 'todo-summary',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('昨天干了啥'), {
+    agent: 'clerk-agent',
+    action: 'command-center',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('昨天失败了什么'), {
     agent: 'clerk-agent',
     action: 'todo-summary',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('帮我看看哪里不正常'), {
+    agent: 'ops-agent',
+    action: 'clarify',
+    target: 'unknown',
+    confidence: 'low',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('项目质量跑一下'), {
+    agent: 'qa-agent',
+    action: 'dify-testing-assistant',
+    query: '项目质量跑一下',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('公众号今天能发什么'), {
+    agent: 'clerk-agent',
+    action: 'wechat-mp-draft',
+    idea: '今日公众号选题建议',
+    requiresAuth: true,
+  });
+  {
+    const route = routeAgentIntent('看看今天失败任务，然后统计 token 用量');
+    assert.equal(route.agent, 'planner-agent');
+    assert.equal(route.action, 'multi-intent-plan');
+    assert.deepEqual(
+      route.plan.intents.map((intent) => intent.action),
+      ['task-center-failed', 'token-summary'],
+    );
+  }
   assert.deepEqual(routeAgentIntent('继续昨天没跑完的 token 工厂'), {
     agent: 'clerk-agent',
     action: 'token-factory',

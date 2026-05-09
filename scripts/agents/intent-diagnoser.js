@@ -180,7 +180,7 @@ function buildIntentDiagnosis(text = '', route = {}) {
   if (route.agent === 'ops-agent' && route.action === 'clarify') {
     diagnosis.outcome = 'clarify';
     diagnosis.canExecute = false;
-    diagnosis.reason = '我还不能确定你要做什么运维操作，或者要看哪台服务器，所以这次先没执行。';
+    diagnosis.reason = '我还不能确定你要做什么运维操作，或者要看哪台服务器，所以这次先不执行，避免误操作。';
     diagnosis.missing = ['action', 'target'];
     diagnosis.blockedBy = ['low_confidence'];
     diagnosis.nextStep = buildOpsClarifyExamples(route).join(' / ');

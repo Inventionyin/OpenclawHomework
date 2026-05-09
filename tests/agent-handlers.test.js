@@ -1354,7 +1354,10 @@ test('buildOpsAgentReply guides on low-confidence ops requests', async () => {
   });
 
   assert.match(reply, /我没完全听懂/);
+  assert.match(reply, /这次先不执行|先没执行|还不能确定/);
+  assert.match(reply, /你可以直接说|请直接说/);
   assert.match(reply, /你现在内存多少/);
+  assert.doesNotMatch(reply, /unknown|guide/i);
 });
 
 test('buildOpsAgentReply supports whitelisted peer repair actions', async () => {

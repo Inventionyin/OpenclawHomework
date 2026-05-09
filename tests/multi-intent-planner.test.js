@@ -45,6 +45,32 @@ test('dangerous combined ops are blocked and not treated as safe multi-intent', 
   assert.equal(hasMultipleSafeIntents(text), false);
 });
 
+test('splits safe intents by clause instead of answering only the first one', () => {
+  const plan = planMultiIntent('看看今天失败任务，然后统计 token 用量');
+
+  assert.equal(plan.isMultiIntent, true);
+  assert.equal(plan.confidence, 'high');
+  assert.deepEqual(
+    plan.intents.map((item) => item.action),
+    ['task-center-failed', 'token-summary'],
+  );
+});
+
+test('does not count repeated resource phrases as separate intents', () => {
+  const plan = planMultiIntent('看看服务器内存，再看看硬盘');
+
+  assert.equal(plan.isMultiIntent, false);
+  assert.deepEqual(plan.intents.map((item) => item.action), ['load-summary']);
+});
+
+test('blocks dangerous work even when combined with safe reporting', () => {
+  const plan = planMultiIntent('重启一下，然后统计 token 用量');
+
+  assert.equal(plan.isMultiIntent, false);
+  assert.deepEqual(plan.intents, []);
+  assert.deepEqual(plan.blocked, ['dangerous_operation_detected']);
+});
+
 test('simple greeting is not multi-intent', () => {
   const text = '你好';
   const plan = planMultiIntent(text);

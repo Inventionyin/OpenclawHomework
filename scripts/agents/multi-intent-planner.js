@@ -67,6 +67,52 @@ function findSafeIntents(text) {
   return found;
 }
 
+function splitIntentClauses(text) {
+  return String(text || '')
+    .split(/(?:并且|并行|同时|顺便|然后|再|并|及|、|，|,|;|；)/i)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function dedupeIntents(intents = []) {
+  const seen = new Set();
+  const deduped = [];
+  for (const intent of intents) {
+    const key = `${intent.agent}:${intent.action}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(intent);
+  }
+  return deduped;
+}
+
+function findClauseSafeIntents(text) {
+  const clauses = splitIntentClauses(text);
+  if (clauses.length < 2) {
+    return {
+      intents: dedupeIntents(findSafeIntents(text)),
+      matchedClauseCount: 0,
+    };
+  }
+
+  const found = [];
+  let matchedClauseCount = 0;
+  for (const clause of clauses) {
+    const clauseIntents = dedupeIntents(findSafeIntents(clause));
+    if (clauseIntents.length) {
+      matchedClauseCount += 1;
+      found.push(...clauseIntents);
+    }
+  }
+
+  return {
+    intents: dedupeIntents(found.length ? found : findSafeIntents(text)),
+    matchedClauseCount,
+  };
+}
+
 function planMultiIntent(text) {
   const normalized = normalizeText(text);
   if (!normalized) {
@@ -94,9 +140,10 @@ function planMultiIntent(text) {
     };
   }
 
-  const intents = findSafeIntents(normalized);
+  const clauseResult = findClauseSafeIntents(normalized);
+  const intents = clauseResult.intents;
   const hasConnector = includesAny(normalized, MULTI_CONNECTORS);
-  const isMultiIntent = hasConnector && intents.length > 1;
+  const isMultiIntent = hasConnector && intents.length > 1 && clauseResult.matchedClauseCount > 1;
   return {
     isMultiIntent,
     confidence: isMultiIntent ? 'high' : intents.length === 1 ? 'medium' : 'low',

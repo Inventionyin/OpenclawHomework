@@ -138,7 +138,9 @@ function routeNaturalLanguageOps(text) {
   }
 
   if (/(你|本机|服务器).{0,8}(搞一下|处理一下)/.test(normalized)
-    || /你帮我搞一下/.test(normalized)) {
+    || /你帮我搞一下/.test(normalized)
+    || /(帮我|给我|麻烦|请)?(看看|看下|检查|排查|定位).{0,12}(哪里|哪儿|什么|哪个).{0,12}(不正常|异常|有问题|不对劲|不对|怪|错了)/.test(normalized)
+    || /(不正常|异常|有问题|不对劲|不对|怪|错了).{0,12}(哪里|哪儿|什么|哪个|原因)/.test(normalized)) {
     return {
       agent: 'ops-agent',
       action: 'clarify',
@@ -210,6 +212,17 @@ function routeNaturalLanguageOps(text) {
 function routeQaAssetIntent(text) {
   const original = String(text ?? '').trim();
   const normalized = original.toLowerCase();
+
+  if (/(项目质量|代码质量|测试质量).{0,12}(体检|检查|评估|评审|诊断|跑一下|看一下|看一遍)/i.test(normalized)
+    || /(项目|代码|测试).{0,12}(体检|检查|评估|评审|诊断|跑一下|看一下|看一遍)/i.test(normalized)
+    || /(跑一下|检查|评估|评审|诊断).{0,16}(项目|代码|测试).{0,8}(质量)?/i.test(normalized)) {
+    return {
+      agent: 'qa-agent',
+      action: 'dify-testing-assistant',
+      query: original,
+      requiresAuth: true,
+    };
+  }
 
   if (/(dify).{0,12}(工作流|workflow|问答|qa)/i.test(normalized)
     || /(需求|需求文档|prd|spec).{0,30}(测试用例|用例|测试点|场景)/i.test(normalized)
@@ -341,6 +354,16 @@ function routeClerkIntent(text) {
     return { agent: 'clerk-agent', action: 'wechat-mp-publish-latest', requiresAuth: true };
   }
 
+  if (/(公众号|微信文章|公众号文章).{0,12}(今天|今日)?.{0,12}(能发什么|发什么|写什么|选题|主题|内容建议|推荐)/i.test(original)
+    || /(今天|今日).{0,12}(公众号|微信文章|公众号文章).{0,12}(能发什么|发什么|写什么|选题|主题|内容建议|推荐)/i.test(original)) {
+    return {
+      agent: 'clerk-agent',
+      action: 'wechat-mp-draft',
+      idea: '今日公众号选题建议',
+      requiresAuth: true,
+    };
+  }
+
   if (/(projectku-web|projectku).{0,30}(注册|验证码|验证).{0,20}(测试|跑一轮|测一下|执行)/i.test(normalized)
     || /(注册|验证码|验证).{0,20}(测试|跑一轮|测一下|执行).{0,30}(projectku-web|projectku)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'platform-registration-runner', requiresAuth: true };
@@ -434,6 +457,7 @@ function routeClerkIntent(text) {
   }
 
   if (/(一屏看懂|总览|项目总览|整体情况|今天.*(进展|做了啥|做了什么|情况)|现在.*(该怎么玩|先做什么))/i.test(normalized)
+    || /(昨天|昨日|昨晚).{0,10}(干了啥|做了啥|做了什么|进展|完成了什么|情况)/i.test(normalized)
     || /((进展|做了啥|做了什么|情况).{0,12}(总览|一屏|汇总))/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'command-center', requiresAuth: true };
   }
@@ -679,6 +703,7 @@ function routeOfficeIntent(text) {
   }
 
   if (/(一屏看懂|总览|项目总览|整体情况|今天.*(进展|做了啥|做了什么|情况)|现在.*(该怎么玩|先做什么))/i.test(normalized)
+    || /(昨天|昨日|昨晚).{0,10}(干了啥|做了啥|做了什么|进展|完成了什么|情况)/i.test(normalized)
     || /((进展|做了啥|做了什么|情况).{0,12}(总览|一屏|汇总))/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'command-center', requiresAuth: true };
   }
@@ -699,6 +724,17 @@ function routeOfficeIntent(text) {
     || /(明日|明天).{0,10}(计划).{0,10}(今日|今天).{0,10}(总结)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'todo-summary', requiresAuth: true };
   }
+
+  if (/(公众号|微信文章|公众号文章).{0,12}(今天|今日)?.{0,12}(能发什么|发什么|写什么|选题|主题|内容建议|推荐)/i.test(original)
+    || /(今天|今日).{0,12}(公众号|微信文章|公众号文章).{0,12}(能发什么|发什么|写什么|选题|主题|内容建议|推荐)/i.test(original)) {
+    return {
+      agent: 'clerk-agent',
+      action: 'wechat-mp-draft',
+      idea: '今日公众号选题建议',
+      requiresAuth: true,
+    };
+  }
+
   if (looksLikeTaskCenterBrainIntent(original)) {
     return { agent: 'clerk-agent', action: 'task-center-brain', requiresAuth: true };
   }

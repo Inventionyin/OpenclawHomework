@@ -37,7 +37,9 @@ test('buildIntentDiagnosis explains low-confidence ops request with clearer next
   assert.equal(diagnosis.intentLabel, '服务器运维操作');
   assert.equal(diagnosis.canExecute, false);
   assert.match(diagnosis.reason, /我还不能确定/);
+  assert.match(diagnosis.reason, /这次先不执行|先没执行/);
   assert.match(diagnosis.nextStep, /你现在内存多少|看看 Hermes 的服务器状态/);
+  assert.doesNotMatch(diagnosis.nextStep, /unknown|guide/i);
 });
 
 test('buildIntentDiagnosis explains that daily report route is a preview not a send', () => {

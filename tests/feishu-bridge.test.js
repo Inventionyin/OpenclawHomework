@@ -1954,6 +1954,97 @@ test('buildRoutedAgentReply executes safe multi-intent routes and merges replies
   assert.match(reply.replyText, /Token 用量：Hermes 1200/);
 });
 
+test('buildRoutedAgentReply skips non-allowlisted multi-intent subroutes', async () => {
+  let executorCalled = false;
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-multi-intent-skip',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '看看今天失败任务，然后发送今天日报到邮箱' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {
+      multiIntentExecutor: async () => {
+        executorCalled = true;
+        return 'should not run';
+      },
+    },
+    {
+      agent: 'planner-agent',
+      action: 'multi-intent-plan',
+      requiresAuth: true,
+      plan: {
+        isMultiIntent: true,
+        confidence: 'high',
+        blocked: [],
+        intents: [
+          { agent: 'clerk-agent', action: 'daily-email', requiresAuth: true, reason: '发送邮件' },
+        ],
+      },
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.equal(executorCalled, false);
+  assert.match(reply.replyText, /已跳过/);
+  assert.match(reply.replyText, /需要单独明确确认/);
+});
+
+test('buildRoutedAgentReply handles planner clarify without running executors', async () => {
+  let executorCalled = false;
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-planner-clarify-safe',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '帮我看看哪里不正常' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {
+      multiIntentExecutor: async () => {
+        executorCalled = true;
+        return 'should not run';
+      },
+      runOpsCheck: async () => {
+        executorCalled = true;
+        return {};
+      },
+    },
+    {
+      agent: 'planner-agent',
+      action: 'clarify',
+      confidence: 'low',
+      requiresAuth: false,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.equal(executorCalled, false);
+  assert.match(reply.replyText, /可以继续|先帮你拆/);
+  assert.match(reply.replyText, /你可以直接说/);
+});
+
 test('buildRoutedAgentReply can send clerk daily summary email to explicit user recipient', async () => {
   const sent = [];
   const reply = await buildRoutedAgentReply(
