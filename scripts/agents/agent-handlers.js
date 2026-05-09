@@ -16,6 +16,9 @@ const {
   listCapabilities,
 } = require('./capability-registry');
 const {
+  buildRegisteredSkillMenu,
+} = require('../skills/skill-registry');
+const {
   runGBrainSearch,
 } = require('./gbrain-client');
 const {
@@ -146,8 +149,9 @@ function buildDocAgentReply(text, memoryContext = buildMemoryContext()) {
   ].join('\n');
 }
 
-function buildCapabilityGuideReply(assistantName = 'OpenClaw') {
+function buildCapabilityGuideReply(assistantName = 'OpenClaw', options = {}) {
   const capabilities = listCapabilities();
+  const skillMenu = buildRegisteredSkillMenu({ mode: options.mode || 'pro' });
   return [
     `${assistantName} 大神版玩法菜单：你不用背命令，按目标直接说。`,
     '',
@@ -195,6 +199,8 @@ function buildCapabilityGuideReply(assistantName = 'OpenClaw') {
     '- 微信 Bridge 计划：帮我整理微信 Bridge 的第一版入口',
     '',
     `已注册能力：${capabilities.map((capability) => capability.name).join('、')}`,
+    '',
+    skillMenu,
   ].join('\n');
 }
 

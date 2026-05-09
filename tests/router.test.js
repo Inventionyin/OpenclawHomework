@@ -1110,6 +1110,23 @@ test('routeAgentIntent handles boss-style natural-language control phrases', () 
     action: 'guide',
     requiresAuth: false,
   });
+  assert.deepEqual(routeAgentIntent('大神版菜单'), {
+    agent: 'capability-agent',
+    action: 'guide',
+    mode: 'pro',
+    requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('给我能力菜单'), {
+    agent: 'capability-agent',
+    action: 'guide',
+    mode: 'normal',
+    requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('看看总控脑'), {
+    agent: 'clerk-agent',
+    action: 'task-center-brain',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，给我一个今日总结和明日计划'), {
     agent: 'clerk-agent',
     action: 'todo-summary',

@@ -3975,7 +3975,7 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
   if (route.agent === 'capability-agent') {
     return {
       handled: true,
-      replyText: buildCapabilityGuideReply(getAssistantName(env)),
+      replyText: buildCapabilityGuideReply(getAssistantName(env), { mode: route.mode || 'pro' }),
     };
   }
 

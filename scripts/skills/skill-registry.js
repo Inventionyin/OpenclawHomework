@@ -5,6 +5,7 @@ const REGISTERED_SKILLS = [
     action: 'web-content-fetch',
     agent: 'clerk-agent',
     description: '抓取白名单网页正文并生成摘要，适合 GitHub 项目、README、资料页和热点链接初筛。',
+    category: '信息抓取',
     riskLevel: 'low',
     autoRun: true,
     requiresAuth: true,
@@ -16,6 +17,7 @@ const REGISTERED_SKILLS = [
     action: 'research-dev-loop',
     agent: 'clerk-agent',
     description: '把目标拆成 Research、Plan、Development、Evaluation、Learning、Next 的可追踪研发闭环。',
+    category: '研发流程',
     riskLevel: 'medium',
     autoRun: false,
     requiresAuth: true,
@@ -27,6 +29,7 @@ const REGISTERED_SKILLS = [
     action: 'skill-flow',
     agent: 'clerk-agent',
     description: '读取 docs/skills/*.md，把技能文档中的步骤写入任务中枢，形成可恢复流程。',
+    category: '研发流程',
     riskLevel: 'medium',
     autoRun: false,
     requiresAuth: true,
@@ -38,6 +41,7 @@ const REGISTERED_SKILLS = [
     action: 'daily-email',
     agent: 'clerk-agent',
     description: '把今日总结、测试报告或日报发送到邮箱；可识别显式收件邮箱。',
+    category: '邮箱协同',
     riskLevel: 'medium',
     autoRun: false,
     requiresAuth: true,
@@ -49,6 +53,7 @@ const REGISTERED_SKILLS = [
     action: 'run',
     agent: 'ui-test-agent',
     description: '触发 GitHub Actions UI 自动化测试，执行前需要明确测试意图。',
+    category: '测试执行',
     riskLevel: 'medium',
     autoRun: false,
     requiresAuth: true,
@@ -60,6 +65,7 @@ const REGISTERED_SKILLS = [
     action: 'dify-testing-assistant',
     agent: 'qa-agent',
     description: '生成测试点、测试用例、缺陷分析和测试报告整理建议。',
+    category: '测试质量',
     riskLevel: 'low',
     autoRun: true,
     requiresAuth: true,
@@ -71,6 +77,7 @@ const REGISTERED_SKILLS = [
     action: 'trend-intel',
     agent: 'clerk-agent',
     description: '抓取并总结开源热榜、热点新闻、测试圈趋势和学习建议。',
+    category: '热点学习',
     riskLevel: 'low',
     autoRun: true,
     requiresAuth: true,
@@ -82,6 +89,7 @@ const REGISTERED_SKILLS = [
     action: 'trend-token-factory',
     agent: 'clerk-agent',
     description: '用模型批量分析热点和开源项目，生成学习价值、测试借鉴点和后续行动。',
+    category: '热点学习',
     riskLevel: 'medium',
     autoRun: false,
     requiresAuth: true,
@@ -93,6 +101,7 @@ const REGISTERED_SKILLS = [
     action: 'token-factory',
     agent: 'clerk-agent',
     description: '批量生成训练数据、模型评审和归档报告，适合主动消耗 token 沉淀资产。',
+    category: 'token 工厂',
     riskLevel: 'medium',
     autoRun: false,
     requiresAuth: true,
@@ -104,6 +113,7 @@ const REGISTERED_SKILLS = [
     action: 'command-center',
     agent: 'clerk-agent',
     description: '汇总项目进展、任务、邮件、流水线和下一步建议。',
+    category: '项目总控',
     riskLevel: 'low',
     autoRun: true,
     requiresAuth: true,
@@ -115,6 +125,7 @@ const REGISTERED_SKILLS = [
     action: 'todo-summary',
     agent: 'clerk-agent',
     description: '整理今日待办、未完成任务、今日总结和明日计划。',
+    category: '项目总控',
     riskLevel: 'low',
     autoRun: true,
     requiresAuth: true,
@@ -126,6 +137,7 @@ const REGISTERED_SKILLS = [
     action: 'mailbox-workbench',
     agent: 'clerk-agent',
     description: '查看 ClawEmail/邮箱平台玩法、任务、审批、流水和归档工作台。',
+    category: '邮箱协同',
     riskLevel: 'low',
     autoRun: true,
     requiresAuth: true,
@@ -137,6 +149,7 @@ const REGISTERED_SKILLS = [
     action: 'mailbox-approvals',
     agent: 'clerk-agent',
     description: '列出待审批邮件；真正审批发送仍由审批 action 单独处理。',
+    category: '邮箱协同',
     riskLevel: 'medium',
     autoRun: false,
     requiresAuth: true,
@@ -148,6 +161,7 @@ const REGISTERED_SKILLS = [
     action: 'mailbox-tasks',
     agent: 'clerk-agent',
     description: '查看今天邮箱里的任务、队列和待办。',
+    category: '邮箱协同',
     riskLevel: 'low',
     autoRun: true,
     requiresAuth: true,
@@ -159,6 +173,7 @@ const REGISTERED_SKILLS = [
     action: 'mail-ledger',
     agent: 'clerk-agent',
     description: '查看邮件发送记录、流水、历史和账本。',
+    category: '邮箱协同',
     riskLevel: 'low',
     autoRun: true,
     requiresAuth: true,
@@ -170,6 +185,7 @@ const REGISTERED_SKILLS = [
     action: 'load-summary',
     agent: 'ops-agent',
     description: '自然语言查询本机或对端服务器内存、硬盘、负载和状态。',
+    category: '运维状态',
     riskLevel: 'low',
     autoRun: true,
     requiresAuth: true,
@@ -192,6 +208,58 @@ function listRegisteredSkills() {
   return REGISTERED_SKILLS.map(cloneSkill);
 }
 
+function groupRegisteredSkillsByCategory(skills = listRegisteredSkills()) {
+  return skills.reduce((groups, skill) => {
+    const category = skill.category || '其他能力';
+    if (!groups[category]) groups[category] = [];
+    groups[category].push(skill);
+    return groups;
+  }, {});
+}
+
+function buildRegisteredSkillMenu(options = {}) {
+  const mode = options.mode === 'pro' ? 'pro' : 'normal';
+  const groups = groupRegisteredSkillsByCategory();
+  const categoryOrder = [
+    '项目总控',
+    '测试执行',
+    '测试质量',
+    '邮箱协同',
+    '热点学习',
+    'token 工厂',
+    '信息抓取',
+    '研发流程',
+    '运维状态',
+    '其他能力',
+  ];
+  const lines = [
+    mode === 'pro'
+      ? 'Skill 总控菜单（大神版）：按目标说话，我会自动选 skill。'
+      : 'Skill 总控菜单：按目标说话，我会自动选 skill。',
+  ];
+
+  for (const category of categoryOrder) {
+    const skills = groups[category] || [];
+    if (!skills.length) continue;
+    lines.push('', `${category}：`);
+    skills.forEach((skill) => {
+      const triggers = (skill.triggers || []).slice(0, mode === 'pro' ? 3 : 2).join(' / ') || '直接描述目标';
+      lines.push(`- ${skill.name}（${skill.id}）`);
+      lines.push(`  触发：${triggers}`);
+      lines.push(`  风险：${skill.riskLevel}；执行：${skill.autoRun ? '自动' : '手动确认'}`);
+      if (mode === 'pro') {
+        lines.push(`  说明：${skill.description}`);
+      }
+    });
+  }
+
+  lines.push('', '总控入口：');
+  lines.push('- 想看项目状态：看看总控脑 / 文员，查看任务中枢主控脑');
+  lines.push('- 想看能力：大神版菜单 / 你会什么 / 能力菜单');
+  lines.push('- 想组合任务：看看失败任务，然后统计 token 用量');
+  return lines.join('\n');
+}
+
 function findRegisteredSkill(skillId = '') {
   const normalized = normalizeSkillId(skillId);
   const skill = REGISTERED_SKILLS.find((candidate) => candidate.id === normalized
@@ -207,8 +275,10 @@ function findRegisteredSkillByAction(action = '') {
 }
 
 module.exports = {
+  buildRegisteredSkillMenu,
   findRegisteredSkill,
   findRegisteredSkillByAction,
+  groupRegisteredSkillsByCategory,
   listRegisteredSkills,
   normalizeSkillId,
 };

@@ -896,6 +896,34 @@ test('buildRoutedAgentReply records safe non-chat intent context metadata', asyn
   assert.equal(writes[0].route.rawText, undefined);
 });
 
+test('buildRoutedAgentReply passes capability menu mode to guide builder', async () => {
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-capability-menu',
+          content: JSON.stringify({ text: '大神版菜单' }),
+        },
+      },
+    },
+    {
+      FEISHU_ASSISTANT_NAME: 'Hermes',
+    },
+    {},
+    {
+      agent: 'capability-agent',
+      action: 'guide',
+      mode: 'pro',
+      requiresAuth: false,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /Hermes/);
+  assert.match(reply.replyText, /Skill 总控菜单/);
+  assert.match(reply.replyText, /大神版/);
+});
+
 test('resolveAgentRoute reads default persisted context for the same Feishu conversation', async () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'feishu-intent-context-'));
   try {

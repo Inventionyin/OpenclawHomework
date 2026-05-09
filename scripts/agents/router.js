@@ -854,11 +854,29 @@ function routeOfficeIntent(text) {
 
 function routeCapabilityIntent(text) {
   const normalized = String(text ?? '').trim().toLowerCase();
+  const wantsProMenu = /(大神版菜单|大神菜单|高级菜单|玩法菜单|skill\s*菜单|技能菜单|能力菜单|总控菜单)/i.test(normalized);
+  if (wantsProMenu) {
+    return {
+      agent: 'capability-agent',
+      action: 'guide',
+      mode: /大神|高级|pro/i.test(normalized) ? 'pro' : 'normal',
+      requiresAuth: false,
+    };
+  }
   if (/(你|我)?(现在)?(能|可以|会).{0,12}(做|干|玩).{0,20}(什么|哪些|啥|事情|功能)/i.test(normalized)
     || /(有哪些|有什么).{0,16}(功能|能力|玩法|指令|命令|技能)/i.test(normalized)
     || /^(帮助|help|怎么用|使用说明|你会做什么|你能做什么|怎么玩|玩法)$/i.test(normalized)
     || /(现在|今天).{0,8}(我|我们).{0,8}(该|可以).{0,8}(怎么玩|怎么用|做什么)/i.test(normalized)) {
     return { agent: 'capability-agent', action: 'guide', requiresAuth: false };
+  }
+  return null;
+}
+
+function routeBossControlIntent(text) {
+  const normalized = String(text ?? '').trim().toLowerCase();
+  if (/(总控脑|主控脑|任务驾驶舱|项目大脑|今日总控|全景复盘).{0,16}(看|看看|总结|汇总|总览|全景|复盘)?/i.test(normalized)
+    || /(看|看看|总结|汇总|总览).{0,16}(总控脑|主控脑|任务驾驶舱|项目大脑|今日总控|全景复盘)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'task-center-brain', requiresAuth: true };
   }
   return null;
 }
@@ -1189,6 +1207,11 @@ function routeAgentIntent(text, options = {}) {
     return dangerousMixedRoute;
   }
 
+  const bossControlRoute = routeBossControlIntent(original);
+  if (bossControlRoute) {
+    return bossControlRoute;
+  }
+
   const capabilityRoute = routeCapabilityIntent(normalized);
   if (capabilityRoute) {
     return capabilityRoute;
@@ -1359,6 +1382,7 @@ module.exports = {
   routeBrainMemoryIntent,
   routeBroadPlannerIntent,
   routeBrowserAutomationIntent,
+  routeBossControlIntent,
   routeCapabilityIntent,
   routeEcosystemIntent,
   routeWorkflowEnhancementIntent,

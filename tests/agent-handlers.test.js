@@ -44,6 +44,11 @@ test('buildCapabilityGuideReply explains practical agent playbook', () => {
   assert.match(reply, /知识库与长期记忆/);
   assert.match(reply, /邮箱与日报/);
   assert.match(reply, /测试资产工坊/);
+  assert.match(reply, /Skill 总控菜单/);
+  assert.match(reply, /热点学习/);
+  assert.match(reply, /邮箱协同/);
+  assert.match(reply, /UI 自动化执行/);
+  assert.match(reply, /触发：/);
 });
 
 test('buildBrainGuideReply explains Obsidian and GBrain memory upgrade', () => {

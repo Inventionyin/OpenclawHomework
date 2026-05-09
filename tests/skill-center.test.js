@@ -7,6 +7,7 @@ const {
 const {
   listRegisteredSkills,
   findRegisteredSkill,
+  buildRegisteredSkillMenu,
 } = require('../scripts/skills/skill-registry');
 const {
   routeSkillIntent,
@@ -39,6 +40,20 @@ test('skill registry exposes workflow enhancement skills with risk metadata', ()
   assert.equal(findRegisteredSkill('dify-testing-assistant').riskLevel, 'low');
   assert.equal(findRegisteredSkill('command-center').autoRun, true);
   assert.equal(findRegisteredSkill('server-ops-status').agent, 'ops-agent');
+  assert.equal(findRegisteredSkill('trend-intel').category, '热点学习');
+  assert.equal(findRegisteredSkill('mailbox-workbench').category, '邮箱协同');
+});
+
+test('skill registry builds categorized pro menu from registered skills', () => {
+  const menu = buildRegisteredSkillMenu({ mode: 'pro' });
+
+  assert.match(menu, /Skill 总控菜单/);
+  assert.match(menu, /热点学习/);
+  assert.match(menu, /邮箱协同/);
+  assert.match(menu, /UI 自动化执行/);
+  assert.match(menu, /触发：/);
+  assert.match(menu, /风险：medium/);
+  assert.match(menu, /执行：自动|执行：手动/);
 });
 
 test('skill router selects the safest matching skill from natural language', () => {
@@ -168,6 +183,18 @@ test('skill router selects command center todo mailbox and ops status skills', (
     action: 'load-summary',
     skillId: 'server-ops-status',
     target: 'self',
+    requiresAuth: true,
+    riskLevel: 'low',
+    autoRun: true,
+  });
+});
+
+test('skill router keeps broad menu phrases available for capability guide', () => {
+  assert.equal(routeSkillIntent('大神版菜单'), null);
+  assert.deepEqual(routeSkillIntent('邮箱平台怎么玩'), {
+    agent: 'clerk-agent',
+    action: 'mailbox-workbench',
+    skillId: 'mailbox-workbench',
     requiresAuth: true,
     riskLevel: 'low',
     autoRun: true,
