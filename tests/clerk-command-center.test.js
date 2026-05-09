@@ -222,6 +222,55 @@ test('buildClerkCommandCenterReply includes daily pipeline stage diagnosis when 
   assert.match(reply, /先修复 scheduled-ui/);
 });
 
+test('buildClerkDailyReportReply includes pipeline diagnosis next action and mail archive targets', () => {
+  const reply = buildClerkDailyReportReply({}, {
+    now: new Date('2026-05-06T04:00:00.000Z'),
+    buildDailySummary: () => ({ text: '基础日报摘要。' }),
+    readDailySummarySnapshot: () => ({ runs: [] }),
+    readUsageLedger: () => [
+      { assistant: 'Hermes', totalTokens: 1200 },
+      { assistant: 'OpenClaw', estimatedTotalTokens: 300 },
+    ],
+    readMailLedger: () => [
+      {
+        timestamp: '2026-05-06T02:00:00.000Z',
+        action: 'daily-report',
+        archiveTo: 'daily@claw.163.com',
+        recipient: '1693457391@qq.com',
+      },
+      {
+        timestamp: '2026-05-06T03:00:00.000Z',
+        action: 'training-data',
+        archiveTo: 'qa@claw.163.com',
+      },
+    ],
+    summarizeDailyPlan: () => ({
+      todaySummaryText: '今天主线：日报、新闻、token 训练。',
+      tomorrowPlan: ['补跑 UI contracts。'],
+    }),
+    summarizeTaskCenterBrain: () => ({
+      executionLoop: {
+        currentStatus: '完成 2，失败 1，运行中 0，可恢复 1',
+        todayTask: { summaryText: '任务中枢今日总结。' },
+        failureReview: '失败集中在 scheduled-ui。',
+        nextPlan: ['重跑 scheduled-ui。'],
+      },
+    }),
+    summarizeDailyPipeline: () => ({
+      failureDiagnosis: '失败诊断：scheduled-ui：runner_failed',
+      nextAction: '先修复 scheduled-ui，再启动今天的自动流水线。',
+    }),
+  });
+
+  assert.match(reply, /失败集中在 scheduled-ui/);
+  assert.match(reply, /失败诊断：scheduled-ui：runner_failed/);
+  assert.match(reply, /先修复 scheduled-ui/);
+  assert.match(reply, /合计约 1500 tokens/);
+  assert.match(reply, /daily@claw\.163\.com/);
+  assert.match(reply, /qa@claw\.163\.com/);
+  assert.match(reply, /1693457391@qq\.com/);
+});
+
 test('buildClerkCommandCenterReply uses enhanced task-center sections when provided', () => {
   const reply = buildClerkCommandCenterReply({
     now: new Date('2026-05-06T04:00:00.000Z'),

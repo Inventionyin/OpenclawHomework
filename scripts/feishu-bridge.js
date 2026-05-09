@@ -3272,6 +3272,7 @@ function isSafePlannerRoute(planned = {}) {
     'capability-agent',
     'planner-agent',
     'clerk-agent',
+    'browser-agent',
   ]);
   if (!allowedAgents.has(agent) || !action) {
     return false;
@@ -3281,6 +3282,33 @@ function isSafePlannerRoute(planned = {}) {
   }
   if (agent === 'ops-agent') {
     return new Set(['status', 'health', 'watchdog', 'logs', 'memory-summary', 'disk-summary', 'load-summary']).has(action);
+  }
+  if (agent === 'browser-agent') {
+    return new Set([
+      'browser-clarify',
+      'browser-capture-plan',
+      'protocol-capture-plan',
+      'protocol-assets-report',
+      'protocol-assets-to-tests',
+    ]).has(action);
+  }
+  if (agent === 'clerk-agent') {
+    return new Set([
+      'command-center',
+      'task-center-brain',
+      'task-center-today',
+      'todo-summary',
+      'token-summary',
+      'trend-intel',
+      'daily-pipeline-status',
+      'mailbox-workbench',
+      'mailbox-tasks',
+      'mail-ledger',
+      'mailbox-daily-report',
+      'recent-files',
+      'file-channel-workbench',
+      'training-data',
+    ]).has(action);
   }
   return true;
 }

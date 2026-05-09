@@ -192,11 +192,12 @@ test('runDailyAgentPipeline writes state file when provided', async () => {
 });
 
 test('runDailyAgentPipeline returns readable domain summary for trend, token, ui and daily digest', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'daily-agent-pipeline-summary-'));
   const result = await runDailyAgentPipeline({
     force: true,
     day: '2026-05-06',
     env: {
-      TOKEN_FACTORY_TASK_DIR: join(tmpdir(), 'daily-agent-pipeline-summary-tasks'),
+      TOKEN_FACTORY_TASK_DIR: join(tempDir, 'tasks'),
     },
     runNewsDigest: async () => ({ report: { total: 4 } }),
     runTrendIntel: async () => ({ report: { total: 5 }, reason: 'completed_with_degraded_sources' }),
@@ -213,6 +214,10 @@ test('runDailyAgentPipeline returns readable domain summary for trend, token, ui
   assert.equal(result.summary.domains.trendIntel.stageId, 'trend-intel');
   assert.equal(result.summary.domains.trendTokenFactory.status, 'completed');
   assert.equal(result.summary.domains.dailyDigest.status, 'completed');
+  const tasks = listTasks(result.env);
+  assert.equal(tasks[0].summary.domains.trendIntel.status, 'degraded');
+  assert.equal(tasks[0].summary.domains.uiAutomation.stageId, 'scheduled-ui');
+  rmSync(tempDir, { recursive: true, force: true });
 });
 
 test('runDailyAgentPipeline degrades optional ui stage instead of failing pipeline', async () => {

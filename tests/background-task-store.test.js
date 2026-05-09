@@ -59,3 +59,35 @@ test('background task store lists queued interrupted and stale running tasks', (
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('background task store can list recoverable tasks for selected task types', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'task-store-recoverable-types-'));
+  const env = { TOKEN_FACTORY_TASK_DIR: tempDir };
+  try {
+    createTask({ id: 'token-queued', type: 'token-factory', now: '2026-05-06T00:00:00.000Z', status: 'queued' }, env);
+    createTask({ id: 'ui-queued', type: 'ui-automation', now: '2026-05-06T00:01:00.000Z', status: 'queued' }, env);
+    createTask({ id: 'news-interrupted', type: 'news-digest', now: '2026-05-06T00:02:00.000Z', status: 'interrupted' }, env);
+    createTask({ id: 'daily-stale', type: 'daily-pipeline', now: '2026-05-06T00:03:00.000Z', status: 'running' }, env);
+    updateTask('daily-stale', { updatedAt: '2026-05-06T00:00:00.000Z' }, env);
+
+    const defaultTasks = listRecoverableTasks(env, {
+      now: new Date('2026-05-06T00:10:00.000Z'),
+      staleMs: 5 * 60 * 1000,
+    });
+    assert.deepEqual(defaultTasks.map((task) => task.id), ['token-queued']);
+
+    const proactiveTasks = listRecoverableTasks(env, {
+      now: new Date('2026-05-06T00:10:00.000Z'),
+      staleMs: 5 * 60 * 1000,
+      types: ['token-factory', 'ui-automation', 'news-digest', 'daily-pipeline'],
+    });
+    assert.deepEqual(proactiveTasks.map((task) => task.id), [
+      'token-queued',
+      'ui-queued',
+      'news-interrupted',
+      'daily-stale',
+    ]);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});

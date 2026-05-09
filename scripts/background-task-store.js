@@ -88,12 +88,21 @@ function isStaleRunningTask(task, now = new Date(), staleMs = 30 * 60 * 1000) {
   return now.getTime() - updatedAt >= staleMs;
 }
 
+function normalizeRecoverableTypes(options = {}) {
+  const rawTypes = options.types || options.recoverableTypes || ['token-factory'];
+  const values = Array.isArray(rawTypes) ? rawTypes : String(rawTypes || '').split(',');
+  return new Set(values
+    .map((type) => String(type || '').trim())
+    .filter(Boolean));
+}
+
 function listRecoverableTasks(env = process.env, options = {}) {
   const now = options.now || new Date();
   const staleMs = Number(options.staleMs || 30 * 60 * 1000);
+  const allowedTypes = normalizeRecoverableTypes(options);
   return listTasks(env)
     .filter((task) => (
-      task.type === 'token-factory'
+      allowedTypes.has(String(task.type || '').trim())
       && (
         task.status === 'queued'
         || task.status === 'interrupted'

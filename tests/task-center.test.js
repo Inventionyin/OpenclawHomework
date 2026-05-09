@@ -67,6 +67,30 @@ test('task center summarizes tasks and recoverable count', () => {
   }
 });
 
+test('task center counts degraded status and proactive recoverable task types', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'task-center-degraded-'));
+  const env = { TOKEN_FACTORY_TASK_DIR: tempDir };
+  try {
+    createTask({ id: 'ui-degraded', type: 'ui-automation', now: '2026-05-06T00:00:00.000Z', status: 'degraded' }, env);
+    createTask({ id: 'daily-queued', type: 'daily-pipeline', now: '2026-05-06T00:01:00.000Z', status: 'queued' }, env);
+    createTask({ id: 'news-interrupted', type: 'news-digest', now: '2026-05-06T00:02:00.000Z', status: 'interrupted' }, env);
+
+    const summary = summarizeTasks({
+      env,
+      now: new Date('2026-05-06T02:00:00.000Z'),
+      timezoneOffsetMinutes: 480,
+      recoverableTypes: ['token-factory', 'ui-automation', 'news-digest', 'daily-pipeline'],
+    });
+
+    assert.equal(summary.counts.degraded, 1);
+    assert.equal(summary.counts.recoverable, 2);
+    assert.equal(summary.byType.find((row) => row.type === 'ui-automation').degraded, 1);
+    assert.deepEqual(summary.recoverableTasks.map((task) => task.id), ['daily-queued', 'news-interrupted']);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('task center summarizes multiple proactive task types', () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'task-center-multi-'));
   const env = { TOKEN_FACTORY_TASK_DIR: tempDir };

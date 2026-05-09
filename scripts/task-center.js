@@ -65,6 +65,7 @@ function summarizeTasks(options = {}) {
   const recoverableTasks = listRecoverableTasks(env, {
     now: options.now || new Date(),
     staleMs: options.staleMs,
+    types: options.recoverableTypes || options.type,
   }).filter((task) => {
     const type = options.type || '';
     if (!type) {
@@ -80,6 +81,7 @@ function summarizeTasks(options = {}) {
     running: 0,
     completed: 0,
     failed: 0,
+    degraded: 0,
     interrupted: 0,
     recoverable: recoverableTasks.length,
   };
@@ -98,6 +100,7 @@ function summarizeTasks(options = {}) {
       running: 0,
       completed: 0,
       failed: 0,
+      degraded: 0,
       interrupted: 0,
     };
     current.total += 1;
@@ -163,6 +166,7 @@ function listHistoricalTasks(options = {}) {
       running: 0,
       completed: 0,
       failed: 0,
+      degraded: 0,
       interrupted: 0,
       unknown: 0,
       types: {},
@@ -619,7 +623,11 @@ function summarizeDailyPipeline(options = {}) {
 
 function summarizeTaskCenterDigest(options = {}) {
   const proactiveTypes = resolveProactiveTypes(options.proactiveTypes);
-  const summary = summarizeTasks({ ...options, type: proactiveTypes });
+  const summary = summarizeTasks({
+    ...options,
+    type: proactiveTypes,
+    recoverableTypes: proactiveTypes,
+  });
   const todayTasks = (summary.todayTasks || []).map(normalizeTaskShape);
   const failedItems = todayTasks.filter((task) => task.status === 'failed');
   const recoverableItems = (summary.recoverableTasks || [])
@@ -682,6 +690,7 @@ function summarizeTaskCenterBrain(options = {}) {
     now,
     timezoneOffsetMinutes,
     type: proactiveTypes,
+    recoverableTypes: proactiveTypes,
   };
   const summary = summarizeTasks(baseOptions);
   const dailyPlan = summarizeDailyPlan(baseOptions);

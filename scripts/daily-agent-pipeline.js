@@ -305,6 +305,7 @@ async function runDailyAgentPipeline(options = {}) {
       failedStages: failedStages.length,
       degradedStages: degradedStages.length,
       pipelineStatus,
+      domains,
       failedStageIds: failedStages.map((stage) => stage.id).join(','),
     },
     error: failedStages.length ? failedStages.map((stage) => `${stage.id}: ${stage.error || stage.reason}`).join(' | ') : '',

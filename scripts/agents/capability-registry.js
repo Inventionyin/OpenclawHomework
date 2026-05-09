@@ -66,6 +66,32 @@ const CAPABILITIES = [
     requiresAuth: true,
   },
   {
+    id: 'clerk.task-center',
+    agent: 'clerk-agent',
+    name: '任务中枢和主控脑',
+    description: '汇总今日任务、历史任务、失败复盘、下一步计划、每日流水线、token 消耗和邮件归档，适合回答“现在项目什么情况”“下一步怎么做”。',
+    examples: [
+      '文员，查看任务中枢主控脑',
+      '文员，给我一个今日总结和明日计划',
+      '文员，把失败复盘和下一步一起汇总',
+    ],
+    riskLevel: 'low',
+    requiresAuth: true,
+  },
+  {
+    id: 'browser.protocol-assets',
+    agent: 'browser-agent',
+    name: '浏览器 CDP 和协议资产',
+    description: '对自有站点或授权测试环境做浏览器/CDP 页面检查、截图、console/network 抓取，把协议资产整理成接口测试用例。',
+    examples: [
+      '真实执行 https://evanshine.me 并截图抓接口',
+      '最近抓到哪些接口',
+      '把最近抓到的接口整理成测试用例',
+    ],
+    riskLevel: 'medium',
+    requiresAuth: true,
+  },
+  {
     id: 'files.channel',
     agent: 'clerk-agent',
     name: '文件通道',

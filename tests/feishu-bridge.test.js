@@ -679,6 +679,53 @@ test('resolveAgentRoute can upgrade safe fuzzy chat through model planner', asyn
   assert.match(route.reason, /下一步计划/);
 });
 
+test('resolveAgentRoute planner prompt exposes clerk brain browser and mailbox abilities', async () => {
+  let promptText = '';
+  const route = await resolveAgentRoute('我有个测试资产想法，先帮我判断该走哪个能力', {
+    FEISHU_INTENT_PLANNER_ENABLED: 'true',
+    FEISHU_ASSISTANT_NAME: 'Hermes',
+  }, {
+    intentPlanner: async (prompt) => {
+      promptText = prompt;
+      return JSON.stringify({
+        intent: 'tool',
+        agent: 'browser-agent',
+        action: 'protocol-assets-to-tests',
+        confidence: 'high',
+        reason: '用户要把协议资产转成测试用例',
+      });
+    },
+  });
+
+  assert.match(promptText, /任务中枢|主控脑/);
+  assert.match(promptText, /浏览器|CDP|协议资产/);
+  assert.match(promptText, /邮箱|ClawEmail|日报/);
+  assert.equal(route.agent, 'browser-agent');
+  assert.equal(route.action, 'protocol-assets-to-tests');
+  assert.equal(route.requiresAuth, true);
+  assert.equal(route.intentSource, 'model-planner');
+});
+
+test('resolveAgentRoute rejects model planner routes outside safe action allowlist', async () => {
+  const route = await resolveAgentRoute('我有点乱，先听你判断', {
+    FEISHU_INTENT_PLANNER_ENABLED: 'true',
+  }, {
+    intentPlanner: async () => JSON.stringify({
+      intent: 'tool',
+      agent: 'browser-agent',
+      action: 'delete-all-assets',
+      confidence: 'high',
+      reason: 'unsafe action',
+    }),
+  });
+
+  assert.deepEqual(route, {
+    agent: 'chat-agent',
+    action: 'chat',
+    requiresAuth: false,
+  });
+});
+
 test('resolveAgentRoute keeps rule fallback when planner suggests auth-required route with medium confidence', async () => {
   const route = await resolveAgentRoute('我有点乱，先听你判断', {
     FEISHU_INTENT_PLANNER_ENABLED: 'true',

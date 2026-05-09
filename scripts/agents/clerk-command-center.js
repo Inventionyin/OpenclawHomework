@@ -104,6 +104,27 @@ function summarizeMail(entries = [], options = {}) {
   };
 }
 
+function formatMailArchiveSummary(mailSummary = {}) {
+  const todayEntries = Array.isArray(mailSummary.todayEntries) ? mailSummary.todayEntries : [];
+  if (!todayEntries.length) {
+    return '暂无今日邮件流水；发送日报时会归档到 daily 邮箱动作。';
+  }
+
+  const archiveTargets = Array.from(new Set(todayEntries
+    .map((entry) => String(entry.archiveTo || entry.archive_to || entry.mailbox || '').trim())
+    .filter(Boolean)));
+  const recipients = Array.from(new Set(todayEntries
+    .map((entry) => String(entry.recipient || entry.to || entry.toEmail || '').trim())
+    .filter(Boolean)));
+  const targetText = archiveTargets.length
+    ? `归档邮箱：${archiveTargets.slice(0, 5).join('、')}。`
+    : '归档邮箱：暂无明确地址。';
+  const recipientText = recipients.length
+    ? `外发收件人：${recipients.slice(0, 5).join('、')}。`
+    : '';
+  return [`今天邮件动作 ${todayEntries.length} 条。`, targetText, recipientText].filter(Boolean).join('');
+}
+
 function formatDigestBlockers(digest = {}) {
   const failed = Array.isArray(digest.failedItems) ? digest.failedItems : [];
   const recoverable = Array.isArray(digest.recoverableItems) ? digest.recoverableItems : [];
@@ -452,19 +473,28 @@ function buildClerkDailyReportReply(route = {}, options = {}) {
   const mailSummary = summarizeMail(mailEntries, { env, now: options.now || new Date() });
   const usageSummary = summarizeUsage(artifacts.usageEntries || []);
   const executionPlan = Array.isArray(executionLoop.nextPlan) ? executionLoop.nextPlan : [];
-  const tomorrowPlan = executionPlan.length
+  const pipeline = safeReadObject(() => (options.summarizeDailyPipeline || summarizeDailyPipeline)({
+    env,
+    now: options.now || new Date(),
+  }), {});
+  const pipelineNextAction = pipeline.nextAction ? [pipeline.nextAction] : [];
+  const tomorrowPlan = [...(executionPlan.length
     ? executionPlan
-    : (Array.isArray(plan.tomorrowPlan) ? plan.tomorrowPlan : []);
+    : (Array.isArray(plan.tomorrowPlan) ? plan.tomorrowPlan : [])), ...pipelineNextAction];
   const todaySummaryText = executionLoop.todayTask?.summaryText
     || executionDailyReport.summaryText
     || plan.todaySummaryText
     || '今天还没有可用任务摘要。';
-  const failureText = executionLoop.failureReview
-    || executionDailyReport.failureText
-    || taskDigest.failureReview?.summaryText
-    || (Array.isArray(taskDigest.failureReview?.items) && taskDigest.failureReview.items.length
+  const failureLines = [
+    executionLoop.failureReview
+      || executionDailyReport.failureText
+      || taskDigest.failureReview?.summaryText
+      || (Array.isArray(taskDigest.failureReview?.items) && taskDigest.failureReview.items.length
       ? `失败任务 ${taskDigest.failureReview.items.length} 个。`
-      : '暂无失败任务或失败诊断记录。');
+      : '暂无失败任务或失败诊断记录。'),
+    pipeline.failureDiagnosis || '',
+  ].filter(Boolean);
+  const failureText = Array.from(new Set(failureLines)).join('\n');
   const quickCommands = Array.isArray(executionDailyReport.quickCommands)
     ? executionDailyReport.quickCommands
     : [];
@@ -488,9 +518,7 @@ function buildClerkDailyReportReply(route = {}, options = {}) {
       : '暂无模型账本记录。',
     '',
     '邮件归档：',
-    mailSummary.todayEntries.length
-      ? `今天邮件动作 ${mailSummary.todayEntries.length} 条，日报会归档到 daily 邮箱动作。`
-      : '暂无今日邮件流水；发送日报时会归档到 daily 邮箱动作。',
+    formatMailArchiveSummary(mailSummary),
     ...(quickCommands.length ? [
       '',
       '快捷指令：',
