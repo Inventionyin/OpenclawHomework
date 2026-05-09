@@ -25,6 +25,11 @@ test('skill registry exposes workflow enhancement skills with risk metadata', ()
   assert.ok(ids.includes('trend-intel'));
   assert.ok(ids.includes('trend-token-factory'));
   assert.ok(ids.includes('token-factory'));
+  assert.ok(ids.includes('command-center'));
+  assert.ok(ids.includes('todo-summary'));
+  assert.ok(ids.includes('mailbox-workbench'));
+  assert.ok(ids.includes('mailbox-approvals'));
+  assert.ok(ids.includes('server-ops-status'));
 
   assert.equal(findRegisteredSkill('research-dev-loop').riskLevel, 'medium');
   assert.equal(findRegisteredSkill('web-fetch-summary').autoRun, true);
@@ -32,6 +37,8 @@ test('skill registry exposes workflow enhancement skills with risk metadata', ()
   assert.equal(findRegisteredSkill('daily-email').riskLevel, 'medium');
   assert.equal(findRegisteredSkill('ui-automation-run').riskLevel, 'medium');
   assert.equal(findRegisteredSkill('dify-testing-assistant').riskLevel, 'low');
+  assert.equal(findRegisteredSkill('command-center').autoRun, true);
+  assert.equal(findRegisteredSkill('server-ops-status').agent, 'ops-agent');
 });
 
 test('skill router selects the safest matching skill from natural language', () => {
@@ -116,6 +123,54 @@ test('skill router selects office testing and proactive skills', () => {
     requiresAuth: true,
     riskLevel: 'medium',
     autoRun: false,
+  });
+});
+
+test('skill router selects command center todo mailbox and ops status skills', () => {
+  assert.deepEqual(routeSkillIntent('给我一屏看懂今天项目'), {
+    agent: 'clerk-agent',
+    action: 'command-center',
+    skillId: 'command-center',
+    requiresAuth: true,
+    riskLevel: 'low',
+    autoRun: true,
+  });
+
+  assert.deepEqual(routeSkillIntent('整理一下今天待办'), {
+    agent: 'clerk-agent',
+    action: 'todo-summary',
+    skillId: 'todo-summary',
+    requiresAuth: true,
+    riskLevel: 'low',
+    autoRun: true,
+  });
+
+  assert.deepEqual(routeSkillIntent('邮箱平台怎么玩'), {
+    agent: 'clerk-agent',
+    action: 'mailbox-workbench',
+    skillId: 'mailbox-workbench',
+    requiresAuth: true,
+    riskLevel: 'low',
+    autoRun: true,
+  });
+
+  assert.deepEqual(routeSkillIntent('列出待审批邮件'), {
+    agent: 'clerk-agent',
+    action: 'mailbox-approvals',
+    skillId: 'mailbox-approvals',
+    requiresAuth: true,
+    riskLevel: 'medium',
+    autoRun: false,
+  });
+
+  assert.deepEqual(routeSkillIntent('你现在内存多少硬盘多少'), {
+    agent: 'ops-agent',
+    action: 'load-summary',
+    skillId: 'server-ops-status',
+    target: 'self',
+    requiresAuth: true,
+    riskLevel: 'low',
+    autoRun: true,
   });
 });
 

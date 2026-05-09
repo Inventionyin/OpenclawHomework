@@ -1317,6 +1317,26 @@ function routeAgentIntent(text, options = {}) {
     return broadPlannerRoute;
   }
 
+  const registeredFallbackSkillRoute = routeRegisteredSkillIntent(original, [
+    'command-center',
+    'todo-summary',
+    'mailbox-workbench',
+    'mailbox-approvals',
+    'mailbox-tasks',
+    'mail-ledger',
+    'status',
+    'memory-summary',
+    'disk-summary',
+    'load-summary',
+    'peer-status',
+    'peer-memory-summary',
+    'peer-disk-summary',
+    'peer-load-summary',
+  ]);
+  if (registeredFallbackSkillRoute) {
+    return registeredFallbackSkillRoute;
+  }
+
   const frameworkRoute = decideIntentRoute(collectIntentCandidates(original));
   if (frameworkRoute) {
     return frameworkRoute;

@@ -161,6 +161,108 @@ function buildTokenFactoryRoute(text) {
   }, skill);
 }
 
+function buildCommandCenterRoute(text) {
+  const normalized = String(text ?? '').trim().toLowerCase();
+  if (!(/(一屏看懂|总览|项目总览|整体情况|今天.*(进展|做了啥|做了什么|情况)|现在.*(该怎么玩|先做什么))/i.test(normalized)
+    || /(昨天|昨日|昨晚).{0,10}(干了啥|做了啥|做了什么|进展|完成了什么|情况)/i.test(normalized)
+    || /((进展|做了啥|做了什么|情况).{0,12}(总览|一屏|汇总))/i.test(normalized))) {
+    return null;
+  }
+  const skill = findRegisteredSkill('command-center');
+  return withSkillMetadata({
+    agent: skill.agent,
+    action: skill.action,
+    skillId: skill.id,
+  }, skill);
+}
+
+function buildTodoSummaryRoute(text) {
+  const normalized = String(text ?? '').trim().toLowerCase();
+  if (!(/(整理|列一下|看看|汇总).{0,12}(今天|当前|项目)?.{0,12}(待办|todo|清单|还没|未完成|下一步)/i.test(normalized)
+    || /(待办|todo|清单|还没|未完成|下一步).{0,12}(整理|列一下|看看|汇总)?/i.test(normalized)
+    || /(今天|现在).{0,8}(还有|还).{0,8}(什么|哪些).{0,8}(没做|未做|没完成|未完成)/i.test(normalized)
+    || /(今日|今天).{0,10}(总结).{0,10}(明日|明天).{0,10}(计划)/i.test(normalized)
+    || /(明日|明天).{0,10}(计划).{0,10}(今日|今天).{0,10}(总结)/i.test(normalized))) {
+    return null;
+  }
+  const skill = findRegisteredSkill('todo-summary');
+  return withSkillMetadata({
+    agent: skill.agent,
+    action: skill.action,
+    skillId: skill.id,
+  }, skill);
+}
+
+function buildMailboxRoute(text) {
+  const normalized = String(text ?? '').trim().toLowerCase();
+  let skillId = '';
+  if (/(今天|当前|现在).{0,12}(邮箱|邮件).{0,12}(任务|队列|待办|有什么|有哪些)/i.test(normalized)
+    || /(邮箱|邮件).{0,12}(任务|队列|待办).{0,12}(今天|当前|现在|有哪些|有什么)/i.test(normalized)) {
+    skillId = 'mailbox-tasks';
+  } else if (/(待审批|待确认|审批).{0,16}(邮件|邮箱)|((邮件|邮箱).{0,16}(待审批|待确认|审批))/i.test(normalized)) {
+    skillId = 'mailbox-approvals';
+  } else if (/(邮件|邮箱).{0,18}(发了|发送了|发出去|发送记录|流水|账本|历史|记录|哪些|列表)/i.test(normalized)
+    || /(发了|发送了|发出去|发送记录|流水|账本|历史|记录|哪些|列表).{0,18}(邮件|邮箱)/i.test(normalized)) {
+    skillId = 'mail-ledger';
+  } else if (/(邮箱平台|邮箱|clawemail).{0,24}(怎么玩|玩法|调度|归档|验证码|结合|分工|工作台)/i.test(normalized)
+    || /(怎么玩|玩法|调度|归档|验证码|结合|分工|工作台).{0,24}(邮箱平台|邮箱|clawemail)/i.test(normalized)) {
+    skillId = 'mailbox-workbench';
+  }
+  if (!skillId) return null;
+  const skill = findRegisteredSkill(skillId);
+  return withSkillMetadata({
+    agent: skill.agent,
+    action: skill.action,
+    skillId: skill.id,
+  }, skill);
+}
+
+function normalizeOpsText(text) {
+  return String(text ?? '')
+    .trim()
+    .replace(/open\s*claw/ig, 'openclaw')
+    .replace(/龙虾/g, 'openclaw')
+    .replace(/赫尔墨斯/ig, 'hermes')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function detectOpsTarget(text) {
+  const normalized = normalizeOpsText(text);
+  const hasHermes = /\bhermes\b/.test(normalized);
+  const hasOpenClaw = /\bopenclaw\b/.test(normalized);
+  if (hasHermes && !hasOpenClaw) return 'hermes';
+  if (hasOpenClaw && !hasHermes) return 'openclaw';
+  return 'self';
+}
+
+function buildServerOpsStatusRoute(text) {
+  const normalized = normalizeOpsText(text);
+  const wantsMemorySummary = /(内存|memory|ram)/i.test(normalized);
+  const wantsDiskSummary = /(硬盘|磁盘|存储|空间|disk|df)/i.test(normalized);
+  const wantsLoadSummary = /(卡不卡|卡吗|负载|cpu|load|压力|慢不慢)/i.test(normalized);
+  const wantsStatus = /(服务器状态|自己.{0,8}状态|你这台.{0,8}状态|本机.{0,8}状态)/i.test(normalized)
+    || (/(hermes|openclaw|服务器|本机|你这台|自己服务器)/i.test(normalized) && /(状态|正常吗|运行)/i.test(normalized));
+  if (!wantsMemorySummary && !wantsDiskSummary && !wantsLoadSummary && !wantsStatus) {
+    return null;
+  }
+  const target = detectOpsTarget(normalized);
+  const count = [wantsMemorySummary, wantsDiskSummary, wantsLoadSummary].filter(Boolean).length;
+  let action = 'status';
+  if (count >= 2) action = 'load-summary';
+  else if (wantsMemorySummary) action = 'memory-summary';
+  else if (wantsDiskSummary) action = 'disk-summary';
+  else if (wantsLoadSummary) action = 'load-summary';
+  if (target !== 'self') action = `peer-${action}`;
+  const skill = findRegisteredSkill('server-ops-status');
+  return withSkillMetadata({
+    agent: skill.agent,
+    action,
+    skillId: skill.id,
+    target,
+  }, skill);
+}
+
 function buildResearchDevRoute(text) {
   const normalized = String(text ?? '').toLowerCase();
   if (!/(rd-agent-lite|rd\s*agent|研发循环|研究开发闭环|自动进化|自我进化)/i.test(normalized)) {
@@ -213,6 +315,10 @@ function routeSkillIntent(text) {
   return buildDailyEmailRoute(text)
     || buildUiAutomationRunRoute(text)
     || buildDifyTestingAssistantRoute(text)
+    || buildCommandCenterRoute(text)
+    || buildTodoSummaryRoute(text)
+    || buildMailboxRoute(text)
+    || buildServerOpsStatusRoute(text)
     || buildTrendTokenFactoryRoute(text)
     || buildTrendIntelRoute(text)
     || buildTokenFactoryRoute(text)
@@ -222,11 +328,15 @@ function routeSkillIntent(text) {
 }
 
 module.exports = {
+  buildCommandCenterRoute,
   buildDailyEmailRoute,
   buildDifyTestingAssistantRoute,
+  buildMailboxRoute,
   buildResearchDevRoute,
+  buildServerOpsStatusRoute,
   buildSkillFlowRoute,
   buildTokenFactoryRoute,
+  buildTodoSummaryRoute,
   buildTrendIntelRoute,
   buildTrendTokenFactoryRoute,
   buildUiAutomationRunRoute,
