@@ -733,6 +733,154 @@ test('resolveAgentRoute falls back to rule route when model planner fails or is 
   });
 });
 
+test('resolveAgentRoute uses fresh intent context hint only for weak follow-up routes', async () => {
+  let plannerCalled = false;
+  const route = await resolveAgentRoute('刚才那个呢', {
+    FEISHU_INTENT_PLANNER_ENABLED: 'true',
+  }, {
+    intentPlanner: async () => {
+      plannerCalled = true;
+      return JSON.stringify({
+        intent: 'tool',
+        agent: 'chat-agent',
+        action: 'chat',
+        confidence: 'high',
+      });
+    },
+    intentContextReader: () => ({
+      agent: 'clerk-agent',
+      action: 'token-summary',
+      confidence: 'high',
+      requiresAuth: true,
+      updatedAt: new Date().toISOString(),
+      source: 'reply',
+    }),
+  });
+
+  assert.equal(plannerCalled, false);
+  assert.deepEqual(route, {
+    agent: 'clerk-agent',
+    action: 'token-summary',
+    confidence: 'medium',
+    intentSource: 'context-hint',
+    requiresAuth: true,
+  });
+});
+
+test('resolveAgentRoute ignores context hint for explicit command routes', async () => {
+  const route = await resolveAgentRoute('/status', {
+    FEISHU_INTENT_PLANNER_ENABLED: 'true',
+  }, {
+    intentContextReader: () => ({
+      agent: 'clerk-agent',
+      action: 'token-summary',
+      confidence: 'high',
+      requiresAuth: true,
+      updatedAt: new Date().toISOString(),
+      source: 'reply',
+    }),
+    intentPlanner: async () => {
+      throw new Error('planner should not run for strong route');
+    },
+  });
+
+  assert.deepEqual(route, {
+    agent: 'ops-agent',
+    action: 'status',
+    requiresAuth: true,
+  });
+});
+
+test('buildRoutedAgentReply records safe non-chat intent context metadata', async () => {
+  const writes = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-context-write',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '文员，总共加起来用了多少' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {
+      intentContextWriter: (payload, route) => {
+        writes.push({ payload, route });
+      },
+    },
+    {
+      agent: 'clerk-agent',
+      action: 'token-summary',
+      requiresAuth: true,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].route.agent, 'clerk-agent');
+  assert.equal(writes[0].route.action, 'token-summary');
+  assert.equal(writes[0].route.rawText, undefined);
+});
+
+test('resolveAgentRoute reads default persisted context for the same Feishu conversation', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'feishu-intent-context-'));
+  try {
+    const contextFile = join(tempDir, 'intent-context.json');
+    const payload = {
+      event: {
+        message: {
+          message_id: 'msg-context-persist',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '文员，总共加起来用了多少' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    };
+    const env = {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      INTENT_CONTEXT_FILE: contextFile,
+      FEISHU_INTENT_PLANNER_ENABLED: 'false',
+    };
+
+    await buildRoutedAgentReply(
+      payload,
+      env,
+      {},
+      {
+        agent: 'clerk-agent',
+        action: 'token-summary',
+        requiresAuth: true,
+      },
+    );
+
+    const stored = readFileSync(contextFile, 'utf8');
+    assert.doesNotMatch(stored, /总共加起来/);
+
+    const route = await resolveAgentRoute('刚才那个呢', env, { payload });
+    assert.deepEqual(route, {
+      agent: 'clerk-agent',
+      action: 'token-summary',
+      confidence: 'medium',
+      intentSource: 'context-hint',
+      requiresAuth: true,
+    });
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('getFeishuDedupKeys prefers Feishu ids when present', () => {
   const keys = getFeishuDedupKeys({
     header: {
@@ -1880,6 +2028,7 @@ test('buildRoutedAgentReply returns structured Dify fallback when runner is unav
 
 test('buildRoutedAgentReply blocks unauthorized Dify testing assistant requests', async () => {
   let called = false;
+  const contextWrites = [];
   const reply = await buildRoutedAgentReply(
     {
       event: {
@@ -1903,12 +2052,100 @@ test('buildRoutedAgentReply blocks unauthorized Dify testing assistant requests'
         called = true;
         return { ok: true, answer: 'should not run' };
       },
+      intentContextWriter: (payload, route) => {
+        contextWrites.push({ payload, route });
+      },
     },
   );
 
   assert.equal(reply.handled, true);
   assert.equal(called, false);
+  assert.equal(contextWrites.length, 0);
   assert.match(reply.replyText, /未授权/);
+});
+
+test('buildRoutedAgentReply does not record intent context when routed handler throws', async () => {
+  const writes = [];
+
+  await assert.rejects(
+    buildRoutedAgentReply(
+      {
+        event: {
+          message: {
+            message_id: 'msg-dify-throws',
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '请根据需求文档帮我生成测试用例' }),
+          },
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+        },
+      },
+      {
+        FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      },
+      {
+        difyTestingAssistantRunner: async () => {
+          throw new Error('dify unavailable');
+        },
+        intentContextWriter: (payload, route) => {
+          writes.push({ payload, route });
+        },
+      },
+      {
+        agent: 'qa-agent',
+        action: 'dify-testing-assistant',
+        requiresAuth: true,
+      },
+    ),
+    /dify unavailable/,
+  );
+
+  assert.equal(writes.length, 0);
+});
+
+test('buildRoutedAgentReply does not record intent context when ecosystem install fails', async () => {
+  const contextWrites = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-ecosystem-install-fail',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '安装 GBrain' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      FEISHU_ASSISTANT_NAME: 'Hermes',
+    },
+    {
+      ecosystemInstaller: async () => {
+        throw new Error('git failed');
+      },
+      intentContextWriter: (payload, route) => {
+        contextWrites.push({ payload, route });
+      },
+    },
+    {
+      agent: 'ecosystem-agent',
+      action: 'install-safe',
+      target: 'gbrain',
+      requiresAuth: true,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.equal(contextWrites.length, 0);
+  assert.match(reply.replyText, /服务器安装执行失败/);
 });
 
 test('buildRoutedAgentReply executes safe multi-intent routes and merges replies', async () => {
@@ -2082,6 +2319,7 @@ test('buildRoutedAgentReply can send clerk daily summary email to explicit user 
 
 test('buildRoutedAgentReply warns when clerk daily email recipient is invalid', async () => {
   const sent = [];
+  const contextWrites = [];
   const reply = await buildRoutedAgentReply(
     {
       event: {
@@ -2106,11 +2344,15 @@ test('buildRoutedAgentReply warns when clerk daily email recipient is invalid', 
         sent.push(message);
         return { sent: true };
       },
+      intentContextWriter: (payload, route) => {
+        contextWrites.push({ payload, route });
+      },
     },
   );
 
   assert.equal(reply.handled, true);
   assert.equal(sent.length, 0);
+  assert.equal(contextWrites.length, 0);
   assert.match(reply.replyText, /我理解你想发送今日日报到邮箱/);
   assert.match(reply.replyText, /邮箱格式/);
   assert.match(reply.replyText, /1693457391@\.com/);
@@ -2118,6 +2360,7 @@ test('buildRoutedAgentReply warns when clerk daily email recipient is invalid', 
 });
 
 test('buildRoutedAgentReply explains daily report preview is not yet an email send', async () => {
+  const contextWrites = [];
   const reply = await buildRoutedAgentReply(
     {
       event: {
@@ -2136,9 +2379,15 @@ test('buildRoutedAgentReply explains daily report preview is not yet an email se
     {
       FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
     },
+    {
+      intentContextWriter: (payload, route) => {
+        contextWrites.push({ payload, route });
+      },
+    },
   );
 
   assert.equal(reply.handled, true);
+  assert.equal(contextWrites.length, 0);
   assert.match(reply.replyText, /我理解你想查看日报预览/);
   assert.match(reply.replyText, /先没执行发送/);
   assert.match(reply.replyText, /发送今天日报到邮箱/);
@@ -2198,6 +2447,7 @@ test('buildRoutedChatReply can prepend lightweight diagnosis for free chat', asy
 
 test('buildRoutedAgentReply explains why medium-confidence ops request was not executed', async () => {
   let called = false;
+  const contextWrites = [];
   const reply = await buildRoutedAgentReply(
     {
       event: {
@@ -2221,11 +2471,15 @@ test('buildRoutedAgentReply explains why medium-confidence ops request was not e
         called = true;
         return {};
       },
+      intentContextWriter: (payload, route) => {
+        contextWrites.push({ payload, route });
+      },
     },
   );
 
   assert.equal(reply.handled, true);
   assert.equal(called, false);
+  assert.equal(contextWrites.length, 0);
   assert.match(reply.replyText, /我理解你想做的是：服务器运维操作/);
   assert.match(reply.replyText, /这次我先没执行/);
   assert.match(reply.replyText, /危险操作/);
@@ -2745,6 +2999,7 @@ test('buildRoutedAgentReply can apply high-confidence image channel switch', asy
 
 test('buildRoutedAgentReply clarifies medium-confidence image channel config without writing', async () => {
   const writes = [];
+  const contextWrites = [];
   const reply = await buildRoutedAgentReply(
     {
       event: {
@@ -2767,6 +3022,9 @@ test('buildRoutedAgentReply clarifies medium-confidence image channel config wit
     },
     {
       envWriter: (file, key, value) => writes.push({ file, key, value }),
+      intentContextWriter: (payload, route) => {
+        contextWrites.push({ payload, route });
+      },
     },
     {
       agent: 'image-agent',
@@ -2787,6 +3045,7 @@ test('buildRoutedAgentReply clarifies medium-confidence image channel config wit
 
   assert.equal(reply.handled, true);
   assert.deepEqual(writes, []);
+  assert.equal(contextWrites.length, 0);
   assert.match(reply.replyText, /先不替换/);
 });
 
@@ -2855,6 +3114,7 @@ test('buildRoutedAgentReply can apply high-confidence chat model channel switch'
 
 test('buildRoutedAgentReply clarifies medium-confidence chat model config without writing', async () => {
   const writes = [];
+  const contextWrites = [];
   const reply = await buildRoutedAgentReply(
     {
       event: {
@@ -2877,6 +3137,9 @@ test('buildRoutedAgentReply clarifies medium-confidence chat model config withou
     },
     {
       envWriter: (file, key, value) => writes.push({ file, key, value }),
+      intentContextWriter: (payload, route) => {
+        contextWrites.push({ payload, route });
+      },
     },
     {
       agent: 'model-agent',
@@ -2899,6 +3162,7 @@ test('buildRoutedAgentReply clarifies medium-confidence chat model config withou
 
   assert.equal(reply.handled, true);
   assert.deepEqual(writes, []);
+  assert.equal(contextWrites.length, 0);
   assert.match(reply.replyText, /先不替换/);
 });
 

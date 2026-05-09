@@ -43,6 +43,12 @@ const {
   parseIntentPlannerOutput,
 } = require('./agents/intent-planner');
 const {
+  buildConversationKey,
+  getFreshIntentHint,
+  routeFromContextHint,
+  writeIntentContext,
+} = require('./agents/intent-context');
+const {
   runPeerSshAction,
 } = require('./peer-client');
 const {
@@ -3161,6 +3167,83 @@ function isStrongRuleRoute(route = {}) {
   return false;
 }
 
+function getIntentContextOptions(env = process.env) {
+  return {
+    filePath: env.INTENT_CONTEXT_FILE || env.FEISHU_INTENT_CONTEXT_FILE,
+    ttlMs: Number(env.INTENT_CONTEXT_TTL_MS || env.FEISHU_INTENT_CONTEXT_TTL_MS || 30 * 60 * 1000),
+    maxEntries: Number(env.INTENT_CONTEXT_MAX_ENTRIES || env.FEISHU_INTENT_CONTEXT_MAX_ENTRIES || 200),
+  };
+}
+
+function resolveContextHintRoute(text, env = process.env, options = {}) {
+  try {
+    const conversationKey = buildConversationKey(options.payload, options.conversationKey);
+    const hint = typeof options.intentContextReader === 'function'
+      ? options.intentContextReader(conversationKey, { text, env, options })
+      : getFreshIntentHint(conversationKey, getIntentContextOptions(env));
+    return routeFromContextHint(text, hint);
+  } catch (error) {
+    console.error(`Intent context read failed: ${error.message}`);
+    return null;
+  }
+}
+
+function shouldWriteIntentContext(route = {}) {
+  if (!route || route.agent === 'chat-agent' || route.agent === 'planner-agent' || route.agent === 'ui-test-agent') {
+    return false;
+  }
+  if (route.action === 'clarify' || String(route.action || '').endsWith('-clarify') || route.confidence === 'low') {
+    return false;
+  }
+  if (route.outcome === 'clarify' || route.outcome === 'failed') {
+    return false;
+  }
+  if (route.error || route.failed) {
+    return false;
+  }
+  return Boolean(route.agent && route.action);
+}
+
+function buildIntentContextMetadata(route = {}) {
+  return {
+    agent: route.agent,
+    action: route.action,
+    confidence: route.confidence || 'high',
+    requiresAuth: Boolean(route.requiresAuth),
+    source: route.intentSource || 'routed-agent',
+  };
+}
+
+function shouldRecordRoutedIntentContext(result = {}, route = {}) {
+  if (!result?.handled || result.intentContext === false || result.failed) {
+    return false;
+  }
+  if (route.agent === 'ops-agent' && result.outcome === 'clarify') {
+    return false;
+  }
+  return shouldWriteIntentContext(route);
+}
+
+function recordIntentContext(payload, route = {}, env = process.env, options = {}) {
+  if (!shouldWriteIntentContext(route)) {
+    return;
+  }
+  const metadata = buildIntentContextMetadata(route);
+  try {
+    if (typeof options.intentContextWriter === 'function') {
+      options.intentContextWriter(payload, metadata);
+      return;
+    }
+    const conversationKey = buildConversationKey(payload, options.conversationKey);
+    if (!conversationKey) {
+      return;
+    }
+    writeIntentContext(conversationKey, metadata, getIntentContextOptions(env));
+  } catch (error) {
+    console.error(`Intent context write failed: ${error.message}`);
+  }
+}
+
 function getPlannerRequiresAuth(agent, action) {
   if (agent === 'chat-agent' || agent === 'capability-agent' || agent === 'planner-agent') {
     return false;
@@ -3263,6 +3346,12 @@ async function resolveAgentRoute(text, env = process.env, options = {}) {
   const ruleRoute = routeAgentIntent(text);
   if (ruleRoute.agent === 'chat-agent' && parseSmallTalkMessage(text, env)) {
     return ruleRoute;
+  }
+  if (!isStrongRuleRoute(ruleRoute)) {
+    const contextRoute = resolveContextHintRoute(text, env, options);
+    if (contextRoute) {
+      return contextRoute;
+    }
   }
   if (isStrongRuleRoute(ruleRoute) || !isIntentPlannerEnabled(env, options)) {
     return ruleRoute;
@@ -3771,6 +3860,14 @@ async function executeSafeMultiIntentPlan(route = {}, payload, env, options = {}
 }
 
 async function buildRoutedAgentReply(payload, env, options = {}, route = routeAgentIntent(extractFeishuText(payload))) {
+  const result = await buildRoutedAgentReplyResult(payload, env, options, route);
+  if (shouldRecordRoutedIntentContext(result, route)) {
+    recordIntentContext(payload, route, env, options);
+  }
+  return result;
+}
+
+async function buildRoutedAgentReplyResult(payload, env, options = {}, route = routeAgentIntent(extractFeishuText(payload))) {
   if (route.agent === 'ui-test-agent') {
     return {
       handled: false,
@@ -3783,6 +3880,7 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
   if (route.requiresAuth && !isAuthorized(payload, env)) {
     return {
       handled: true,
+      intentContext: false,
       replyText: getUnauthorizedMessage(env),
     };
   }
@@ -3828,6 +3926,7 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
     if (route.requiresAuth && !isAuthorized(payload, env)) {
       return {
         handled: true,
+        intentContext: false,
         replyText: getUnauthorizedMessage(env),
       };
     }
@@ -3844,6 +3943,8 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
       } catch (error) {
         return {
           handled: true,
+          failed: true,
+          intentContext: false,
           replyText: [
             buildEcosystemAgentReply(route, {
               env,
@@ -4180,6 +4281,7 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
     if (route.action === 'daily-email-invalid-recipient') {
       return {
         handled: true,
+        intentContext: false,
         replyText: [
           `我理解你想${diagnosis.intentLabel}。`,
           '这次我先没执行。',
@@ -4205,6 +4307,7 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
         : '日报邮件没有发出：请检查 EMAIL_NOTIFY_ENABLED、默认 SMTP、evanshine 第二 SMTP，以及 daily 邮箱动作是否启用。';
       return {
         handled: true,
+        intentContext: messages.length ? undefined : false,
         replyText: [
           diagnosis.reason,
           status,
@@ -4216,6 +4319,8 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
     if (route.action === 'daily-report' && diagnosis.outcome === 'clarify') {
       return {
         handled: true,
+        outcome: 'clarify',
+        intentContext: false,
         replyText: [
           `我理解你想${diagnosis.intentLabel}。`,
           '这次我先没执行发送。',
@@ -4239,6 +4344,7 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
     if (route.requiresAuth && !isAuthorized(payload, env)) {
       return {
         handled: true,
+        intentContext: false,
         replyText: getUnauthorizedMessage(env),
       };
     }
@@ -4257,6 +4363,7 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
     if (route.requiresAuth && !isAuthorized(payload, env)) {
       return {
         handled: true,
+        intentContext: false,
         replyText: getUnauthorizedMessage(env),
       };
     }
@@ -4290,6 +4397,8 @@ async function buildRoutedAgentReply(payload, env, options = {}, route = routeAg
     };
     return {
       handled: true,
+      outcome: diagnosis.outcome,
+      intentContext: diagnosis.outcome === 'clarify' ? false : undefined,
       replyText: diagnosis.outcome === 'clarify'
         ? [
           `我理解你想做的是：${diagnosis.intentLabel}。`,
@@ -4379,7 +4488,7 @@ function runWebhookInBackground(payload, env, options = {}) {
       return;
     }
 
-    Promise.resolve(resolveAgentRoute(text, env, { ...options, timingContext })).then((route) => {
+    Promise.resolve(resolveAgentRoute(text, env, { ...options, timingContext, payload })).then((route) => {
       logFeishuTiming(env, timingContext, 'route', {
         agent: route.agent,
         action: route.action,
@@ -4538,7 +4647,7 @@ function createServer(env = process.env, options = {}) {
       }
 
       const text = extractFeishuText(payload);
-      const route = await resolveAgentRoute(text, routeEnv, timedRouteOptions);
+      const route = await resolveAgentRoute(text, routeEnv, { ...timedRouteOptions, payload });
       logFeishuTiming(routeEnv, timingContext, 'route', {
         agent: route.agent,
         action: route.action,

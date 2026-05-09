@@ -1095,3 +1095,58 @@ test('routeAgentIntent handles boss-style natural-language control phrases', () 
     requiresAuth: false,
   });
 });
+
+test('routeAgentIntent clarifies dangerous mixed natural-language control requests', () => {
+  assert.deepEqual(routeAgentIntent('执行 df -h 并统计 token 用量'), {
+    agent: 'planner-agent',
+    action: 'clarify',
+    confidence: 'low',
+    reason: 'dangerous_mixed_intent',
+    missing: ['separate_confirmation'],
+    requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('要不要重启你自己并清理硬盘？'), {
+    agent: 'ops-agent',
+    action: 'clarify',
+    target: 'unknown',
+    confidence: 'low',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('修一下那个服务并顺便看下状态'), {
+    agent: 'ops-agent',
+    action: 'clarify',
+    target: 'unknown',
+    confidence: 'low',
+    requiresAuth: true,
+  });
+});
+
+test('routeAgentIntent can use safe context hints for short follow-up phrases', () => {
+  assert.deepEqual(routeAgentIntent('刚才那个呢', {
+    contextHint: {
+      agent: 'clerk-agent',
+      action: 'token-summary',
+      confidence: 'high',
+      requiresAuth: true,
+    },
+  }), {
+    agent: 'clerk-agent',
+    action: 'token-summary',
+    confidence: 'medium',
+    intentSource: 'context-hint',
+    requiresAuth: true,
+  });
+
+  assert.deepEqual(routeAgentIntent('/status', {
+    contextHint: {
+      agent: 'clerk-agent',
+      action: 'token-summary',
+      confidence: 'high',
+      requiresAuth: true,
+    },
+  }), {
+    agent: 'ops-agent',
+    action: 'status',
+    requiresAuth: true,
+  });
+});

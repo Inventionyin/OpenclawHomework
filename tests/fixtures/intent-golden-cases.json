@@ -1,0 +1,64 @@
+[
+  {
+    "text": "文员，总共加起来用了多少",
+    "expected": {
+      "agent": "clerk-agent",
+      "action": "token-summary",
+      "requiresAuth": true
+    }
+  },
+  {
+    "text": "今天还有哪些没完成",
+    "expected": {
+      "agent": "clerk-agent",
+      "action": "todo-summary",
+      "requiresAuth": true
+    }
+  },
+  {
+    "text": "昨天干了啥",
+    "expected": {
+      "agent": "clerk-agent",
+      "action": "command-center",
+      "requiresAuth": true
+    }
+  },
+  {
+    "text": "帮我看看哪里不正常",
+    "expected": {
+      "agent": "ops-agent",
+      "action": "clarify",
+      "target": "unknown",
+      "confidence": "low",
+      "requiresAuth": true
+    }
+  },
+  {
+    "text": "公众号今天能发什么",
+    "expected": {
+      "agent": "clerk-agent",
+      "action": "wechat-mp-draft",
+      "idea": "今日公众号选题建议",
+      "requiresAuth": true
+    }
+  },
+  {
+    "text": "把今天日报发到邮箱",
+    "expected": {
+      "agent": "clerk-agent",
+      "action": "daily-email",
+      "requiresAuth": true
+    }
+  },
+  {
+    "text": "重启一下然后统计 token",
+    "expected": {
+      "agent": "planner-agent",
+      "action": "clarify",
+      "confidence": "low",
+      "reason": "dangerous_mixed_intent",
+      "missing": ["separate_confirmation"],
+      "requiresAuth": false
+    }
+  }
+]

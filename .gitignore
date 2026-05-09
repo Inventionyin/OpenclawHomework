@@ -12,6 +12,7 @@ data/tasks/
 data/memory/daily-summary-state.json
 data/memory/daily-agent-pipeline-state.json
 data/memory/mailbox-approval-queue.json
+data/memory/intent-context.json
 data/wechat-mp/
 .env
 .playwright-mcp/

@@ -7,6 +7,16 @@ const {
 const {
   planMultiIntent,
 } = require('./multi-intent-planner');
+const {
+  collectIntentCandidates,
+  hasDangerousIntentSignal,
+} = require('./intent-candidates');
+const {
+  decideIntentRoute,
+} = require('./intent-decision');
+const {
+  routeFromContextHint,
+} = require('./intent-context');
 
 function normalizeText(text) {
   return extractCommandText(stripMention(String(text ?? '').trim()));
@@ -931,10 +941,73 @@ function routeBrowserAutomationIntent(text) {
   };
 }
 
-function routeAgentIntent(text) {
+function hasDangerousMixedIntent(text) {
+  const value = stripMention(String(text ?? '').trim());
+  if (!hasDangerousIntentSignal(value)) {
+    return false;
+  }
+  const hasConnector = /(并且|并行|同时|顺便|然后|再|并|及|、|，|,|;|；)/i.test(value);
+  if (!hasConnector) {
+    return false;
+  }
+  const candidates = collectIntentCandidates(value);
+  const hasDanger = candidates.some((candidate) => candidate.safety === 'blocked');
+  const hasSafe = candidates.some((candidate) => candidate.safety === 'safe');
+  return hasDanger && hasSafe;
+}
+
+function routeDangerousMixedIntent(text) {
+  const value = String(text ?? '');
+  const hasConnector = /(并且|并行|同时|顺便|然后|再|并|及|、|，|,|;|；)/i.test(value);
+  if (!hasDangerousIntentSignal(value) || !hasConnector) {
+    return null;
+  }
+
+  if (/要不要|是否|该不该|能不能|可以不可以|可不可以/.test(value)) {
+    return {
+      agent: 'ops-agent',
+      action: 'clarify',
+      target: 'unknown',
+      confidence: 'low',
+      requiresAuth: true,
+    };
+  }
+
+  if (/(那个|这个|某个|服务|一下)/.test(value) && /(修|修复|维修)/.test(value)) {
+    return {
+      agent: 'ops-agent',
+      action: 'clarify',
+      target: 'unknown',
+      confidence: 'low',
+      requiresAuth: true,
+    };
+  }
+
+  if (!hasDangerousMixedIntent(value)) {
+    return null;
+  }
+
+  return {
+    agent: 'planner-agent',
+    action: 'clarify',
+    confidence: 'low',
+    reason: 'dangerous_mixed_intent',
+    missing: ['separate_confirmation'],
+    requiresAuth: false,
+  };
+}
+
+function routeContextHintIntent(text, options = {}) {
+  if (!options.contextHint) {
+    return null;
+  }
+  return routeFromContextHint(stripMention(String(text ?? '').trim()), options.contextHint);
+}
+
+function routeAgentIntent(text, options = {}) {
   const original = stripMention(text);
   if (looksLikeShortContinuationIntent(original) && !hasClerkWakeWord(text)) {
-    return { agent: 'chat-agent', action: 'chat', requiresAuth: false };
+    return routeContextHintIntent(original, options) || { agent: 'chat-agent', action: 'chat', requiresAuth: false };
   }
 
   if (looksLikeTestHowToQuestion(original)) {
@@ -946,6 +1019,8 @@ function routeAgentIntent(text) {
   }
 
   const normalized = normalizeText(text);
+
+  const contextHintRoute = routeContextHintIntent(original, options);
 
   if (/^\/status\b/i.test(normalized)) {
     return { agent: 'ops-agent', action: 'status', requiresAuth: true };
@@ -1005,6 +1080,15 @@ function routeAgentIntent(text) {
   }
   if (/^\/memory\b/i.test(normalized) || /(记忆|项目状态)/.test(normalized)) {
     return { agent: 'memory-agent', action: 'show', requiresAuth: true };
+  }
+
+  if (contextHintRoute) {
+    return contextHintRoute;
+  }
+
+  const dangerousMixedRoute = routeDangerousMixedIntent(original);
+  if (dangerousMixedRoute) {
+    return dangerousMixedRoute;
   }
 
   const capabilityRoute = routeCapabilityIntent(normalized);
@@ -1133,6 +1217,11 @@ function routeAgentIntent(text) {
   const broadPlannerRoute = routeBroadPlannerIntent(normalized);
   if (broadPlannerRoute) {
     return broadPlannerRoute;
+  }
+
+  const frameworkRoute = decideIntentRoute(collectIntentCandidates(original));
+  if (frameworkRoute) {
+    return frameworkRoute;
   }
 
   return { agent: 'chat-agent', action: 'chat', requiresAuth: false };
