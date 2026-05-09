@@ -11,8 +11,17 @@ data/multi-agent-lab/
 data/tasks/
 data/memory/daily-summary-state.json
 data/memory/daily-agent-pipeline-state.json
+data/memory/disk-cleanup-state.json
+data/memory/ecosystem-state.json
 data/memory/mailbox-approval-queue.json
+data/memory/proactive-daily-digest-state.json
+data/memory/scheduled-token-lab-state.json
+data/memory/scheduled-ui-runner-state.json
 data/memory/intent-context.json
+data/news-digest/
+data/protocol-assets/
+data/trend-intel/
+data/trend-token-factory/
 data/wechat-mp/
 .env
 .playwright-mcp/
