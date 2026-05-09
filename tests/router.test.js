@@ -596,6 +596,24 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'multi-agent-lab',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，启动 RD-Agent-lite 研发循环，优化 UI 自动化失败复盘'), {
+    agent: 'clerk-agent',
+    action: 'research-dev-loop',
+    goal: '优化 UI 自动化失败复盘',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，抓一下 https://github.com/skill-flow/skflow 的正文做摘要'), {
+    agent: 'clerk-agent',
+    action: 'web-content-fetch',
+    url: 'https://github.com/skill-flow/skflow',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('文员，按 ui-automation 技能跑一轮流程'), {
+    agent: 'clerk-agent',
+    action: 'skill-flow',
+    skillId: 'ui-automation',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，发送今天日报到邮箱'), {
     agent: 'clerk-agent',
     action: 'daily-email',
@@ -726,6 +744,24 @@ test('routeAgentIntent routes office work without requiring clerk wake word', ()
   assert.deepEqual(routeAgentIntent('生成 ClawEmail 每日报告'), {
     agent: 'clerk-agent',
     action: 'mailbox-daily-report',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('启动研发循环，研究怎么优化热点雷达'), {
+    agent: 'clerk-agent',
+    action: 'research-dev-loop',
+    goal: '研究怎么优化热点雷达',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('抓一下 https://github.com/microsoft/RD-Agent 正文'), {
+    agent: 'clerk-agent',
+    action: 'web-content-fetch',
+    url: 'https://github.com/microsoft/RD-Agent',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('按 server-ops 技能跑'), {
+    agent: 'clerk-agent',
+    action: 'skill-flow',
+    skillId: 'server-ops',
     requiresAuth: true,
   });
 });

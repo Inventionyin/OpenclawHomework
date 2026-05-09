@@ -265,6 +265,32 @@ node scripts/proactive-daily-digest.js --force --to 1693457391@qq.com
 - `docs/云服务器接手说明.md`
 - `docs/Agent玩法与二改优化路线.md`
 
+### F. 三个开源项目思路的轻量内化
+
+这次没有直接把外部大框架装进生产服务器，而是把思路拆成三个可测试模块：
+
+```text
+RD-Agent    -> scripts/research-dev-loop.js
+Scrapling   -> scripts/web-content-fetcher.js
+skflow      -> scripts/skill-flow-runner.js
+```
+
+对应飞书玩法：
+
+```text
+文员，启动 RD-Agent-lite 研发循环，优化 UI 自动化失败复盘
+文员，抓一下 https://github.com/microsoft/RD-Agent 正文
+文员，按 ui-automation 技能跑一轮流程
+```
+
+落地边界：
+
+- `RD-Agent-lite` 只负责把目标变成 Research -> Plan -> Development -> Evaluation -> Learning -> Next 的可追踪任务，不直接乱改代码。
+- `web-content-fetcher` 只抓白名单域名，默认拒绝 localhost、内网 IP 和未知域名；带“接口/抓包/CDP/截图”的请求仍走浏览器 Agent。
+- `skflow-lite` 读取 `docs/skills/*.md`，把技能文档里的步骤写入任务中枢，适合做可恢复流程，而不是把脚本权限直接交给自然语言。
+
+这三项的目标是让 Hermes/OpenClaw 更接近“会持续做事的项目助理”：先形成闭环、留痕和复盘，再逐步接真实执行器。
+
 ## 不建议现在做的事
 
 - 不建议在 2G/4G 小服务器上直接部署完整 LangGraph/CrewAI/OpenHands 常驻服务。

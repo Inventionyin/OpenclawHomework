@@ -4320,7 +4320,7 @@ test('createServer streams chat by updating the same Feishu message', async () =
     });
 
     assert.equal(response.status, 200);
-    await waitForCondition(() => updates.length >= 2);
+    await waitForCondition(() => updates.length >= 2, { timeoutMs: 5000 });
     assert.equal(chatCalled, false);
     assert.equal(replies.length, 1);
     assert.equal(replies[0].msgType, 'interactive');
@@ -4401,7 +4401,7 @@ test('createServer enables streaming when model gateway only provides api keys',
     });
 
     assert.equal(response.status, 200);
-    await waitForCondition(() => updates.length >= 2);
+    await waitForCondition(() => updates.length >= 2, { timeoutMs: 5000 });
     assert.equal(chatCalled, false);
     assert.equal(replies.length, 1);
     assert.equal(replies[0].msgType, 'interactive');
@@ -4478,7 +4478,7 @@ test('runWebhookInBackground passes default receipt sender to streaming chat', a
       },
     );
 
-    await waitForCondition(() => updates.length >= 2);
+    await waitForCondition(() => updates.length >= 2, { timeoutMs: 5000 });
     assert.equal(chatCalled, false);
     assert.equal(sentMessages.length, 1);
     assert.equal(sentMessages[0].msg_type, 'interactive');

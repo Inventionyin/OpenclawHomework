@@ -153,6 +153,19 @@ const CAPABILITIES = [
     requiresAuth: true,
   },
   {
+    id: 'clerk.workflow-enhancement',
+    agent: 'clerk-agent',
+    name: '研发循环、网页抽取和技能流程',
+    description: '把 RD-Agent、Scrapling、skflow 的核心思路轻量化：建立可追踪研发循环、抽取白名单网页正文、按 docs/skills 技能文档生成可恢复任务。',
+    examples: [
+      '文员，启动 RD-Agent-lite 研发循环，优化 UI 自动化失败复盘',
+      '文员，抓一下 https://github.com/microsoft/RD-Agent 正文',
+      '文员，按 ui-automation 技能跑一轮流程',
+    ],
+    riskLevel: 'low',
+    requiresAuth: true,
+  },
+  {
     id: 'chat.normal',
     agent: 'chat-agent',
     name: '普通聊天和需求澄清',

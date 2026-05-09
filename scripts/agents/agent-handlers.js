@@ -81,6 +81,17 @@ const {
 const {
   publishWechatMpArticle,
 } = require('../wechat-mp-publisher');
+const {
+  formatResearchDevLoopReply,
+  runResearchDevLoop,
+} = require('../research-dev-loop');
+const {
+  runWebContentFetch,
+} = require('../web-content-fetcher');
+const {
+  buildSkillFlowReply,
+  runSkillFlow,
+} = require('../skill-flow-runner');
 
 const OPS_SECRET_PATTERNS = [
   /\bauthorization\s*:\s*\S+/i,
@@ -1275,6 +1286,31 @@ function buildClerkWorkbenchReply(options = {}) {
   ].join('\n');
 }
 
+function buildWebContentFetchReply(result = {}) {
+  if (!result.allowed) {
+    return [
+      '网页正文抽取已拦截。',
+      `- URL：${sanitizeReplyField(result.url || '未提供', 300)}`,
+      `- 原因：${sanitizeReplyField(result.reason || 'URL 不在允许列表或指向私网地址。', 300)}`,
+      '- 目前只允许 GitHub、HN、Product Hunt、Hugging Face、Cloudflare 和自有域名等白名单来源。',
+    ].join('\n');
+  }
+  const links = Array.isArray(result.links) ? result.links : [];
+  return [
+    '网页正文抽取完成：',
+    `- URL：${sanitizeReplyField(result.url || '', 300)}`,
+    `- 状态：${sanitizeReplyField(result.status || 'unknown', 40)}`,
+    result.title ? `- 标题：${sanitizeReplyField(result.title, 180)}` : null,
+    '',
+    sanitizeReplyField(result.summary || result.text || '没有抽取到正文摘要。', 900),
+    '',
+    '可跟进链接：',
+    ...(links.length
+      ? links.slice(0, 5).map((link, index) => `${index + 1}. ${sanitizeReplyField(link.text || link.href, 100)} - ${sanitizeReplyField(link.href, 220)}`)
+      : ['- 暂无。']),
+  ].filter(Boolean).join('\n');
+}
+
 async function buildWechatMpArticleReply(route = {}, options = {}) {
   const publisher = options.publishWechatMpArticle || publishWechatMpArticle;
   const mode = route.action === 'wechat-mp-direct-publish'
@@ -1498,6 +1534,38 @@ function buildClerkAgentReply(route = {}, options = {}) {
       '这套流程比普通高 token 训练场更像“生成 -> 评审 -> 总结”的多轮对打，token 消耗更高，也更容易沉淀测试资产。',
       '启动口令：文员，启动多 Agent 训练场。',
     ].join('\n');
+  }
+
+  if (route.action === 'research-dev-loop') {
+    const runner = options.runResearchDevLoop || runResearchDevLoop;
+    return Promise.resolve(runner({
+      goal: route.goal || route.rawText || options.text || '',
+      text: route.rawText || options.text || '',
+      env: options.env || process.env,
+      now: options.now || new Date(),
+    })).then(formatResearchDevLoopReply);
+  }
+
+  if (route.action === 'web-content-fetch') {
+    const runner = options.runWebContentFetch || runWebContentFetch;
+    return Promise.resolve(runner({
+      url: route.url,
+      text: route.rawText || options.text || route.url || '',
+      env: options.env || process.env,
+      maxSummaryChars: 700,
+    })).then(buildWebContentFetchReply);
+  }
+
+  if (route.action === 'skill-flow') {
+    const runner = options.runSkillFlow || runSkillFlow;
+    return Promise.resolve(runner({
+      skillId: route.skillId,
+      goal: route.goal || route.rawText || options.text || '',
+      env: options.env || process.env,
+      now: options.now || new Date(),
+      projectDir: options.projectDir || process.cwd(),
+      skillsDir: options.skillsDir,
+    })).then(buildSkillFlowReply);
   }
 
   if (route.action === 'todo-summary') {

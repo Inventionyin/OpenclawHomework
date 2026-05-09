@@ -1119,6 +1119,96 @@ test('buildClerkAgentReply explains multi-agent lab before execution', () => {
   assert.match(reply, /report/);
 });
 
+test('buildClerkAgentReply delegates RD-Agent-lite research loop', async () => {
+  let received;
+  const reply = await buildClerkAgentReply({
+    action: 'research-dev-loop',
+    goal: '优化 UI 自动化失败复盘',
+  }, {
+    runResearchDevLoop: async (request) => {
+      received = request;
+      return {
+        task: { id: 'rd-test-1' },
+        plan: {
+          goal: request.goal,
+          hypothesis: '如果形成闭环，失败复盘会更稳定。',
+          loop: [
+            { order: 1, label: 'Research', description: '研究目标' },
+            { order: 2, label: 'Evaluation', description: '评估结果' },
+          ],
+          metrics: [
+            { label: '是否可追踪', target: '写入任务中枢' },
+          ],
+          nextActions: ['跑一轮 smoke UI 自动化'],
+        },
+      };
+    },
+  });
+
+  assert.equal(received.goal, '优化 UI 自动化失败复盘');
+  assert.match(reply, /RD-Agent-lite/);
+  assert.match(reply, /rd-test-1/);
+  assert.match(reply, /失败复盘/);
+});
+
+test('buildClerkAgentReply delegates web content fetch safely', async () => {
+  let received;
+  const reply = await buildClerkAgentReply({
+    action: 'web-content-fetch',
+    url: 'https://github.com/skill-flow/skflow',
+  }, {
+    runWebContentFetch: async (request) => {
+      received = request;
+      return {
+        allowed: true,
+        url: request.url,
+        status: 200,
+        title: 'skill-flow/skflow',
+        summary: 'Markdown skills and workflow automation.',
+        links: [
+          { text: 'README', href: 'https://github.com/skill-flow/skflow#readme' },
+        ],
+      };
+    },
+  });
+
+  assert.equal(received.url, 'https://github.com/skill-flow/skflow');
+  assert.match(reply, /网页正文抽取/);
+  assert.match(reply, /skill-flow\/skflow/);
+  assert.match(reply, /README/);
+});
+
+test('buildClerkAgentReply delegates skflow-lite skill flow', async () => {
+  let received;
+  const reply = await buildClerkAgentReply({
+    action: 'skill-flow',
+    skillId: 'ui-automation',
+  }, {
+    runSkillFlow: async (request) => {
+      received = request;
+      return {
+        status: 'queued',
+        task: { id: 'skill-ui-1' },
+        skill: {
+          id: request.skillId,
+          title: 'UI Automation',
+          purpose: 'Run UI automation safely',
+          steps: [
+            { order: 1, text: '确认目标环境' },
+            { order: 2, text: '触发测试' },
+          ],
+          safety: ['先 dry-run'],
+        },
+      };
+    },
+  });
+
+  assert.equal(received.skillId, 'ui-automation');
+  assert.match(reply, /skflow-lite/);
+  assert.match(reply, /skill-ui-1/);
+  assert.match(reply, /确认目标环境/);
+});
+
 test('buildImageChannelReply redacts key and explains confidence', () => {
   const switchReply = buildImageChannelReply({
     action: 'image-channel-switch',

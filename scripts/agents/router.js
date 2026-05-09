@@ -326,6 +326,78 @@ function buildTokenUsageSummaryRoute(text) {
   };
 }
 
+function extractFirstUrl(text) {
+  const match = String(text ?? '').match(/https?:\/\/[^\s，。！？)）]+/i);
+  return match ? match[0] : '';
+}
+
+function extractResearchDevGoal(text) {
+  return String(text ?? '')
+    .replace(/^(?:文员|秘书|助理|clerk|office)[，,\s:：。]*/i, '')
+    .replace(/(?:启动|开始|跑|执行|建立|安排)?\s*(?:rd-agent-lite|rd\s*agent|研发循环|研究开发闭环|自动进化|自我进化)\s*/ig, '')
+    .replace(/^(?:，|,|：|:|\s)+/, '')
+    .trim() || '优化当前 OpenClaw/Hermes 项目';
+}
+
+function extractSkillFlowId(text) {
+  const original = stripMention(String(text ?? '').trim());
+  const explicit = original.match(/(?:按|运行|启动|执行)\s*([a-z0-9_-]+)\s*(?:技能|skill|流程)/i)
+    || original.match(/(?:技能|skill)\s*[:：]\s*([a-z0-9_-]+)/i)
+    || original.match(/([a-z0-9_-]+)\s*(?:技能|skill).{0,8}(?:跑|运行|启动|执行)/i);
+  return explicit ? explicit[1].toLowerCase() : '';
+}
+
+function buildResearchDevRoute(text) {
+  const normalized = String(text ?? '').toLowerCase();
+  if (!/(rd-agent-lite|rd\s*agent|研发循环|研究开发闭环|自动进化|自我进化)/i.test(normalized)) {
+    return null;
+  }
+  return {
+    agent: 'clerk-agent',
+    action: 'research-dev-loop',
+    goal: extractResearchDevGoal(text),
+    requiresAuth: true,
+  };
+}
+
+function buildWebContentFetchRoute(text) {
+  const url = extractFirstUrl(text);
+  if (!url) return null;
+  const normalized = String(text ?? '').toLowerCase();
+  if (/(cdp|har|协议|接口|network|抓包|请求|响应|登录流程|注册流程|console|控制台|截图|验证码)/i.test(normalized)) {
+    return null;
+  }
+  if (!/(抓一下|抓取|抽取|提取|正文|网页摘要|网页内容|验证热点链接|看看这个链接|分析这个链接)/i.test(normalized)) {
+    return null;
+  }
+  return {
+    agent: 'clerk-agent',
+    action: 'web-content-fetch',
+    url,
+    requiresAuth: true,
+  };
+}
+
+function buildSkillFlowRoute(text) {
+  const normalized = String(text ?? '').toLowerCase();
+  if (!/(技能|skill|skflow|skill-flow).{0,20}(跑|运行|启动|执行|流程)|(?:按|运行|启动|执行).{0,20}(技能|skill|skflow|skill-flow)/i.test(normalized)) {
+    return null;
+  }
+  const skillId = extractSkillFlowId(text);
+  return {
+    agent: 'clerk-agent',
+    action: 'skill-flow',
+    ...(skillId ? { skillId } : {}),
+    requiresAuth: true,
+  };
+}
+
+function routeWorkflowEnhancementIntent(text) {
+  return buildResearchDevRoute(text)
+    || buildWebContentFetchRoute(text)
+    || buildSkillFlowRoute(text);
+}
+
 function routeClerkIntent(text) {
   const original = stripMention(String(text ?? '').trim());
   const normalized = original.toLowerCase();
@@ -335,6 +407,11 @@ function routeClerkIntent(text) {
   const recipientEmail = recipientMatch ? recipientMatch[1] : '';
   if (!/(文员|秘书|助理|clerk|office)/i.test(normalized)) {
     return null;
+  }
+
+  const workflowEnhancementRoute = routeWorkflowEnhancementIntent(original);
+  if (workflowEnhancementRoute) {
+    return workflowEnhancementRoute;
   }
 
   if (looksLikeTaskCenterBrainIntent(original)) {
@@ -608,6 +685,11 @@ function routeOfficeIntent(text) {
   const emailLike = emailLikeMatch ? emailLikeMatch[1].replace(/[，。！!？?,;；]+$/u, '') : '';
   const recipientMatch = original.match(/\b([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\b/i);
   const recipientEmail = recipientMatch ? recipientMatch[1] : '';
+
+  const workflowEnhancementRoute = routeWorkflowEnhancementIntent(original);
+  if (workflowEnhancementRoute) {
+    return workflowEnhancementRoute;
+  }
 
   if (looksLikeTaskCenterBrainIntent(original)) {
     return { agent: 'clerk-agent', action: 'task-center-brain', requiresAuth: true };
@@ -1243,6 +1325,7 @@ module.exports = {
   routeBrowserAutomationIntent,
   routeCapabilityIntent,
   routeEcosystemIntent,
+  routeWorkflowEnhancementIntent,
   looksLikeShortContinuationIntent,
   hasClerkWakeWord,
   routeClerkIntent,
