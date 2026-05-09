@@ -291,6 +291,36 @@ skflow      -> scripts/skill-flow-runner.js
 
 这三项的目标是让 Hermes/OpenClaw 更接近“会持续做事的项目助理”：先形成闭环、留痕和复盘，再逐步接真实执行器。
 
+### G. Skill 中枢和风险分级
+
+现在三项开源项目能力已经从散落命令收敛到 Skill 中枢：
+
+```text
+scripts/skills/skill-registry.js   -> 技能注册表：名称、action、风险、是否自动运行
+scripts/skills/skill-router.js     -> 技能路由器：从自然语言选择对应 Skill
+scripts/skills/skill-risk-gate.js  -> 风险闸门：决定自动跑、入队、还是拒绝
+```
+
+当前规则：
+
+```text
+web-fetch-summary  -> low    -> 可以自动跑，适合抓 GitHub/网页正文
+research-dev-loop  -> medium -> 需要明确“启动/研发循环/RD-Agent-lite”这类指令
+skill-flow         -> medium -> 需要明确技能名，例如 ui-automation/server-ops
+```
+
+设计目标不是让 AI 看到任何话都启动工具，而是：
+
+```text
+普通聊天 -> 只回答
+看链接/总结网页 -> 自动走 web-fetch-summary
+明确研发循环 -> 建立 research-dev-loop 任务
+明确按技能跑 -> 建立 skill-flow 任务
+接口/CDP/抓包/截图/登录流程 -> 交给 browser-agent，不走普通网页抓取
+```
+
+这样后续继续增加 Skill 时，只需要先注册元数据和风险等级，再接执行器；不需要继续把所有判断塞进 `scripts/agents/router.js`。
+
 ## 不建议现在做的事
 
 - 不建议在 2G/4G 小服务器上直接部署完整 LangGraph/CrewAI/OpenHands 常驻服务。

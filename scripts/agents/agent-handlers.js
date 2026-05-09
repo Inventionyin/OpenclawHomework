@@ -92,6 +92,9 @@ const {
   buildSkillFlowReply,
   runSkillFlow,
 } = require('../skill-flow-runner');
+const {
+  evaluateSkillRisk,
+} = require('../skills/skill-risk-gate');
 
 const OPS_SECRET_PATTERNS = [
   /\bauthorization\s*:\s*\S+/i,
@@ -1557,6 +1560,19 @@ function buildClerkAgentReply(route = {}, options = {}) {
   }
 
   if (route.action === 'skill-flow') {
+    const risk = evaluateSkillRisk({
+      action: route.action,
+      skillId: route.skillId,
+      sourceSkillId: route.sourceSkillId || 'skill-flow',
+    });
+    if (!risk.allowed) {
+      return [
+        '技能流程没有启动。',
+        risk.reason === 'missing_skill_id'
+          ? '- 原因：没有识别到明确的技能名。请说：文员，按 ui-automation 技能跑。'
+          : `- 原因：${risk.reason}`,
+      ].join('\n');
+    }
     const runner = options.runSkillFlow || runSkillFlow;
     return Promise.resolve(runner({
       skillId: route.skillId,
