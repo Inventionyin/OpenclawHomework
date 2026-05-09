@@ -42,6 +42,7 @@ test('skill registry exposes workflow enhancement skills with risk metadata', ()
   assert.equal(findRegisteredSkill('server-ops-status').agent, 'ops-agent');
   assert.equal(findRegisteredSkill('trend-intel').category, '热点学习');
   assert.equal(findRegisteredSkill('mailbox-workbench').category, '邮箱协同');
+  assert.equal(findRegisteredSkill('obsidian-memory-sync').category, '长期记忆');
 });
 
 test('skill registry builds categorized pro menu from registered skills', () => {
@@ -50,6 +51,8 @@ test('skill registry builds categorized pro menu from registered skills', () => 
   assert.match(menu, /Skill 总控菜单/);
   assert.match(menu, /热点学习/);
   assert.match(menu, /邮箱协同/);
+  assert.match(menu, /长期记忆/);
+  assert.match(menu, /Obsidian 记忆同步/);
   assert.match(menu, /UI 自动化执行/);
   assert.match(menu, /触发：/);
   assert.match(menu, /风险：medium/);
@@ -183,6 +186,15 @@ test('skill router selects command center todo mailbox and ops status skills', (
     action: 'load-summary',
     skillId: 'server-ops-status',
     target: 'self',
+    requiresAuth: true,
+    riskLevel: 'low',
+    autoRun: true,
+  });
+
+  assert.deepEqual(routeSkillIntent('同步 Obsidian 记忆库'), {
+    agent: 'memory-agent',
+    action: 'obsidian-sync',
+    skillId: 'obsidian-memory-sync',
     requiresAuth: true,
     riskLevel: 'low',
     autoRun: true,

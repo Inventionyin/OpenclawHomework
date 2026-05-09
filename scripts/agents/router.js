@@ -895,6 +895,11 @@ function routeBrainMemoryIntent(text) {
     };
   }
 
+  if (/(同步|刷新|生成|更新).{0,12}(obsidian|记忆库|长期记忆|知识库|脑库)/i.test(normalized)
+    || /(obsidian|记忆库|长期记忆|知识库|脑库).{0,12}(同步|刷新|生成|更新)/i.test(normalized)) {
+    return { agent: 'memory-agent', action: 'obsidian-sync', requiresAuth: true };
+  }
+
   const knowledgeNoteMatch = original.match(/(?:沉淀|保存|记住|记录).{0,12}(?:知识库|记忆|经验|笔记)?[:：]\s*(.+)$/i);
   if (knowledgeNoteMatch) {
     return {
@@ -1180,6 +1185,10 @@ function routeAgentIntent(text, options = {}) {
       query: searchMatch[1].trim(),
       requiresAuth: true,
     };
+  }
+  const earlyBrainMemoryRoute = routeBrainMemoryIntent(original);
+  if (earlyBrainMemoryRoute) {
+    return earlyBrainMemoryRoute;
   }
   const rememberNaturalMatch = original.match(/^(?:帮我)?(?:记住|记一下|记个|保存|沉淀|记录)(?:一下|下来)?[:：\s]+(.+)$/i);
   if (rememberNaturalMatch) {

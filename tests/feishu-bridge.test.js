@@ -1005,6 +1005,49 @@ test('buildRoutedAgentReply prefixes task center brain replies with execution di
   assert.match(reply.replyText, /Skill：无（非注册 skill 路由）/);
 });
 
+test('buildRoutedAgentReply can sync Obsidian memory vault through memory agent', async () => {
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-obsidian-sync',
+          content: JSON.stringify({ text: '同步 Obsidian 记忆库' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {
+      obsidianMemorySync: () => ({
+        vaultDir: '/tmp/obsidian-vault',
+        day: '2026-05-10',
+        written: [
+          '/tmp/obsidian-vault/Index.md',
+          '/tmp/obsidian-vault/Daily/2026-05-10.md',
+        ],
+      }),
+    },
+    {
+      agent: 'memory-agent',
+      action: 'obsidian-sync',
+      skillId: 'obsidian-memory-sync',
+      requiresAuth: true,
+      riskLevel: 'low',
+      autoRun: true,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /Obsidian 记忆库已同步/);
+  assert.match(reply.replyText, /\/tmp\/obsidian-vault/);
+});
+
 test('buildRoutedAgentReply does not prefix ordinary chat replies with execution diagnosis card', async () => {
   const reply = await buildRoutedAgentReply(
     {

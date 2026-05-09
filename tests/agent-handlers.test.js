@@ -1321,6 +1321,33 @@ test('buildMemoryAgentReply supports GBrain search action', async () => {
   assert.match(reply, /LongCat/);
 });
 
+test('buildMemoryAgentReply syncs Obsidian memory vault', async () => {
+  const reply = await buildMemoryAgentReply({ action: 'obsidian-sync' }, '', {
+    obsidianMemorySync: () => ({
+      vaultDir: '/tmp/obsidian-vault',
+      written: [
+        '/tmp/obsidian-vault/Index.md',
+        '/tmp/obsidian-vault/Daily/2026-05-10.md',
+      ],
+    }),
+  });
+
+  assert.match(reply, /Obsidian 记忆库已同步/);
+  assert.match(reply, /\/tmp\/obsidian-vault/);
+  assert.match(reply, /2 个文件/);
+});
+
+test('buildMemoryAgentReply reports Obsidian sync failure from synchronous errors', async () => {
+  const reply = await buildMemoryAgentReply({ action: 'obsidian-sync' }, '', {
+    obsidianMemorySync: () => {
+      throw new Error('disk denied');
+    },
+  });
+
+  assert.match(reply, /Obsidian 记忆库同步失败/);
+  assert.match(reply, /disk denied/);
+});
+
 test('buildMemoryAgentReply falls back when GBrain search is unavailable', async () => {
   const reply = await buildMemoryAgentReply({ action: 'brain-search', query: 'session lock' }, '', {
     brainSearch: async () => {

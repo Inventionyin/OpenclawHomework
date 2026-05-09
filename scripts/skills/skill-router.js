@@ -263,6 +263,20 @@ function buildServerOpsStatusRoute(text) {
   }, skill);
 }
 
+function buildObsidianMemorySyncRoute(text) {
+  const normalized = String(text ?? '').toLowerCase();
+  if (!(/(同步|刷新|生成|更新).{0,12}(obsidian|记忆库|长期记忆|知识库|脑库)/i.test(normalized)
+    || /(obsidian|记忆库|长期记忆|知识库|脑库).{0,12}(同步|刷新|生成|更新)/i.test(normalized))) {
+    return null;
+  }
+  const skill = findRegisteredSkill('obsidian-memory-sync');
+  return withSkillMetadata({
+    agent: skill.agent,
+    action: skill.action,
+    skillId: skill.id,
+  }, skill);
+}
+
 function buildResearchDevRoute(text) {
   const normalized = String(text ?? '').toLowerCase();
   if (!/(rd-agent-lite|rd\s*agent|研发循环|研究开发闭环|自动进化|自我进化)/i.test(normalized)) {
@@ -319,6 +333,7 @@ function routeSkillIntent(text) {
     || buildTodoSummaryRoute(text)
     || buildMailboxRoute(text)
     || buildServerOpsStatusRoute(text)
+    || buildObsidianMemorySyncRoute(text)
     || buildTrendTokenFactoryRoute(text)
     || buildTrendIntelRoute(text)
     || buildTokenFactoryRoute(text)
@@ -332,6 +347,7 @@ module.exports = {
   buildDailyEmailRoute,
   buildDifyTestingAssistantRoute,
   buildMailboxRoute,
+  buildObsidianMemorySyncRoute,
   buildResearchDevRoute,
   buildServerOpsStatusRoute,
   buildSkillFlowRoute,

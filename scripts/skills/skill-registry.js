@@ -191,6 +191,18 @@ const REGISTERED_SKILLS = [
     requiresAuth: true,
     triggers: ['内存多少', '硬盘多少', '服务器状态', '负载', '卡不卡'],
   },
+  {
+    id: 'obsidian-memory-sync',
+    name: 'Obsidian 记忆同步',
+    action: 'obsidian-sync',
+    agent: 'memory-agent',
+    description: '把 data/memory、任务中枢、失败复盘和下一步计划同步成 Obsidian 风格 Markdown vault。',
+    category: '长期记忆',
+    riskLevel: 'low',
+    autoRun: true,
+    requiresAuth: true,
+    triggers: ['同步 Obsidian', '同步记忆库', '生成 Obsidian vault', '刷新长期记忆'],
+  },
 ];
 
 function cloneSkill(skill) {
@@ -226,6 +238,7 @@ function buildRegisteredSkillMenu(options = {}) {
     '测试质量',
     '邮箱协同',
     '热点学习',
+    '长期记忆',
     'token 工厂',
     '信息抓取',
     '研发流程',

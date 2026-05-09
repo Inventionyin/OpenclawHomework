@@ -19,6 +19,7 @@ data/memory/scheduled-token-lab-state.json
 data/memory/scheduled-ui-runner-state.json
 data/memory/intent-context.json
 data/news-digest/
+data/obsidian-vault/
 data/protocol-assets/
 data/trend-intel/
 data/trend-token-factory/

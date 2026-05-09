@@ -777,6 +777,11 @@ test('routeAgentIntent routes natural-language control brain and memory discover
     action: 'brain-guide',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('同步 Obsidian 记忆库'), {
+    agent: 'memory-agent',
+    action: 'obsidian-sync',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('把这段经验沉淀到知识库：UI 自动化失败先看 Allure'), {
     agent: 'memory-agent',
     action: 'remember',

@@ -4036,6 +4036,11 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
       replyText: await buildMemoryAgentReply(route, undefined, {
         assistantName: getAssistantName(env),
         env,
+        obsidianMemorySync: options.obsidianMemorySync,
+        memoryDir: options.memoryDir,
+        vaultDir: options.vaultDir,
+        now: options.now,
+        summarizeTaskCenterBrain: options.summarizeTaskCenterBrain,
       }),
     };
   }

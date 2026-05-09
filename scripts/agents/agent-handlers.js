@@ -22,6 +22,9 @@ const {
   runGBrainSearch,
 } = require('./gbrain-client');
 const {
+  syncObsidianMemoryVault,
+} = require('../obsidian-memory-sync');
+const {
   getUsageLedgerPath,
   readUsageLedgerEntries,
 } = require('../usage-ledger');
@@ -1389,6 +1392,26 @@ function buildMemoryAgentReply(route, memoryContext = buildMemoryContext(), opti
         searchMemoryContext(route.query),
       ].join('\n');
       });
+  }
+
+  if (route.action === 'obsidian-sync') {
+    const syncer = options.obsidianMemorySync || ((syncOptions) => syncObsidianMemoryVault(syncOptions));
+    return Promise.resolve().then(() => syncer({
+      env: options.env,
+      memoryDir: options.memoryDir,
+      vaultDir: options.vaultDir,
+      now: options.now,
+      summarizeTaskCenterBrain: options.summarizeTaskCenterBrain,
+    })).then((result) => [
+      'Obsidian 记忆库已同步。',
+      `- Vault：${result.vaultDir}`,
+      `- 写入：${(result.written || []).length} 个文件`,
+      `- 日期：${result.day || 'unknown'}`,
+      '下一步可以说：查知识库 UI 自动化失败，或同步到 GBrain 检索层。',
+    ].join('\n')).catch((error) => [
+      'Obsidian 记忆库同步失败。',
+      `原因：${sanitizeReplyField(error.message || error, 300)}`,
+    ].join('\n'));
   }
 
   return [
