@@ -307,6 +307,12 @@ scripts/skills/skill-risk-gate.js  -> 风险闸门：决定自动跑、入队、
 web-fetch-summary  -> low    -> 可以自动跑，适合抓 GitHub/网页正文
 research-dev-loop  -> medium -> 需要明确“启动/研发循环/RD-Agent-lite”这类指令
 skill-flow         -> medium -> 需要明确技能名，例如 ui-automation/server-ops
+daily-email        -> medium -> 明确要求把日报/报告发邮箱时启动，会校验邮箱格式
+ui-automation-run  -> medium -> 明确要求跑 UI 自动化/冒烟/全量测试时启动
+dify-testing       -> low    -> 测试用例、缺陷分析、测试报告整理可自动走测试助理
+trend-intel        -> low    -> 开源热榜、热点新闻、值得学项目可自动分析
+trend-token        -> medium -> 明确要求烧 token/LongCat 分析热点时启动
+token-factory      -> medium -> 明确要求 token 工厂/训练数据流水线时启动
 ```
 
 设计目标不是让 AI 看到任何话都启动工具，而是：
@@ -316,6 +322,10 @@ skill-flow         -> medium -> 需要明确技能名，例如 ui-automation/ser
 看链接/总结网页 -> 自动走 web-fetch-summary
 明确研发循环 -> 建立 research-dev-loop 任务
 明确按技能跑 -> 建立 skill-flow 任务
+明确日报发邮箱 -> 走 daily-email，邮箱无效时交给 invalid-recipient 诊断
+测试知识生成 -> 走 dify-testing-assistant
+热点学习 -> 走 trend-intel
+高 token 主动训练 -> 走 trend-token-factory 或 token-factory
 接口/CDP/抓包/截图/登录流程 -> 交给 browser-agent，不走普通网页抓取
 ```
 

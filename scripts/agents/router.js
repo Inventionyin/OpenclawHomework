@@ -225,6 +225,10 @@ function routeNaturalLanguageOps(text) {
 function routeQaAssetIntent(text) {
   const original = String(text ?? '').trim();
   const normalized = original.toLowerCase();
+  const difySkillRoute = routeRegisteredSkillIntent(original, ['dify-testing-assistant']);
+  if (difySkillRoute) {
+    return difySkillRoute;
+  }
 
   if (/(项目质量|代码质量|测试质量).{0,12}(体检|检查|评估|评审|诊断|跑一下|看一下|看一遍)/i.test(normalized)
     || /(项目|代码|测试).{0,12}(体检|检查|评估|评审|诊断|跑一下|看一下|看一遍)/i.test(normalized)
@@ -362,10 +366,32 @@ function buildSkillFlowRoute(text) {
   };
 }
 
+function toPublicSkillRoute(route) {
+  if (!route) return null;
+  const publicRoute = {
+    agent: route.agent,
+    action: route.action,
+    requiresAuth: route.requiresAuth,
+  };
+  if (route.goal) publicRoute.goal = route.goal;
+  if (route.url) publicRoute.url = route.url;
+  if (route.query) publicRoute.query = route.query;
+  if (route.recipientEmail) publicRoute.recipientEmail = route.recipientEmail;
+  if (route.action === 'skill-flow' && route.skillId) publicRoute.skillId = route.skillId;
+  return publicRoute;
+}
+
 function routeWorkflowEnhancementIntent(text) {
   return buildResearchDevRoute(text)
     || buildWebContentFetchRoute(text)
     || buildSkillFlowRoute(text);
+}
+
+function routeRegisteredSkillIntent(text, allowedActions = []) {
+  const route = routeSkillIntent(text);
+  if (!route) return null;
+  if (allowedActions.length && !allowedActions.includes(route.action)) return null;
+  return toPublicSkillRoute(route);
 }
 
 function routeClerkIntent(text) {
@@ -377,6 +403,16 @@ function routeClerkIntent(text) {
   const recipientEmail = recipientMatch ? recipientMatch[1] : '';
   if (!/(文员|秘书|助理|clerk|office)/i.test(normalized)) {
     return null;
+  }
+
+  const registeredClerkSkillRoute = routeRegisteredSkillIntent(original, [
+    'daily-email',
+    'trend-token-factory',
+    'trend-intel',
+    'token-factory',
+  ]);
+  if (registeredClerkSkillRoute) {
+    return registeredClerkSkillRoute;
   }
 
   const workflowEnhancementRoute = routeWorkflowEnhancementIntent(original);
@@ -659,6 +695,16 @@ function routeOfficeIntent(text) {
   const workflowEnhancementRoute = routeWorkflowEnhancementIntent(original);
   if (workflowEnhancementRoute) {
     return workflowEnhancementRoute;
+  }
+
+  const registeredOfficeSkillRoute = routeRegisteredSkillIntent(original, [
+    'daily-email',
+    'trend-token-factory',
+    'trend-intel',
+    'token-factory',
+  ]);
+  if (registeredOfficeSkillRoute) {
+    return registeredOfficeSkillRoute;
   }
 
   if (looksLikeTaskCenterBrainIntent(original)) {
@@ -1255,7 +1301,7 @@ function routeAgentIntent(text, options = {}) {
   }
 
   if (/^(\/run-ui-test|run-ui-test)\b/i.test(normalized) || looksLikeTestRunRequest(normalized)) {
-    return {
+    return routeRegisteredSkillIntent(original, ['run']) || {
       agent: 'ui-test-agent',
       action: 'run',
       requiresAuth: true,
