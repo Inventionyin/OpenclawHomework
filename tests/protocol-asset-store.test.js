@@ -341,3 +341,37 @@ test('saveHotMonitorCandidatesAsProtocolAssets stores searchable hot monitor lin
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('saveProtocolAsset keeps browser asset summary fields queryable', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'protocol-assets-browser-shape-'));
+  try {
+    const stored = saveProtocolAsset({
+      method: 'POST',
+      url: 'https://localhost:3000/api/login?next=%2Fdashboard',
+      status: 200,
+      request: {
+        url: 'https://localhost:3000/api/login?next=%2Fdashboard',
+        method: 'POST',
+        headers: { accept: 'application/json' },
+      },
+      response: {
+        status: 200,
+        headers: { 'content-type': 'application/json; charset=utf-8' },
+      },
+      tags: ['browser-cdp-executor', 'network'],
+      summaryText: 'Login API',
+      createdAt: '2026-05-08T10:00:00.000Z',
+    }, { dir: tempDir });
+
+    assert.equal(stored.summary.method, 'POST');
+    assert.equal(stored.summary.host, 'localhost:3000');
+    assert.equal(stored.summary.normalizedPath, '/api/login');
+    assert.equal(stored.summary.status, 200);
+
+    const report = buildProtocolAssetReport({ method: 'post', path: '/api/login' }, { dir: tempDir });
+    assert.equal(report.total, 1);
+    assert.equal(report.byMethod.POST, 1);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});

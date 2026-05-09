@@ -74,6 +74,37 @@ test('buildStreamingChatConfig supports LongCat model tiers and multiple keys', 
   assert.equal(config.thinkingModel, 'LongCat-Flash-Thinking-2601');
 });
 
+test('buildStreamingChatConfig treats LiteLLM compatible gateway as first-class fallback config', () => {
+  const config = buildStreamingChatConfig({
+    LITELLM_BASE_URL: 'http://127.0.0.1:4000/v1/',
+    LITELLM_API_KEYS: 'gw-key-1, gw-key-2',
+    LITELLM_MODEL: 'longcat/chat',
+    LITELLM_SIMPLE_MODEL: 'longcat/lite',
+    LITELLM_THINKING_MODEL: 'claude/sonnet',
+  });
+
+  assert.equal(config.baseUrl, 'http://127.0.0.1:4000/v1');
+  assert.deepEqual(config.apiKeys, ['gw-key-1', 'gw-key-2']);
+  assert.equal(config.model, 'longcat/chat');
+  assert.equal(config.simpleModel, 'longcat/lite');
+  assert.equal(config.thinkingModel, 'claude/sonnet');
+});
+
+test('explicit streaming env overrides model gateway config', () => {
+  const config = buildStreamingChatConfig({
+    STREAMING_MODEL_BASE_URL: 'https://direct.example/v1',
+    STREAMING_MODEL_API_KEYS: 'direct-key',
+    STREAMING_MODEL_ID: 'direct-model',
+    MODEL_GATEWAY_BASE_URL: 'http://127.0.0.1:4000/v1',
+    MODEL_GATEWAY_API_KEYS: 'gateway-key',
+    MODEL_GATEWAY_MODEL: 'gateway-model',
+  });
+
+  assert.equal(config.baseUrl, 'https://direct.example/v1');
+  assert.deepEqual(config.apiKeys, ['direct-key']);
+  assert.equal(config.model, 'direct-model');
+});
+
 test('resolveStreamingModelProfile routes simple prompts to Flash-Lite', () => {
   const profile = resolveStreamingModelProfile('你现在内存多少', {
     model: 'LongCat-Flash-Chat',

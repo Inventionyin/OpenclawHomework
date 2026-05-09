@@ -321,6 +321,77 @@ test('task center brain exposes execution loop for daily clerk reports', () => {
   }
 });
 
+test('task center failure review keeps degraded and interrupted tasks in diagnostics', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'task-center-failure-mixed-'));
+  const env = { TOKEN_FACTORY_TASK_DIR: tempDir };
+  try {
+    createTask({ id: 'ui-degraded', type: 'ui-automation', now: '2026-05-06T01:00:00.000Z', status: 'degraded', error: 'allure missing' }, env);
+    createTask({ id: 'news-interrupted', type: 'news-digest', now: '2026-05-06T01:10:00.000Z', status: 'interrupted', error: 'rss timeout' }, env);
+
+    const failureReview = summarizeFailureReview({
+      env,
+      now: new Date('2026-05-06T03:00:00.000Z'),
+      timezoneOffsetMinutes: 480,
+      type: ['ui-automation', 'news-digest'],
+    });
+
+    assert.equal(failureReview.items.length, 2);
+    assert.equal(failureReview.items.some((task) => task.id === 'ui-degraded'), true);
+    assert.equal(failureReview.items.some((task) => task.id === 'news-interrupted'), true);
+    assert.match(failureReview.summaryText, /降级|中断|失败/);
+    assert.equal(failureReview.recommendations.length > 0, true);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('task center daily plan includes degraded and interrupted counts in today summary', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'task-center-plan-mixed-'));
+  const env = { TOKEN_FACTORY_TASK_DIR: tempDir };
+  try {
+    createTask({ id: 'ui-degraded', type: 'ui-automation', now: '2026-05-06T01:00:00.000Z', status: 'degraded' }, env);
+    createTask({ id: 'news-interrupted', type: 'news-digest', now: '2026-05-06T01:10:00.000Z', status: 'interrupted' }, env);
+    createTask({ id: 'token-running', type: 'token-factory', now: '2026-05-06T01:20:00.000Z', status: 'running' }, env);
+
+    const plan = summarizeDailyPlan({
+      env,
+      now: new Date('2026-05-06T03:00:00.000Z'),
+      timezoneOffsetMinutes: 480,
+      type: ['ui-automation', 'news-digest', 'token-factory'],
+      recoverableTypes: ['ui-automation', 'news-digest', 'token-factory'],
+    });
+
+    assert.match(plan.todaySummaryText, /降级 1/);
+    assert.match(plan.todaySummaryText, /中断 1/);
+    assert.match(plan.todaySummaryText, /可恢复 2/);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('task center brain keeps blockers when only degraded or interrupted states exist', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'task-center-brain-mixed-blockers-'));
+  const env = { TOKEN_FACTORY_TASK_DIR: tempDir };
+  try {
+    createTask({ id: 'ui-degraded', type: 'ui-automation', now: '2026-05-06T01:00:00.000Z', status: 'degraded', error: 'allure missing' }, env);
+    createTask({ id: 'news-interrupted', type: 'news-digest', now: '2026-05-06T01:10:00.000Z', status: 'interrupted', error: 'rss timeout' }, env);
+
+    const brain = summarizeTaskCenterBrain({
+      env,
+      now: new Date('2026-05-06T03:00:00.000Z'),
+      timezoneOffsetMinutes: 480,
+      proactiveTypes: ['proactive'],
+      historyDays: 5,
+    });
+
+    assert.equal(brain.executionLoop.blockers.some((item) => item.id === 'ui-degraded'), true);
+    assert.equal(brain.executionLoop.blockers.some((item) => item.id === 'news-interrupted'), true);
+    assert.match(brain.executionLoop.failureReview, /降级|中断|失败/);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('task center historical tasks and failure review tolerate malformed task shapes', () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'task-center-history-'));
   const env = { TOKEN_FACTORY_TASK_DIR: tempDir };

@@ -773,6 +773,14 @@ FEISHU_STREAM_UPDATE_INTERVAL_MS=800
 FEISHU_USAGE_LEDGER_ENABLED=true
 FEISHU_USAGE_LEDGER_PATH=/var/log/openclaw-homework/usage-ledger.jsonl
 
+# 可选：统一模型网关 / LiteLLM。只有未显式配置 STREAMING_MODEL_* 时才会接管。
+MODEL_GATEWAY_BASE_URL=http://127.0.0.1:4000/v1
+MODEL_GATEWAY_API_KEYS=网关 key 1,网关 key 2
+MODEL_GATEWAY_MODEL=longcat/chat
+MODEL_GATEWAY_SIMPLE_MODEL=longcat/lite
+MODEL_GATEWAY_THINKING_MODEL=claude/sonnet
+# 等价变量也支持：LITELLM_BASE_URL / LITELLM_API_KEYS / LITELLM_MODEL / LITELLM_SIMPLE_MODEL / LITELLM_THINKING_MODEL
+
 TOKEN_FACTORY_TASK_DIR=/opt/OpenclawHomework/data/tasks/token-factory
 TOKEN_FACTORY_STALE_MS=1800000
 
@@ -818,6 +826,7 @@ MAIL_ACTION_PROVIDER_OVERRIDES=report=evanshine,daily=evanshine
 - token/耗时账本在 `/var/log/openclaw-homework/usage-ledger.jsonl`。每行是一次普通聊天的 JSON，包含 assistant、agent、model、tier、endpoint、耗时和 token，不包含密钥。
 - Hermes 当前主文本链路已经切到 LongCat，推荐固定使用 `STREAMING_MODEL_ENDPOINT_MODE=chat_completions`。
 - OpenClaw 仍使用讯飞 CodingPlan；如果以后给 OpenClaw 单独开流式，再保留讯飞自己的 streaming 配置。
+- 模型配置优先级是：`STREAMING_MODEL_*` > `MODEL_GATEWAY_* / LITELLM_*` > `OPENAI_* / XFYUN_*`。要把 Hermes 接到 LiteLLM 或其它 OpenAI-compatible 网关时，优先填 `MODEL_GATEWAY_*`，不要覆盖已有直连 key。
 - 飞书更新依赖 `PATCH /im/v1/messages/{message_id}`，如果权限不足，会自动退回一次性回复。
 
 当前推荐模型分工：

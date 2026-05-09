@@ -10,18 +10,24 @@ function splitList(value) {
 }
 
 function buildStreamingChatConfig(env = process.env) {
-  const apiKey = String(env.STREAMING_MODEL_API_KEY || env.OPENAI_API_KEY || env.XFYUN_API_KEY || '').trim();
-  const apiKeys = splitList(env.STREAMING_MODEL_API_KEYS || env.LONGCAT_API_KEYS || '')
+  const gatewayBaseUrl = env.MODEL_GATEWAY_BASE_URL || env.LITELLM_BASE_URL || '';
+  const gatewayApiKey = env.MODEL_GATEWAY_API_KEY || env.LITELLM_API_KEY || '';
+  const gatewayApiKeys = env.MODEL_GATEWAY_API_KEYS || env.LITELLM_API_KEYS || '';
+  const gatewayModel = env.MODEL_GATEWAY_MODEL || env.LITELLM_MODEL || '';
+  const gatewaySimpleModel = env.MODEL_GATEWAY_SIMPLE_MODEL || env.LITELLM_SIMPLE_MODEL || '';
+  const gatewayThinkingModel = env.MODEL_GATEWAY_THINKING_MODEL || env.LITELLM_THINKING_MODEL || '';
+  const apiKey = String(env.STREAMING_MODEL_API_KEY || gatewayApiKey || env.OPENAI_API_KEY || env.XFYUN_API_KEY || '').trim();
+  const apiKeys = splitList(env.STREAMING_MODEL_API_KEYS || gatewayApiKeys || env.LONGCAT_API_KEYS || '')
     .concat(apiKey ? [apiKey] : [])
     .filter((key, index, keys) => keys.indexOf(key) === index);
 
   return {
-    baseUrl: normalizeBaseUrl(env.STREAMING_MODEL_BASE_URL || env.OPENAI_BASE_URL || env.XFYUN_BASE_URL || ''),
+    baseUrl: normalizeBaseUrl(env.STREAMING_MODEL_BASE_URL || gatewayBaseUrl || env.OPENAI_BASE_URL || env.XFYUN_BASE_URL || ''),
     apiKey,
     apiKeys,
-    model: String(env.STREAMING_MODEL_ID || env.OPENAI_MODEL || env.XFYUN_MODEL || '').trim(),
-    simpleModel: String(env.STREAMING_MODEL_SIMPLE_ID || env.LONGCAT_SIMPLE_MODEL || '').trim(),
-    thinkingModel: String(env.STREAMING_MODEL_THINKING_ID || env.LONGCAT_THINKING_MODEL || '').trim(),
+    model: String(env.STREAMING_MODEL_ID || gatewayModel || env.OPENAI_MODEL || env.XFYUN_MODEL || '').trim(),
+    simpleModel: String(env.STREAMING_MODEL_SIMPLE_ID || gatewaySimpleModel || env.LONGCAT_SIMPLE_MODEL || '').trim(),
+    thinkingModel: String(env.STREAMING_MODEL_THINKING_ID || gatewayThinkingModel || env.LONGCAT_THINKING_MODEL || '').trim(),
     endpointMode: String(env.STREAMING_MODEL_ENDPOINT_MODE || 'auto').trim().toLowerCase(),
   };
 }

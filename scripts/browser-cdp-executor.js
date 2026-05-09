@@ -87,6 +87,14 @@ async function runBrowserAutomationTask(options) {
   const summaryBase = request.url || "current page";
 
   if (!plan.allowed) {
+    const emptyAssets = buildBrowserExecutionAssets({
+      planSteps: [],
+      consoleMessages: [],
+      networkAssets: [],
+      screenshotPath: null,
+      savedProtocolAssets: [],
+      changedFiles: [],
+    });
     return {
       executed: false,
       mode: "blocked",
@@ -94,18 +102,28 @@ async function runBrowserAutomationTask(options) {
       plan,
       reason: plan.reason,
       steps: [],
+      assets: emptyAssets,
       summary: `Blocked browser run for ${summaryBase}: ${plan.reason}`,
       changedFiles: [],
     };
   }
 
   if (input.dryRun !== false) {
+    const dryRunAssets = buildBrowserExecutionAssets({
+      planSteps: plan.steps,
+      consoleMessages: [],
+      networkAssets: [],
+      screenshotPath: null,
+      savedProtocolAssets: [],
+      changedFiles: [],
+    });
     return {
       executed: false,
       mode: "dry-run",
       request,
       plan,
       steps: plan.steps,
+      assets: dryRunAssets,
       summary: `Dry-run planned ${plan.steps.length} step(s) for ${summaryBase}.`,
       changedFiles: [],
     };
@@ -113,6 +131,14 @@ async function runBrowserAutomationTask(options) {
 
   const launcher = resolveBrowserLauncher(input);
   if (!launcher) {
+    const emptyAssets = buildBrowserExecutionAssets({
+      planSteps: plan.steps,
+      consoleMessages: [],
+      networkAssets: [],
+      screenshotPath: null,
+      savedProtocolAssets: [],
+      changedFiles: [],
+    });
     return {
       executed: false,
       mode: "not-implemented",
@@ -120,6 +146,7 @@ async function runBrowserAutomationTask(options) {
       plan,
       reason: "Live browser/CDP execution is not implemented in this foundation yet.",
       steps: plan.steps,
+      assets: emptyAssets,
       summary: `Live browser execution is not available for ${summaryBase}.`,
       changedFiles: [],
     };
@@ -142,6 +169,14 @@ async function runBrowserAutomationTask(options) {
       });
     } catch (error) {
       if (!input.browserFactory && isBrowserLaunchUnavailableError(error)) {
+        const emptyAssets = buildBrowserExecutionAssets({
+          planSteps: plan.steps,
+          consoleMessages: [],
+          networkAssets: [],
+          screenshotPath: null,
+          savedProtocolAssets: [],
+          changedFiles: [],
+        });
         return {
           executed: false,
           mode: "not-implemented",
@@ -150,6 +185,7 @@ async function runBrowserAutomationTask(options) {
           reason:
             "Live browser/CDP execution is not implemented or browser binaries are not installed.",
           steps: plan.steps,
+          assets: emptyAssets,
           summary: `Live browser execution is not available for ${summaryBase}.`,
           changedFiles: [],
         };
@@ -194,6 +230,14 @@ async function runBrowserAutomationTask(options) {
         changedFiles.push(filePath);
       }
     }
+    const executionAssets = buildBrowserExecutionAssets({
+      planSteps: plan.steps,
+      consoleMessages,
+      networkAssets,
+      screenshotPath,
+      savedProtocolAssets,
+      changedFiles,
+    });
 
     return {
       executed: true,
@@ -201,6 +245,7 @@ async function runBrowserAutomationTask(options) {
       request,
       plan,
       steps: plan.steps,
+      assets: executionAssets,
       consoleMessages,
       networkAssets,
       artifacts: {
@@ -229,6 +274,14 @@ async function runBrowserAutomationTask(options) {
     plan,
     reason: "Live browser/CDP execution is not implemented in this foundation yet.",
     steps: plan.steps,
+    assets: buildBrowserExecutionAssets({
+      planSteps: plan.steps,
+      consoleMessages: [],
+      networkAssets: [],
+      screenshotPath: null,
+      savedProtocolAssets: [],
+      changedFiles: [],
+    }),
   };
 }
 
@@ -372,6 +425,49 @@ function computeDurationMs(startedAt, endedAt) {
     return ended - started;
   }
   return 0;
+}
+
+function buildBrowserExecutionAssets({
+  planSteps = [],
+  consoleMessages = [],
+  networkAssets = [],
+  screenshotPath = null,
+  savedProtocolAssets = [],
+  changedFiles = [],
+} = {}) {
+  const protocolAssets = networkAssets.map((asset) => ({ ...asset }));
+  return {
+    steps: planSteps.map((step, index) => ({
+      index: index + 1,
+      type: step.type || "step",
+      detail: step.detail || "",
+      ...(step.url ? { url: step.url } : {}),
+    })),
+    artifacts: {
+      files: [...changedFiles],
+      screenshot: screenshotPath
+        ? { path: screenshotPath }
+        : null,
+      protocol: {
+        captured: protocolAssets,
+        saved: savedProtocolAssets.map((asset) => ({ ...asset })),
+      },
+    },
+    console: {
+      total: consoleMessages.length,
+      entries: consoleMessages.map((entry) => ({ ...entry })),
+    },
+    network: {
+      total: networkAssets.length,
+      requests: networkAssets.map((entry) => ({ ...entry })),
+    },
+    protocol: {
+      capturedCount: protocolAssets.length,
+      savedCount: savedProtocolAssets.length,
+      captured: protocolAssets,
+      saved: savedProtocolAssets.map((asset) => ({ ...asset })),
+    },
+  };
 }
 
 function readObjectMember(object, key) {

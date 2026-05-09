@@ -42,6 +42,7 @@ function sanitizeEntry(input = {}) {
   const to = asEmailList(safe.to);
   return {
     timestamp: safe.timestamp || new Date().toISOString(),
+    traceId: safe.traceId || safe.trace_id,
     assistant: trimText(safe.assistant || 'unknown', 80),
     action: trimText(safe.action || 'unknown', 80),
     provider: trimText(safe.provider || 'unknown', 80),

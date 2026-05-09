@@ -219,6 +219,66 @@ test('selectAlertItems filters expired benefit activities', () => {
   assert.equal(alerts[0].id, 'benefit:active');
 });
 
+test('buildHotMonitorSnapshot deduplicates near-duplicate benefit clues by link/title fingerprint', () => {
+  const now = new Date('2026-05-08T10:00:00.000Z');
+  const snapshot = buildHotMonitorSnapshot([
+    {
+      id: 'benefit:gpu:1',
+      title: 'Free GPU credits for AI agents',
+      source: 'Tavily 搜索',
+      kind: 'benefit-search',
+      link: 'https://example.com/gpu?ref=tavily',
+      summary: 'Apply before May 30',
+    },
+    {
+      id: 'benefit:gpu:2',
+      title: 'Free GPU credits for AI agents!!!',
+      source: 'Brave 搜索',
+      kind: 'benefit-search',
+      link: 'https://example.com/gpu?utm=ad',
+      summary: 'Apply before May 30 now',
+    },
+  ], { items: {}, alerts: {} }, {}, { now });
+
+  assert.equal(snapshot.total, 1);
+  assert.equal(snapshot.ordered.length, 1);
+});
+
+test('selectAlertItems uses stable alert key cooldown for duplicate ids across runs', () => {
+  const now = new Date('2026-05-08T10:00:00.000Z');
+  const previousState = {
+    items: {},
+    alerts: {
+      'https://example.com/gpu': '2026-05-08T09:55:00.000Z',
+    },
+  };
+  const snapshot = buildHotMonitorSnapshot([
+    {
+      id: 'benefit:gpu:new-id',
+      title: 'Free GPU credits for AI agents',
+      source: 'Tavily 搜索',
+      kind: 'benefit-search',
+      link: 'https://example.com/gpu',
+    },
+  ], previousState, {}, { now });
+
+  const alerts = selectAlertItems(snapshot, previousState, {
+    HOT_MONITOR_ALERT_COOLDOWN_MINUTES: '360',
+  }, { now });
+  assert.equal(alerts.length, 0);
+});
+
+test('scoreHotItem exposes scoring reasons for explainable ranking', () => {
+  const scored = scoreHotItem(
+    { title: 'Free LLM API credits for playwright agent testing', stars: 500, starsToday: 50 },
+    { stars: 450, firstSeenAt: '2026-05-08T08:00:00.000Z' },
+  );
+
+  assert.equal(Array.isArray(scored.scoreReasons), true);
+  assert.equal(scored.scoreReasons.length > 0, true);
+  assert.equal(scored.scoreReasons.some((row) => row.code === 'benefit_keywords'), true);
+});
+
 test('formatHotMonitorMessage separates benefits and technical hotspots', () => {
   const text = formatHotMonitorMessage([
     {

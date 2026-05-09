@@ -150,6 +150,13 @@ test("live execution uses injected browser factory and captures browser artifact
   assert.equal(result.networkAssets[0].request.url, "https://localhost:3000/dashboard/api/session");
   assert.equal(result.artifacts.screenshotPath, "/tmp/browser-cdp-shot.png");
   assert.equal(result.artifacts.protocolAssets.length, 1);
+  assert.equal(result.assets.steps.length >= 3, true);
+  assert.equal(result.assets.console.total, 1);
+  assert.equal(result.assets.network.total, 1);
+  assert.equal(result.assets.protocol.capturedCount, 1);
+  assert.equal(result.assets.protocol.savedCount, 0);
+  assert.equal(result.assets.artifacts.files.includes("/tmp/browser-cdp-shot.png"), true);
+  assert.equal(result.assets.artifacts.screenshot.path, "/tmp/browser-cdp-shot.png");
   assert.equal(result.changedFiles.includes("/tmp/browser-cdp-shot.png"), true);
   assert.match(result.summary, /live/i);
 });
@@ -206,8 +213,25 @@ test("live execution saves captured protocol assets when saver is provided", asy
   assert.equal(saved[0].url, "http://localhost:3000/login/api/login");
   assert.equal(result.artifacts.savedProtocolAssets.length, 1);
   assert.equal(result.artifacts.savedProtocolAssets[0].id, "pa-1");
+  assert.equal(result.assets.protocol.savedCount, 1);
+  assert.equal(result.assets.artifacts.protocol.saved.length, 1);
+  assert.equal(result.assets.artifacts.protocol.saved[0].id, "pa-1");
   assert.equal(result.changedFiles.includes("/tmp/protocol-assets/pa-1.json"), true);
   assert.match(result.summary, /saved 1 protocol asset/i);
+});
+
+test("dry run output keeps reusable assets structure", async () => {
+  const result = await runBrowserAutomationTask({
+    text: "Inspect https://localhost:3000/dashboard and capture screenshot, network, and console logs.",
+    dryRun: true,
+  });
+
+  assert.equal(result.mode, "dry-run");
+  assert.equal(Array.isArray(result.assets.steps), true);
+  assert.equal(result.assets.console.total, 0);
+  assert.equal(result.assets.network.total, 0);
+  assert.equal(result.assets.protocol.capturedCount, 0);
+  assert.equal(result.assets.artifacts.files.length, 0);
 });
 
 test("live execution reads Playwright methods with the original object context", async () => {

@@ -365,8 +365,26 @@ function elapsedMs(startedAt) {
   return Math.max(0, Math.round(nowMs() - Number(startedAt || nowMs())));
 }
 
-function createFeishuTimingContext(startedAt = nowMs()) {
-  return { startedAt };
+function createTraceId() {
+  return `tr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function resolveTraceIdFromPayload(payload = {}, fallbackTraceId = '') {
+  const messageId = getFeishuInputMessageId(payload);
+  if (messageId) {
+    return String(messageId);
+  }
+
+  const eventId = payload?.header?.event_id || payload?.event_id || payload?.uuid || '';
+  if (eventId) {
+    return String(eventId);
+  }
+
+  return String(fallbackTraceId || '').trim() || createTraceId();
+}
+
+function createFeishuTimingContext(startedAt = nowMs(), traceId = '') {
+  return { startedAt, traceId: String(traceId || '').trim() || createTraceId() };
 }
 
 function sanitizeTimingValue(value) {
@@ -387,6 +405,9 @@ function logFeishuTiming(env, timingContext, stage, fields = {}) {
     'stage=' + sanitizeTimingValue(stage),
     'elapsed_ms=' + elapsedMs(startedAt),
   ];
+  if (timingContext?.traceId) {
+    parts.push('trace_id=' + sanitizeTimingValue(timingContext.traceId));
+  }
 
   for (const [key, value] of Object.entries(fields)) {
     if (value === undefined || value === null || value === '') {
@@ -409,6 +430,7 @@ function logUsageLedger(env, input = {}) {
   try {
     const written = appendUsageLedgerEntry(env, {
       assistant: getAssistantName(env),
+      traceId: input.traceId || input.timingContext?.traceId,
       ...input,
     });
     if (written) {
@@ -1291,6 +1313,12 @@ function appendFeishuReplyFooter(text, env = process.env, metadata = {}) {
       footer.push(`耗时：${duration}`);
     }
   }
+  if (truthyEnv(env.FEISHU_REPLY_FOOTER_TRACE_ID) || truthyEnv(env.FEISHU_FOOTER_TRACE_ID_ENABLED)) {
+    const traceId = String(metadata.traceId || metadata.trace_id || '').trim();
+    if (traceId) {
+      footer.push(`Trace ID：${traceId}`);
+    }
+  }
 
   if (footer.length === 0) {
     return String(text ?? '');
@@ -1367,6 +1395,12 @@ function buildFeishuStreamingCard(text, env = process.env, metadata = {}) {
     const duration = formatDuration(metadata.elapsedMs);
     if (duration) {
       footer.push(`耗时：${duration}`);
+    }
+  }
+  if (truthyEnv(env.FEISHU_REPLY_FOOTER_TRACE_ID) || truthyEnv(env.FEISHU_FOOTER_TRACE_ID_ENABLED)) {
+    const traceId = String(metadata.traceId || metadata.trace_id || '').trim();
+    if (traceId) {
+      footer.push(`Trace ID：${traceId}`);
     }
   }
 
@@ -2244,6 +2278,7 @@ async function sendMailWithRouting(message, env = process.env, options = {}) {
       ...message,
       ...result,
       assistant: getAssistantName(env),
+      traceId: message.traceId || options.traceId || options.timingContext?.traceId,
     });
     return result;
   }
@@ -2254,6 +2289,7 @@ async function sendMailWithRouting(message, env = process.env, options = {}) {
       ...message,
       ...result,
       assistant: getAssistantName(env),
+      traceId: message.traceId || options.traceId || options.timingContext?.traceId,
     });
     return result;
   }
@@ -2264,6 +2300,7 @@ async function sendMailWithRouting(message, env = process.env, options = {}) {
       ...message,
       ...result,
       assistant: getAssistantName(env),
+      traceId: message.traceId || options.traceId || options.timingContext?.traceId,
     });
     return result;
   } catch (error) {
@@ -2288,6 +2325,7 @@ async function sendMailWithRouting(message, env = process.env, options = {}) {
       ...message,
       ...result,
       assistant: getAssistantName(env),
+      traceId: message.traceId || options.traceId || options.timingContext?.traceId,
     });
     return result;
   }
@@ -2502,7 +2540,10 @@ async function notifyUiMailboxActions(job, run, env = process.env, options = {})
   const emailSender = options.emailSender || ((message, senderEnv) => sendMailboxActionEmail(message, senderEnv, options));
 
   for (const message of messages) {
-    await Promise.resolve(emailSender(message, env));
+    await Promise.resolve(emailSender({
+      ...message,
+      traceId: message.traceId || job.traceId || options.traceId || options.timingContext?.traceId,
+    }, env));
   }
 
   return messages;
@@ -2521,6 +2562,7 @@ async function sendEmailRunResultNotification(job, run, env = process.env, optio
   const message = buildEmailRunResultMessage(job, run);
   return sendMailWithRouting({
     action: 'report',
+    traceId: job.traceId || options.traceId || options.timingContext?.traceId,
     to: recipients,
     subject: buildEmailRunResultSubject(job, run),
     text: message.text,
@@ -2567,6 +2609,7 @@ async function sendDailySummaryNotification(runs, env = process.env, options = {
 
   const message = {
     action: 'daily',
+    traceId: options.traceId || options.timingContext?.traceId,
     mailbox: resolvedAction.mailbox,
     to: allRecipients,
     externalTo: externalRecipients,
@@ -2678,6 +2721,9 @@ function buildDispatchConfig(command, env) {
 }
 
 async function handleFeishuWebhook(payload, env = process.env, dispatch = dispatchWorkflow, parserOverride, schedulerOverride, fallbackParserOverride, parserSourceOverride, fallbackParserSourceOverride, timingContext) {
+  const effectiveTimingContext = timingContext?.startedAt
+    ? createFeishuTimingContext(timingContext.startedAt, resolveTraceIdFromPayload(payload, timingContext.traceId))
+    : createFeishuTimingContext(nowMs(), resolveTraceIdFromPayload(payload));
   if (payload?.challenge) {
     return {
       statusCode: 200,
@@ -2706,21 +2752,21 @@ async function handleFeishuWebhook(payload, env = process.env, dispatch = dispat
       const parser = parserOverride || runOpenClawParser;
       const parserSource = parserSourceOverride || 'openclaw';
       const parserStartedAt = nowMs();
-      logFeishuTiming(env, timingContext, 'model:start', {
+      logFeishuTiming(env, effectiveTimingContext, 'model:start', {
         agent: 'ui-test-agent',
         source: parserSource,
         purpose: 'parser',
       });
       try {
         command = await parser(text, env);
-        logTimedModelFinish(env, timingContext, 'model:finish', parserStartedAt, {
+        logTimedModelFinish(env, effectiveTimingContext, 'model:finish', parserStartedAt, {
           agent: 'ui-test-agent',
           source: parserSource,
           purpose: 'parser',
         });
         commandSource = command ? parserSource : commandSource;
       } catch (parserError) {
-        logTimedModelFinish(env, timingContext, 'model:error', parserStartedAt, {
+        logTimedModelFinish(env, effectiveTimingContext, 'model:error', parserStartedAt, {
           agent: 'ui-test-agent',
           source: parserSource,
           purpose: 'parser',
@@ -2732,13 +2778,13 @@ async function handleFeishuWebhook(payload, env = process.env, dispatch = dispat
         const hermesParser = fallbackParserOverride || runHermesParser;
         const fallbackSource = fallbackParserSourceOverride || 'hermes';
         const fallbackStartedAt = nowMs();
-        logFeishuTiming(env, timingContext, 'model:start', {
+        logFeishuTiming(env, effectiveTimingContext, 'model:start', {
           agent: 'ui-test-agent',
           source: fallbackSource,
           purpose: 'parser',
         });
         command = await hermesParser(text, env);
-        logTimedModelFinish(env, timingContext, 'model:finish', fallbackStartedAt, {
+        logTimedModelFinish(env, effectiveTimingContext, 'model:finish', fallbackStartedAt, {
           agent: 'ui-test-agent',
           source: fallbackSource,
           purpose: 'parser',
@@ -2769,10 +2815,12 @@ async function handleFeishuWebhook(payload, env = process.env, dispatch = dispat
   const config = buildDispatchConfig(command, env);
   const result = await dispatch(config);
   const workflowRunUrl = result.workflowRunUrl || result.run?.html_url;
+  const traceId = effectiveTimingContext.traceId;
   const notificationMessage = buildFeishuTextMessage(
     payload,
     `UI 自动化测试已启动：分支 ${command.targetRef}，模式 ${command.runMode}\n链接：${workflowRunUrl || result.actionsUrl}`,
     env,
+    { traceId },
   );
 
   if (shouldNotifyFeishu(env)) {
@@ -2784,6 +2832,7 @@ async function handleFeishuWebhook(payload, env = process.env, dispatch = dispat
       run: result.run,
       runMode: config.inputs.run_mode,
       targetRef: config.inputs.target_ref,
+      traceId,
     }, env);
   }
 
@@ -2795,6 +2844,7 @@ async function handleFeishuWebhook(payload, env = process.env, dispatch = dispat
       actionsUrl: result.actionsUrl,
       workflowRunUrl,
       commandSource,
+      traceId,
       targetRepository: config.inputs.target_repository,
       targetRef: config.inputs.target_ref,
       runMode: config.inputs.run_mode,
@@ -3405,7 +3455,7 @@ function isChatStreamingEnabled(env = process.env) {
   }
 
   const config = buildStreamingChatConfig(env);
-  return Boolean(config.baseUrl && config.apiKey && config.model);
+  return Boolean(config.baseUrl && config.model && (config.apiKey || config.apiKeys?.length));
 }
 
 function extractFeishuMessageId(sendResult) {
@@ -3677,6 +3727,7 @@ async function streamRoutedChatReply(payload, text, env, options = {}) {
   const placeholder = buildFeishuCardMessage(payload, buildFeishuStreamingCard('正在思考...', env, {
     status: '生成中',
     elapsedMs: elapsedMs(timingContext?.startedAt),
+    traceId: timingContext?.traceId,
   }), env);
   const sendResult = await sendTimedFeishuMessage(receiptSender, placeholder, env, timingContext, 'stream-placeholder');
   const messageId = extractFeishuMessageId(sendResult);
@@ -3716,6 +3767,7 @@ async function streamRoutedChatReply(payload, text, env, options = {}) {
     const message = buildFeishuCardUpdateMessage(fullText || '正在思考...', env, {
       status: force ? '完成' : '生成中',
       elapsedMs: elapsedMs(timingContext?.startedAt),
+      traceId: timingContext?.traceId,
     });
     if (force) {
       await waitForUpdate();
@@ -4102,6 +4154,7 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
           buildFeishuTextMessage(payload, '收到，开始跑整套 token 工厂：先高 token 训练场，再多 Agent 训练场。完成后我会给你汇总。', env, {
             status: '运行中',
             elapsedMs: elapsedMs(options.timingContext?.startedAt),
+            traceId: options.timingContext?.traceId,
           }),
           env,
           options.timingContext,
@@ -4152,6 +4205,7 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
           buildFeishuTextMessage(payload, '收到，开始抓今天的 GitHub 热榜、Hacker News 和 RSS 热点。完成后我会给你摘要和产物路径。', env, {
             status: '运行中',
             elapsedMs: elapsedMs(options.timingContext?.startedAt),
+            traceId: options.timingContext?.traceId,
           }),
           env,
           options.timingContext,
@@ -4183,6 +4237,7 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
           buildFeishuTextMessage(payload, '收到，开始跑趋势 Token 工厂：读取今日热点，批量调用模型分析开源项目、新闻和训练数据价值。完成后我会发报告。', env, {
             status: '运行中',
             elapsedMs: elapsedMs(options.timingContext?.startedAt),
+            traceId: options.timingContext?.traceId,
           }),
           env,
           options.timingContext,
@@ -4214,6 +4269,7 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
           buildFeishuTextMessage(payload, '收到，开始跑高 token 训练场。这个任务会批量调用模型，完成后我会发报告和产物路径。', env, {
             status: '运行中',
             elapsedMs: elapsedMs(options.timingContext?.startedAt),
+            traceId: options.timingContext?.traceId,
           }),
           env,
           options.timingContext,
@@ -4255,6 +4311,7 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
           buildFeishuTextMessage(payload, '收到，开始跑多 Agent 训练场。这会多轮调用模型做生成、评审和总结，完成后我会发报告和产物路径。', env, {
             status: '运行中',
             elapsedMs: elapsedMs(options.timingContext?.startedAt),
+            traceId: options.timingContext?.traceId,
           }),
           env,
           options.timingContext,
@@ -4322,6 +4379,7 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
     if (route.action === 'daily-email') {
       const messages = await sendDailySummaryNotification([], env, {
         ...options,
+        traceId: options.traceId || options.timingContext?.traceId,
         recipientEmail: route.recipientEmail,
       });
       const primaryRecipients = messages[0]?.externalTo?.length
@@ -4485,6 +4543,7 @@ function sendRoutedFeishuReply(receiptSender, payload, replyText, env, label, ti
   return sendTimedFeishuMessage(receiptSender, buildFeishuTextMessage(payload, replyText, env, {
     status: '完成',
     elapsedMs: elapsedMs(timingContext?.startedAt),
+    traceId: timingContext?.traceId,
   }), env, timingContext, label).catch((error) => {
     console.error(`Feishu ${label} reply failed: ${error.message}`);
   });
@@ -4494,7 +4553,9 @@ function runWebhookInBackground(payload, env, options = {}) {
   setTimeout(() => {
     const text = extractFeishuText(payload);
     const receiptSender = options.receiptSender || ((reply) => sendFeishuTextMessage(env, reply));
-    const timingContext = options.timingContext || createFeishuTimingContext();
+    const timingContext = options.timingContext?.startedAt
+      ? createFeishuTimingContext(options.timingContext.startedAt, resolveTraceIdFromPayload(payload, options.timingContext.traceId))
+      : createFeishuTimingContext(nowMs(), resolveTraceIdFromPayload(payload));
     rememberFeishuImage(
       payload,
       options.imageMemory || recentFeishuImages,
@@ -4508,7 +4569,9 @@ function runWebhookInBackground(payload, env, options = {}) {
 
     if (parseBindCommand(text)) {
       bindAllowedSender(payload, env, options)
-        .then((replyText) => sendTimedFeishuMessage(receiptSender, buildFeishuTextMessage(payload, replyText, env), env, timingContext, 'bind'))
+        .then((replyText) => sendTimedFeishuMessage(receiptSender, buildFeishuTextMessage(payload, replyText, env, {
+          traceId: timingContext.traceId,
+        }), env, timingContext, 'bind'))
         .then(() => logFeishuTiming(env, timingContext, 'finish', { outcome: 'bind' }))
         .catch((error) => {
           console.error(`Feishu bind reply failed: ${error.message}`);
@@ -4531,7 +4594,9 @@ function runWebhookInBackground(payload, env, options = {}) {
 
       const smallTalkReply = parseSmallTalkMessage(extractFeishuText(payload), env);
       if (smallTalkReply) {
-        const message = buildFeishuTextMessage(payload, smallTalkReply, env);
+        const message = buildFeishuTextMessage(payload, smallTalkReply, env, {
+          traceId: timingContext.traceId,
+        });
         sendTimedFeishuMessage(receiptSender, message, env, timingContext, 'small-talk')
           .then(() => logFeishuTiming(env, timingContext, 'finish', { outcome: 'small_talk' }))
           .catch((error) => {
@@ -4551,7 +4616,9 @@ function runWebhookInBackground(payload, env, options = {}) {
       }
 
       if (!isAuthorized(payload, env)) {
-        sendTimedFeishuMessage(receiptSender, buildFeishuTextMessage(payload, getUnauthorizedMessage(env), env), env, timingContext, 'unauthorized')
+        sendTimedFeishuMessage(receiptSender, buildFeishuTextMessage(payload, getUnauthorizedMessage(env), env, {
+          traceId: timingContext.traceId,
+        }), env, timingContext, 'unauthorized')
           .then(() => logFeishuTiming(env, timingContext, 'finish', { outcome: 'unauthorized' }))
           .catch((error) => {
             console.error(`Feishu unauthorized reply failed: ${error.message}`);
@@ -4564,6 +4631,7 @@ function runWebhookInBackground(payload, env, options = {}) {
           payload,
           '收到了，正在运行 UI 自动化测试。报告生成后我会发给你。',
           env,
+          { traceId: timingContext.traceId },
         );
         sendTimedFeishuMessage(receiptSender, receipt, env, timingContext, 'automation-receipt').catch((error) => {
           console.error(`Feishu receipt notification failed: ${error.message}`);
@@ -4621,6 +4689,7 @@ function createServer(env = process.env, options = {}) {
     try {
       const rawBody = await readRequestBody(request);
       const payload = rawBody ? JSON.parse(rawBody) : {};
+      timingContext.traceId = resolveTraceIdFromPayload(payload, timingContext.traceId);
       const effectiveRouteMode = getFeishuPayloadMode(payload, env, routeMode);
       const routeOptions = buildRouteOptions(effectiveRouteMode, options);
       const routeEnv = buildRouteEnv(effectiveRouteMode, env);

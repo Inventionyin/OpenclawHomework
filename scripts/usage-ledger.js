@@ -37,6 +37,7 @@ function buildUsageLedgerEntry(input = {}) {
   const route = input.route || {};
   const entry = {
     timestamp: input.timestamp || new Date().toISOString(),
+    traceId: input.traceId || input.trace_id,
     assistant: input.assistant,
     agent: route.agent || input.agent,
     action: route.action || input.action,

@@ -455,6 +455,25 @@ test('buildFeishuTextMessage can append elapsed and status footer', () => {
   assert.match(content.text, /耗时：1\.2s/);
 });
 
+test('buildFeishuTextMessage can append trace id footer', () => {
+  const payload = {
+    event: {
+      message: {
+        chat_id: 'chat-a',
+      },
+    },
+  };
+
+  const message = buildFeishuTextMessage(payload, '测试完成', {
+    FEISHU_REPLY_FOOTER_TRACE_ID: 'true',
+  }, {
+    traceId: 'trace-message-xyz',
+  });
+
+  const content = JSON.parse(message.content);
+  assert.match(content.text, /Trace ID：trace-message-xyz/);
+});
+
 test('buildFeishuTextMessage omits unknown elapsed footer when elapsed is unavailable', () => {
   const payload = {
     event: {
@@ -1741,6 +1760,7 @@ test('sendDailySummaryNotification writes mail ledger for real smtp sender path'
         MAIL_LEDGER_PATH: ledgerFile,
       },
       {
+        traceId: 'trace-daily-001',
         createTransport: (config) => ({
           sendMail: async (mail) => {
             transports.push({
@@ -1758,6 +1778,7 @@ test('sendDailySummaryNotification writes mail ledger for real smtp sender path'
     const entries = readMailLedgerEntries({ MAIL_LEDGER_PATH: ledgerFile });
     assert.equal(entries.length, 1);
     assert.equal(entries[0].assistant, 'Hermes');
+    assert.equal(entries[0].traceId, 'trace-daily-001');
     assert.equal(entries[0].action, 'daily');
     assert.equal(entries[0].provider, 'default');
     assert.equal(entries[0].sent, true);
@@ -4201,6 +4222,7 @@ test('createServer logs Feishu timing stages for async chat replies', async () =
             },
           },
           message: {
+            message_id: 'om_input_trace_01',
             chat_id: 'chat-a',
             content: JSON.stringify({ text: '今天随便聊两句' }),
           },
@@ -4220,6 +4242,7 @@ test('createServer logs Feishu timing stages for async chat replies', async () =
     assert(timingLogs.some((line) => /stage=send:start\b/.test(line)));
     assert(timingLogs.some((line) => /stage=send:finish\b/.test(line)));
     assert(timingLogs.some((line) => /stage=finish\b/.test(line)));
+    assert(timingLogs.every((line) => line.includes('trace_id=om_input_trace_01')));
   } finally {
     console.log = originalLog;
     await new Promise((resolve) => server.close(resolve));
@@ -4307,12 +4330,84 @@ test('createServer streams chat by updating the same Feishu message', async () =
     assert.match(JSON.stringify(JSON.parse(updates.at(-1).message.content)), /你好/);
     const ledger = JSON.parse(readFileSync(ledgerFile, 'utf8').trim());
     assert.equal(ledger.assistant, 'OpenClaw');
+    assert.match(ledger.traceId, /^tr-/);
     assert.equal(ledger.agent, 'chat-agent');
     assert.equal(ledger.model, 'model-a');
     assert.equal(ledger.totalTokens, 13);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('createServer enables streaming when model gateway only provides api keys', async () => {
+  const replies = [];
+  const updates = [];
+  let chatCalled = false;
+  const server = createServer(
+    {
+      GITHUB_TOKEN: 'ghp_example',
+      FEISHU_WEBHOOK_ASYNC: 'true',
+      FEISHU_RESULT_NOTIFY_ENABLED: 'true',
+      FEISHU_APP_ID: 'cli_xxx',
+      FEISHU_APP_SECRET: 'secret_xxx',
+      OPENCLAW_CHAT_ENABLED: 'true',
+      FEISHU_CHAT_STREAMING_ENABLED: 'true',
+      FEISHU_INTENT_PLANNER_ENABLED: 'false',
+      MODEL_GATEWAY_BASE_URL: 'https://gateway.example.test/v1',
+      MODEL_GATEWAY_API_KEYS: 'gateway-key-a,gateway-key-b',
+      MODEL_GATEWAY_MODEL: 'gateway-chat',
+    },
+    {
+      chat: async () => {
+        chatCalled = true;
+        return 'fallback should not run';
+      },
+      receiptSender: async (message) => {
+        replies.push(message);
+        return { data: { message_id: 'om_gateway_stream' } };
+      },
+      messageUpdater: async (messageId, message) => {
+        updates.push({ messageId, message });
+      },
+      streamChat: async (prompt, options) => {
+        await options.onDelta('好', '好');
+        return { text: '好', endpoint: 'chat_completions', model: 'gateway-chat' };
+      },
+    },
+  );
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/webhook/feishu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          sender: {
+            sender_id: {
+              open_id: 'user-a',
+            },
+          },
+          message: {
+            chat_id: 'chat-a',
+            content: JSON.stringify({ text: '今天随便聊两句' }),
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    await waitForCondition(() => updates.length >= 2);
+    assert.equal(chatCalled, false);
+    assert.equal(replies.length, 1);
+    assert.equal(replies[0].msgType, 'interactive');
+    assert.deepEqual(updates.map((item) => item.messageId), ['om_gateway_stream', 'om_gateway_stream']);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
   }
 });
 
@@ -4412,6 +4507,7 @@ test('createServer does not block streaming deltas on slow Feishu card updates',
       FEISHU_APP_SECRET: 'secret_xxx',
       OPENCLAW_CHAT_ENABLED: 'true',
       FEISHU_CHAT_STREAMING_ENABLED: 'true',
+      FEISHU_INTENT_PLANNER_ENABLED: 'false',
       STREAMING_MODEL_BASE_URL: 'https://example.test/v1',
       STREAMING_MODEL_API_KEY: 'secret',
       STREAMING_MODEL_ID: 'model-a',

@@ -137,6 +137,23 @@ STREAMING_MODEL_THINKING_ID=LongCat-Flash-Thinking-2601
 STREAMING_MODEL_ENDPOINT_MODE=chat_completions
 ```
 
+如果后续要让 Hermes 通过 LiteLLM 或其它 OpenAI-compatible 模型网关统一调度多家模型，可以改用下面这组可选变量。桥梁服务的优先级是：`STREAMING_MODEL_*` > `MODEL_GATEWAY_* / LITELLM_*` > `OPENAI_* / XFYUN_*`，所以保留直连 LongCat 时网关不会覆盖它。
+
+```text
+MODEL_GATEWAY_BASE_URL=http://127.0.0.1:4000/v1
+MODEL_GATEWAY_API_KEYS=网关 key 1,网关 key 2
+MODEL_GATEWAY_MODEL=longcat/chat
+MODEL_GATEWAY_SIMPLE_MODEL=longcat/lite
+MODEL_GATEWAY_THINKING_MODEL=claude/sonnet
+
+# 等价 LiteLLM 变量也支持：
+LITELLM_BASE_URL=http://127.0.0.1:4000/v1
+LITELLM_API_KEYS=网关 key 1,网关 key 2
+LITELLM_MODEL=longcat/chat
+LITELLM_SIMPLE_MODEL=longcat/lite
+LITELLM_THINKING_MODEL=claude/sonnet
+```
+
 ## 5. DNS 与证书
 
 你要把 Hermes 的域名解析到新服务器：

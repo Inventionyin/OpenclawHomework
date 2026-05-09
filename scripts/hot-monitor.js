@@ -186,6 +186,50 @@ function itemKey(item = {}) {
     .toLowerCase();
 }
 
+function normalizeUrlForKey(urlValue = '') {
+  const text = String(urlValue || '').trim();
+  if (!text) return '';
+  try {
+    const parsed = new URL(text);
+    return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, '') || parsed.origin;
+  } catch {
+    return text.split('?')[0].split('#')[0].replace(/\/+$/, '');
+  }
+}
+
+function normalizeTitleForKey(title = '') {
+  return normalizeText(title)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]+/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildAlertKey(item = {}) {
+  const linkKey = normalizeUrlForKey(item.link || item.url);
+  if (linkKey) {
+    return linkKey.toLowerCase();
+  }
+  const titleKey = normalizeTitleForKey(item.title || item.titleZh || '');
+  const sourceKey = normalizeText(item.source || item.kind || '').toLowerCase();
+  if (titleKey) {
+    return `${sourceKey}:${titleKey}`;
+  }
+  return itemKey(item);
+}
+
+function buildDedupKey(item = {}) {
+  const linkKey = normalizeUrlForKey(item.link || item.url);
+  if (linkKey) {
+    return `url:${linkKey.toLowerCase()}`;
+  }
+  const titleKey = normalizeTitleForKey(item.title || item.titleZh || '');
+  if (titleKey) {
+    return `title:${titleKey}`;
+  }
+  return `id:${itemKey(item)}`;
+}
+
 function includesAny(text, keywords) {
   const lowered = String(text || '').toLowerCase();
   return keywords.some((keyword) => lowered.includes(String(keyword).toLowerCase()));
@@ -256,12 +300,25 @@ function keywordScore(item = {}) {
     item.source,
     item.topic,
   ].join(' ');
+  const reasons = [];
   let score = 0;
-  if (includesAny(text, TECH_KEYWORDS)) score += 25;
-  if (includesAny(text, BENEFIT_KEYWORDS)) score += 45;
-  if (/playwright|cypress|dify|agent|mcp|openhands|langgraph|allure/i.test(text)) score += 25;
-  if (/免费|额度|token|credits?|server|服务器|trial|coupon/i.test(text)) score += 30;
-  return score;
+  if (includesAny(text, TECH_KEYWORDS)) {
+    score += 25;
+    reasons.push({ code: 'tech_keywords', score: 25, detail: '命中技术关键词' });
+  }
+  if (includesAny(text, BENEFIT_KEYWORDS)) {
+    score += 45;
+    reasons.push({ code: 'benefit_keywords', score: 45, detail: '命中福利关键词' });
+  }
+  if (/playwright|cypress|dify|agent|mcp|openhands|langgraph|allure/i.test(text)) {
+    score += 25;
+    reasons.push({ code: 'workflow_keywords', score: 25, detail: '命中测试/Agent 工作流关键词' });
+  }
+  if (/免费|额度|token|credits?|server|服务器|trial|coupon/i.test(text)) {
+    score += 30;
+    reasons.push({ code: 'resource_keywords', score: 30, detail: '命中资源/额度关键词' });
+  }
+  return { score, reasons };
 }
 
 function scoreHotItem(item = {}, previous = {}) {
@@ -271,11 +328,19 @@ function scoreHotItem(item = {}, previous = {}) {
   const deltaStars = hasPreviousStars ? Math.max(0, stars - previousStars) : 0;
   const starsToday = Number(item.starsToday || 0);
   const isNew = !previous.firstSeenAt;
+  const keyword = keywordScore(item);
+  const scoreReasons = [
+    { code: 'stars_total', score: Math.min(stars / 100, 120), detail: `总 stars=${stars}` },
+    { code: 'stars_delta', score: Math.min(deltaStars * 4, 220), detail: `相较上轮增量=${deltaStars}` },
+    { code: 'stars_today', score: Math.min(starsToday * 2, 220), detail: `今日增量=${starsToday}` },
+    ...keyword.reasons,
+    ...(isNew ? [{ code: 'new_item_bonus', score: 20, detail: '首次进入雷达' }] : []),
+  ].filter((row) => Number(row.score) > 0);
   const score = Math.round(
     Math.min(stars / 100, 120)
     + Math.min(deltaStars * 4, 220)
     + Math.min(starsToday * 2, 220)
-    + keywordScore(item)
+    + keyword.score
     + (isNew ? 20 : 0),
   );
   return {
@@ -283,6 +348,7 @@ function scoreHotItem(item = {}, previous = {}) {
     deltaStars,
     starsToday,
     isNew,
+    scoreReasons,
   };
 }
 
@@ -292,6 +358,8 @@ function normalizeHotItem(item = {}, previous = {}, now = new Date()) {
   const chinese = buildChineseUnderstanding(item, categories);
   return {
     id: itemKey(item),
+    alertKey: buildAlertKey(item),
+    dedupKey: buildDedupKey(item),
     title: normalizeText(item.title).slice(0, 180),
     titleZh: normalizeText(item.titleZh || chinese.titleZh).slice(0, 180),
     source: normalizeText(item.source || item.kind || 'hot-monitor').slice(0, 120),
@@ -304,6 +372,7 @@ function normalizeHotItem(item = {}, previous = {}, now = new Date()) {
     starsToday: Number.isFinite(Number(item.starsToday)) ? Number(item.starsToday) : undefined,
     deltaStars: metrics.deltaStars,
     score: metrics.score,
+    scoreReasons: metrics.scoreReasons,
     categories,
     firstSeenAt: previous.firstSeenAt || now.toISOString(),
     lastSeenAt: now.toISOString(),
@@ -687,9 +756,23 @@ function buildHotMonitorSnapshot(rawItems = [], previousState = {}, env = proces
       stars: item.stars,
     },
   ]));
-  const normalized = rawItems
+  const normalizedRaw = rawItems
     .map((item) => normalizeHotItem(item, previousItems[itemKey(item)] || previousSeen[itemKey(item)], now))
     .filter((item) => item.title)
+    .sort((a, b) => b.score - a.score || b.deltaStars - a.deltaStars || String(a.title).localeCompare(String(b.title)));
+  const dedupMap = new Map();
+  for (const item of normalizedRaw) {
+    const key = item.dedupKey || item.id;
+    if (!dedupMap.has(key)) {
+      dedupMap.set(key, item);
+      continue;
+    }
+    const previous = dedupMap.get(key);
+    if ((item.score || 0) > (previous.score || 0)) {
+      dedupMap.set(key, item);
+    }
+  }
+  const normalized = [...dedupMap.values()]
     .sort((a, b) => b.score - a.score || b.deltaStars - a.deltaStars || String(a.title).localeCompare(String(b.title)));
   const maxTracked = Number(env.HOT_MONITOR_MAX_TRACKED_ITEMS || 300);
   const items = {};
@@ -730,7 +813,8 @@ function selectAlertItems(snapshot = {}, previousState = {}, env = process.env, 
       };
     })
     .filter((item) => {
-      const lastAlert = Date.parse(alerts[item.id] || '');
+      const alertKey = item.alertKey || item.id;
+      const lastAlert = Date.parse(alerts[alertKey] || alerts[item.id] || '');
       if (Number.isFinite(lastAlert) && nowMs - lastAlert < cooldownMinutes * 60 * 1000) {
         return false;
       }
@@ -849,7 +933,7 @@ async function runHotMonitor(config = {}, options = {}) {
     };
     if (alertItems.length && !config.dryRun) {
       for (const item of alertItems) {
-        nextState.alerts[item.id] = now.toISOString();
+        nextState.alerts[item.alertKey || item.id] = now.toISOString();
       }
     }
     writeJsonFile(stateFile, nextState);

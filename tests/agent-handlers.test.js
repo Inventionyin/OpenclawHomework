@@ -1072,6 +1072,42 @@ test('buildClerkAgentReply task center brain degrades invalid data safely', () =
   assert.match(reply, /降级提示：task_center_brain_unavailable/);
 });
 
+test('buildClerkAgentReply renders degraded and interrupted blockers in task center brain', () => {
+  const reply = buildClerkAgentReply({ action: 'task-center-brain' }, {
+    summarizeTaskCenterBrain: () => ({
+      today: {
+        summaryText: '今天任务 3 个，运行中 1 个，降级 1 个，中断 1 个。',
+      },
+      history: {
+        summaryText: '近 7 天历史任务 3 个。',
+      },
+      failureReview: {
+        summaryText: '最近有降级/中断任务需要复盘。',
+        items: [
+          { id: 'ui-degraded', type: 'ui-automation', status: 'degraded', error: 'allure missing' },
+          { id: 'news-interrupted', type: 'news-digest', status: 'interrupted', error: 'rss timeout' },
+        ],
+      },
+      nextPlan: {
+        items: ['先修复 ui-degraded。', '再恢复 news-interrupted。'],
+        quickCommands: ['文员，查看失败任务', '文员，启动今天的自动流水线'],
+      },
+    }),
+    summarizeDailyPipeline: () => ({
+      day: '2026-05-07',
+      totalStages: 4,
+      completedStages: 2,
+      failedStages: 0,
+      nextAction: '先补齐未完成阶段，再重跑流水线。',
+    }),
+  });
+
+  assert.match(reply, /任务中枢主控脑/);
+  assert.match(reply, /ui-degraded/);
+  assert.match(reply, /news-interrupted/);
+  assert.match(reply, /降级|中断/);
+});
+
 test('buildClerkAgentReply explains multi-agent lab before execution', () => {
   const reply = buildClerkAgentReply({ action: 'multi-agent-lab' });
   assert.match(reply, /多 Agent 训练场/);

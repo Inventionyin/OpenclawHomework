@@ -210,13 +210,18 @@ function normalizeFailureReason(task = {}) {
 function summarizeFailureReview(options = {}) {
   const env = options.env || process.env;
   const limit = Math.max(1, Number(options.limit || 20));
-  const failed = filterTasks(listTasks(env), options)
+  const failures = filterTasks(listTasks(env), options)
     .map(normalizeTaskShape)
-    .filter((task) => task.status === 'failed')
+    .filter((task) => ['failed', 'degraded', 'interrupted'].includes(task.status))
     .slice(0, limit);
   const byReasonMap = new Map();
-  for (const task of failed) {
-    const reason = normalizeFailureReason(task);
+  for (const task of failures) {
+    const reasonSeed = task.status === 'degraded'
+      ? `degraded: ${task.error || ''}`
+      : task.status === 'interrupted'
+        ? `interrupted: ${task.error || ''}`
+        : task.error;
+    const reason = normalizeFailureReason({ ...task, error: reasonSeed });
     const current = byReasonMap.get(reason) || {
       reason,
       count: 0,
@@ -250,16 +255,27 @@ function summarizeFailureReview(options = {}) {
     recommendations.push('CI/UI 失败：先打开 GitHub Actions 与 Allure/trace，再补一轮 smoke。');
   }
   if (!recommendations.length) {
-    recommendations.push(failed.length ? '先查看最近失败任务日志，补充可复现线索后再重试。' : '暂无失败任务，保持每日流水线巡检。');
+    recommendations.push(failures.length ? '先查看最近失败任务日志，补充可复现线索后再重试。' : '暂无失败任务，保持每日流水线巡检。');
   }
 
+  const statusCounts = failures.reduce((acc, task) => {
+    if (!acc[task.status]) acc[task.status] = 0;
+    acc[task.status] += 1;
+    return acc;
+  }, {});
+  const statusPieces = [
+    statusCounts.failed ? `失败 ${statusCounts.failed} 个` : '',
+    statusCounts.degraded ? `降级 ${statusCounts.degraded} 个` : '',
+    statusCounts.interrupted ? `中断 ${statusCounts.interrupted} 个` : '',
+  ].filter(Boolean);
+
   return {
-    items: failed,
+    items: failures,
     byReason,
-    latestFailure: failed[0] || null,
+    latestFailure: failures[0] || null,
     recommendations,
-    summaryText: failed.length
-      ? `最近失败任务 ${failed.length} 个，主要原因：${byReason.slice(0, 3).map((row) => `${row.reason} ${row.count} 个`).join('，')}。`
+    summaryText: failures.length
+      ? `最近异常任务 ${failures.length} 个（${statusPieces.join('，')}），主要原因：${byReason.slice(0, 3).map((row) => `${row.reason} ${row.count} 个`).join('，')}。`
       : '最近没有失败任务。',
   };
 }
@@ -337,6 +353,7 @@ function buildExecutionLoopSummary(input = {}) {
     blockers: failureItems.slice(0, 5).map((task) => ({
       id: task.id,
       type: task.type,
+      status: task.status,
       error: task.error || '失败待复盘',
     })),
     nextPlan: nextItems.length
@@ -396,21 +413,22 @@ function summarizeDailyPlan(options = {}) {
   const summary = summarizeTasks(options);
   const todayTasks = summary.todayTasks || [];
   const failedTasks = todayTasks.filter((task) => task.status === 'failed');
+  const reviewTasks = todayTasks.filter((task) => ['failed', 'degraded', 'interrupted'].includes(task.status));
   const runningTasks = todayTasks.filter((task) => task.status === 'running');
   const completedTasks = todayTasks.filter((task) => task.status === 'completed');
   const recoverableTasks = summary.recoverableTasks || [];
   const byType = summary.byType || [];
 
   const todaySummaryText = [
-    `今天任务 ${summary.counts.today} 个，完成 ${completedTasks.length} 个，失败 ${failedTasks.length} 个，运行中 ${runningTasks.length} 个。`,
+    `今天任务 ${summary.counts.today} 个，完成 ${completedTasks.length} 个，失败 ${failedTasks.length} 个，运行中 ${runningTasks.length} 个，降级 ${Number(summary.counts.degraded || 0)} 个，中断 ${Number(summary.counts.interrupted || 0)} 个，可恢复 ${Number(summary.counts.recoverable || 0)} 个。`,
     byType.length
       ? `重点类型：${byType.slice(0, 3).map((row) => `${row.label} ${row.today || row.total} 个`).join('，')}。`
       : '今天还没有新的任务记录。',
   ].join('');
 
   const tomorrowPlan = [];
-  if (failedTasks.length) {
-    tomorrowPlan.push(`优先复盘失败任务：${failedTasks.slice(0, 2).map((task) => `${formatTaskType(task.type)} ${task.id}`).join('、')}。`);
+  if (reviewTasks.length) {
+    tomorrowPlan.push(`优先复盘失败任务（含降级/中断）：${reviewTasks.slice(0, 2).map((task) => `${formatTaskType(task.type)} ${task.id}`).join('、')}。`);
   }
   if (recoverableTasks.length) {
     tomorrowPlan.push(`恢复中断或超时任务：${recoverableTasks.slice(0, 2).map((task) => `${formatTaskType(task.type)} ${task.id}`).join('、')}。`);
@@ -629,7 +647,7 @@ function summarizeTaskCenterDigest(options = {}) {
     recoverableTypes: proactiveTypes,
   });
   const todayTasks = (summary.todayTasks || []).map(normalizeTaskShape);
-  const failedItems = todayTasks.filter((task) => task.status === 'failed');
+  const failedItems = todayTasks.filter((task) => ['failed', 'degraded', 'interrupted'].includes(task.status));
   const recoverableItems = (summary.recoverableTasks || [])
     .map(normalizeTaskShape)
     .filter((task) => proactiveTypes.includes(task.type));

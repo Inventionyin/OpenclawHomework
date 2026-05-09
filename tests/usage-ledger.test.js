@@ -11,6 +11,7 @@ const {
 
 test('buildUsageLedgerEntry keeps timing and token fields without secrets', () => {
   const entry = buildUsageLedgerEntry({
+    traceId: 'trace-001',
     assistant: 'Hermes',
     route: { agent: 'chat-agent', action: 'chat' },
     modelResult: {
@@ -33,6 +34,7 @@ test('buildUsageLedgerEntry keeps timing and token fields without secrets', () =
 
   assert.deepEqual(entry, {
     timestamp: '2026-05-05T00:00:00.000Z',
+    traceId: 'trace-001',
     assistant: 'Hermes',
     agent: 'chat-agent',
     action: 'chat',
@@ -82,6 +84,7 @@ test('appendUsageLedgerEntry writes one JSON line when enabled', () => {
 
 test('buildUsageLedgerEntry still records latency when provider omits token usage', () => {
   const entry = buildUsageLedgerEntry({
+    trace_id: 'trace-event-2',
     assistant: 'Hermes',
     route: { agent: 'chat-agent', action: 'chat' },
     modelResult: {
@@ -98,6 +101,7 @@ test('buildUsageLedgerEntry still records latency when provider omits token usag
   });
 
   assert.equal(entry.assistant, 'Hermes');
+  assert.equal(entry.traceId, 'trace-event-2');
   assert.equal(entry.model, 'LongCat-Flash-Chat');
   assert.equal(entry.modelElapsedMs, 5000);
   assert.equal(entry.promptChars, 42);

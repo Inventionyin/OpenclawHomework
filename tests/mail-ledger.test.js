@@ -24,6 +24,7 @@ test('appendMailLedgerEntry writes safe email action summary lines', () => {
       action: 'daily',
       provider: 'evanshine',
       sent: true,
+      traceId: 'trace-mail-001',
       subject: '[Daily Summary] 自动化测试日报',
       to: ['1693457391@qq.com', 'agent4.daily@claw.163.com'],
       externalTo: ['1693457391@qq.com'],
@@ -35,6 +36,7 @@ test('appendMailLedgerEntry writes safe email action summary lines', () => {
     assert.equal(entries[0].assistant, 'Hermes');
     assert.equal(entries[0].action, 'daily');
     assert.equal(entries[0].provider, 'evanshine');
+    assert.equal(entries[0].traceId, 'trace-mail-001');
     assert.equal(entries[0].recipientCount, 2);
     assert.deepEqual(entries[0].externalTo, ['1693457391@qq.com']);
     assert.deepEqual(entries[0].archiveTo, ['agent4.daily@claw.163.com']);

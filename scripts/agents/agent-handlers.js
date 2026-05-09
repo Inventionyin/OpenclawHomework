@@ -364,6 +364,43 @@ function formatProtocolAssetReportLines(report = {}) {
   return lines;
 }
 
+function formatBrowserExecutionAssetLines(assets = {}) {
+  const lines = [];
+  const steps = Array.isArray(assets.steps) ? assets.steps : [];
+  const consoleEntries = Array.isArray(assets.console?.entries) ? assets.console.entries : [];
+  const networkEntries = Array.isArray(assets.network?.requests) ? assets.network.requests : [];
+  const protocolCaptured = Array.isArray(assets.protocol?.captured) ? assets.protocol.captured : [];
+  const protocolSaved = Array.isArray(assets.protocol?.saved) ? assets.protocol.saved : [];
+  const screenshotPath = assets.artifacts?.screenshot?.path || '';
+  const files = Array.isArray(assets.artifacts?.files) ? assets.artifacts.files : [];
+
+  lines.push('结构化资产：');
+  lines.push(`- steps：${steps.length}`);
+  steps.slice(0, 6).forEach((step, index) => {
+    lines.push(`  ${index + 1}. ${sanitizeReplyField(step.type || 'step', 40)}${step.detail ? ` - ${sanitizeReplyField(step.detail, 120)}` : ''}`);
+  });
+  lines.push(`- artifacts：${files.length} 个文件${screenshotPath ? `，截图 ${sanitizeReplyField(screenshotPath, 180)}` : ''}`);
+  if (files.length) {
+    lines.push(`  文件：${files.slice(0, 5).map((file) => sanitizeReplyField(file, 120)).join('、')}`);
+  }
+  lines.push(`- console：${consoleEntries.length} 条`);
+  consoleEntries.slice(0, 3).forEach((entry, index) => {
+    lines.push(`  ${index + 1}. ${sanitizeReplyField(entry.type || 'log', 20)} ${sanitizeReplyField(entry.text || '', 160)}`);
+  });
+  lines.push(`- network：${networkEntries.length} 条`);
+  networkEntries.slice(0, 3).forEach((entry, index) => {
+    const method = sanitizeReplyField(entry.method || 'GET', 10);
+    const url = sanitizeReplyField(entry.url || entry.request?.url || '', 180);
+    const status = sanitizeReplyField(entry.status ?? entry.response?.status ?? '-', 10);
+    lines.push(`  ${index + 1}. ${method} ${url} ${status}`);
+  });
+  lines.push(`- protocol：captured ${protocolCaptured.length} 条，saved ${protocolSaved.length} 条`);
+  protocolSaved.slice(0, 3).forEach((entry, index) => {
+    lines.push(`  ${index + 1}. ${sanitizeReplyField(entry.id || entry.file || 'saved', 120)}`);
+  });
+  return lines;
+}
+
 async function buildBrowserAgentReply(route = {}, options = {}) {
   const rawText = route.rawText || options.text || '';
   const baseDiagnosis = buildIntentDiagnosis(rawText, route);
@@ -535,6 +572,10 @@ async function buildBrowserAgentReply(route = {}, options = {}) {
     steps.forEach((step, index) => {
       lines.push(`${index + 1}. ${sanitizeReplyField(step.type || 'step')} - ${sanitizeReplyField(step.detail || step.url || '')}`);
     });
+  }
+
+  if (result.assets) {
+    lines.push('', ...formatBrowserExecutionAssetLines(result.assets));
   }
 
   if (result.mode === 'live' || result.executed) {
