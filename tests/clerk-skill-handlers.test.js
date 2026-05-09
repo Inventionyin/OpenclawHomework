@@ -98,3 +98,44 @@ test('buildClerkSkillReply handles token factory status and daily email', async 
   assert.match(emailReply, /1693457391@qq.com/);
   assert.match(emailReply, /daily@claw.163.com/);
 });
+
+test('buildClerkSkillReply handles skill-flow risk and runner paths', async () => {
+  const blockedReply = await buildClerkSkillReply({
+    action: 'skill-flow',
+  });
+
+  assert.match(blockedReply, /技能流程没有启动/);
+  assert.match(blockedReply, /没有识别到明确的技能名/);
+
+  let flowRequest;
+  const flowReply = await buildClerkSkillReply({
+    action: 'skill-flow',
+    skillId: 'ui-automation',
+    goal: '优化电商 UI 自动化测试',
+  }, {
+    runSkillFlow: async (request) => {
+      flowRequest = request;
+      return {
+        status: 'queued',
+        skillId: request.skillId,
+        task: { id: 'skill-flow-1' },
+        skill: {
+          id: request.skillId,
+          title: 'ui-automation',
+          purpose: '优化电商 UI 自动化测试',
+          steps: [
+            { order: 1, text: '读取技能' },
+            { order: 2, text: '生成计划' },
+          ],
+          safety: ['只记录流程状态'],
+        },
+      };
+    },
+  });
+
+  assert.equal(flowRequest.skillId, 'ui-automation');
+  assert.equal(flowRequest.goal, '优化电商 UI 自动化测试');
+  assert.match(flowReply, /ui-automation/);
+  assert.match(flowReply, /skill-flow-1/);
+  assert.match(flowReply, /读取技能/);
+});
