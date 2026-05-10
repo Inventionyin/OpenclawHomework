@@ -191,6 +191,41 @@ test('runDailyAgentPipeline writes state file when provided', async () => {
   }
 });
 
+test('runDailyAgentPipeline runs memory autopilot as final optional stage', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'daily-pipeline-memory-'));
+  try {
+    const calls = [];
+    const result = await runDailyAgentPipeline({
+      env: {
+        LOCAL_PROJECT_DIR: tempDir,
+        TOKEN_FACTORY_TASK_DIR: join(tempDir, 'tasks'),
+        DAILY_PIPELINE_MEMORY_AUTOPILOT_ENABLED: 'true',
+      },
+      day: '2026-05-10',
+      force: true,
+      runNewsDigest: async () => ({ ok: true }),
+      runTrendIntel: async () => ({ ok: true }),
+      runTrendTokenFactory: async () => ({ ok: true }),
+      runScheduledUi: async () => ({ ok: true }),
+      runScheduledTokenLab: async () => ({ ok: true }),
+      runDigest: async () => ({ ok: true }),
+      runMemoryAutopilot: (options) => {
+        calls.push(options);
+        return { written: true, syncResult: { written: ['Index.md'] } };
+      },
+    });
+
+    assert.equal(result.summary.totalStages, 7);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].event.type, 'daily-pipeline-completed');
+    assert.match(calls[0].event.summary, /completed/);
+    assert.equal(result.stages.at(-1).id, 'memory-autopilot');
+    assert.equal(result.stages.at(-1).status, 'completed');
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('runDailyAgentPipeline returns readable domain summary for trend, token, ui and daily digest', async () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'daily-agent-pipeline-summary-'));
   const result = await runDailyAgentPipeline({

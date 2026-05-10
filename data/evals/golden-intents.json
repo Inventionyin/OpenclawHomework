@@ -1,0 +1,22 @@
+[
+  {
+    "text": "今天项目什么情况？",
+    "expected": { "agent": "clerk-agent", "action": "command-center" }
+  },
+  {
+    "text": "你现在内存多少硬盘多少",
+    "expected": { "agent": "ops-agent", "action": "load-summary" }
+  },
+  {
+    "text": "这个问题以后别再踩坑：UI自动化失败先看Allure",
+    "expected": { "agent": "memory-agent", "action": "remember" }
+  },
+  {
+    "text": "帮我跑一下 main 分支的 UI 自动化冒烟测试",
+    "expected": { "agent": "ui-test-agent", "action": "run" }
+  },
+  {
+    "text": "看看内存、硬盘、今天失败任务和 token 用量",
+    "expected": { "agent": "planner-agent", "action": "multi-intent-plan" }
+  }
+]

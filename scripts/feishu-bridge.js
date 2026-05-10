@@ -84,6 +84,9 @@ const {
   readUsageLedgerEntries,
 } = require('./usage-ledger');
 const {
+  appendAgentTrace,
+} = require('./agent-trace-ledger');
+const {
   appendMailLedgerEntry,
 } = require('./mail-ledger');
 const {
@@ -3368,6 +3371,15 @@ function isSafePlannerRoute(planned = {}) {
   return true;
 }
 
+function appendRouteTrace(env, options = {}, input = {}) {
+  const appender = options.agentTraceAppender || ((entry) => appendAgentTrace(env, entry));
+  try {
+    return appender(input);
+  } catch {
+    return false;
+  }
+}
+
 function toPlannerRoute(planned = {}) {
   return {
     agent: String(planned.agent || 'chat-agent'),
@@ -3945,7 +3957,32 @@ async function executeSafeMultiIntentPlan(route = {}, payload, env, options = {}
 }
 
 async function buildRoutedAgentReply(payload, env, options = {}, route = routeAgentIntent(extractFeishuText(payload))) {
-  const result = await buildRoutedAgentReplyResult(payload, env, options, route);
+  const currentNowMs = typeof options.nowMs === 'function' ? options.nowMs : nowMs;
+  const startedAt = Number(options.timingContext?.startedAt || currentNowMs());
+  let result;
+  try {
+    result = await buildRoutedAgentReplyResult(payload, env, options, route);
+    appendRouteTrace(env, options, {
+      traceId: options.traceId || options.timingContext?.traceId,
+      channel: 'feishu',
+      userText: extractFeishuText(payload),
+      route,
+      status: result?.failed ? 'failed' : 'completed',
+      elapsedMs: Math.max(0, Math.round(currentNowMs() - startedAt)),
+      replyChars: String(result?.replyText || '').length,
+    });
+  } catch (error) {
+    appendRouteTrace(env, options, {
+      traceId: options.traceId || options.timingContext?.traceId,
+      channel: 'feishu',
+      userText: extractFeishuText(payload),
+      route,
+      status: 'failed',
+      elapsedMs: Math.max(0, Math.round(currentNowMs() - startedAt)),
+      error: error.message || error,
+    });
+    throw error;
+  }
   if (shouldRecordRoutedIntentContext(result, route)) {
     recordIntentContext(payload, route, env, options);
   }

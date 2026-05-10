@@ -25,6 +25,9 @@ const {
 const {
   recordTaskEvent,
 } = require('./task-center');
+const {
+  runMemoryAutopilot,
+} = require('./memory-autopilot');
 
 function parseArgs(argv = process.argv.slice(2)) {
   const args = {
@@ -251,6 +254,22 @@ async function runDailyAgentPipeline(options = {}) {
       run: () => (options.runDigest || runDigest)({ day, force: options.force, env }),
     },
   ];
+
+  if (String(env.DAILY_PIPELINE_MEMORY_AUTOPILOT_ENABLED || 'false').toLowerCase() === 'true') {
+    stageDefs.push({
+      id: 'memory-autopilot',
+      label: '自动记忆沉淀',
+      run: () => (options.runMemoryAutopilot || runMemoryAutopilot)({
+        env,
+        event: {
+          type: 'daily-pipeline-completed',
+          taskType: 'daily-pipeline',
+          summary: `daily pipeline completed for ${day}`,
+          timestamp: new Date().toISOString(),
+        },
+      }),
+    });
+  }
 
   const stages = [];
   for (const stage of stageDefs) {

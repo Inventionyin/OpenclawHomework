@@ -788,6 +788,12 @@ test('routeAgentIntent routes natural-language control brain and memory discover
     note: 'UI 自动化失败先看 Allure',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('这个问题以后别再踩坑：UI 自动化失败先看 Allure'), {
+    agent: 'memory-agent',
+    action: 'remember',
+    note: 'UI 自动化失败先看 Allure',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('记住 workflow 今天失败了'), {
     agent: 'memory-agent',
     action: 'remember',

@@ -584,3 +584,13 @@ scripts/
 4. WebUI 总控台
 ```
 
+## 11. Phase 1 落地状态
+
+Phase 1 已选择最关键、能直接提升产品闭环的骨架，而不是把所有开源项目都装进来：
+
+- Agent Trace Ledger：记录 `trace_id`、路由、skill、耗时、状态和错误，先用 JSONL，后续再接 Langfuse。
+- Memory Autopilot：把明确记忆和关键任务事件自动沉淀，借鉴 Mem0/LangMem 的“自动写入、后台整理”思路。
+- Daily Pipeline Memory Stage：每日流水线可选自动触发长期记忆沉淀和 Obsidian 同步，不再要求用户手动说“同步 Obsidian”。
+- Golden Intent Evals：用固定样例检查自然语言路由，借鉴 Promptfoo 的回归评测思路。
+
+暂不直接接入 LangGraph、CrewAI、Graphiti、LiteLLM、Langfuse、Stagehand。它们的思路已经映射到当前架构，等 trace/eval 稳定后再逐步接入。

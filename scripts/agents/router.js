@@ -1199,6 +1199,15 @@ function routeAgentIntent(text, options = {}) {
       requiresAuth: true,
     };
   }
+  const rememberLessonMatch = original.match(/^(?:这个|这次|刚刚|刚才)?.{0,12}(?:以后别再踩坑|以后不要再踩坑|以后别忘|下次别忘)[:：\s]+(.+)$/i);
+  if (rememberLessonMatch) {
+    return {
+      agent: 'memory-agent',
+      action: 'remember',
+      note: rememberLessonMatch[1].trim(),
+      requiresAuth: true,
+    };
+  }
   const earlyEcosystemRoute = routeEcosystemIntent(original);
   if (earlyEcosystemRoute) {
     return earlyEcosystemRoute;

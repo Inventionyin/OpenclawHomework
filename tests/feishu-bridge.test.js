@@ -896,6 +896,50 @@ test('buildRoutedAgentReply records safe non-chat intent context metadata', asyn
   assert.equal(writes[0].route.rawText, undefined);
 });
 
+test('buildRoutedAgentReply writes route trace when trace appender is provided', async () => {
+  const traces = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-trace-route',
+          content: JSON.stringify({ text: '给我一屏看懂今天项目' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+    },
+    {
+      timingContext: { traceId: 'trace-route-1', startedAt: 1000 },
+      nowMs: () => 1123,
+      agentTraceAppender: (entry) => traces.push(entry),
+    },
+    {
+      agent: 'clerk-agent',
+      action: 'command-center',
+      skillId: 'command-center',
+      requiresAuth: true,
+      riskLevel: 'low',
+      autoRun: true,
+      intentSource: 'rules',
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.equal(traces.length, 1);
+  assert.equal(traces[0].traceId, 'trace-route-1');
+  assert.equal(traces[0].route.agent, 'clerk-agent');
+  assert.equal(traces[0].route.action, 'command-center');
+  assert.equal(traces[0].status, 'completed');
+  assert.equal(traces[0].elapsedMs, 123);
+});
+
 test('buildRoutedAgentReply passes capability menu mode to guide builder', async () => {
   const reply = await buildRoutedAgentReply(
     {
