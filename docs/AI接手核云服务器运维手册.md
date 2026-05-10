@@ -612,6 +612,42 @@ node scripts/hot-monitor.js --dry-run --force --env-file /etc/hermes-feishu-brid
 grep -E 'HOT_MONITOR_SEARCH|TAVILY_API_KEY|BRAVE_SEARCH_API_KEY|SERPAPI_API_KEY|HOT_MONITOR_TAVILY|HOT_MONITOR_BRAVE|HOT_MONITOR_SERPAPI|SEARXNG|PROTOCOL_ASSET_DIR' /etc/hermes-feishu-bridge.env | sed -E 's/=.*/=***/'
 ```
 
+### 全球新闻雷达与福利雷达拆分
+
+2026-05-10 后，全球新闻和福利活动不要再混在一个频道里：
+
+- `scripts/world-news-monitor.js`：全球局势、国际热点、财经与产业、科技与 AI、社会文化。输出 `/var/lib/openclaw-homework/world-news-latest.json`，默认每天 09:10、15:10、21:10 推送。
+- `scripts/hot-monitor.js`：福利活动、免费 token、云服务器/GPU/API 额度、试用/内测，以及与本项目强相关的技术线索。输出 `/var/lib/openclaw-homework/hot-monitor-latest.json`，默认每 30 分钟扫描一次。
+
+全球新闻雷达安装或更新：
+
+```bash
+cd /opt/OpenclawHomework
+bash scripts/install-world-news-monitor.sh \
+  --unit-name hermes-world-news-monitor \
+  --env-file /etc/hermes-feishu-bridge.env \
+  --output-file /var/lib/openclaw-homework/world-news-latest.json
+systemctl list-timers '*world-news*' --no-pager
+journalctl -u hermes-world-news-monitor -n 80 --no-pager
+```
+
+可选新闻源配置：
+
+```bash
+WORLD_NEWS_RSS_FEEDS=BBC World|https://feeds.bbci.co.uk/news/world/rss.xml,NPR World|https://feeds.npr.org/1004/rss.xml,Google News World|https://news.google.com/rss/headlines/section/topic/WORLD?hl=zh-CN&gl=HK&ceid=HK:zh-Hans
+WORLD_NEWS_RSS_PER_FEED=6
+WORLD_NEWS_MAX_ITEMS=20
+WORLD_NEWS_FEISHU_NOTIFY_ENABLED=true
+WORLD_NEWS_OUTPUT_FILE=/var/lib/openclaw-homework/world-news-latest.json
+```
+
+排查时先看：
+
+```bash
+node scripts/world-news-monitor.js --dry-run --env-file /etc/hermes-feishu-bridge.env --output-file /tmp/world-news-latest.json
+cat /tmp/world-news-latest.json
+```
+
 电商自动化高级玩法：
 
 ```text

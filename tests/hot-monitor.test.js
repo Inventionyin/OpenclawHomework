@@ -279,7 +279,7 @@ test('scoreHotItem exposes scoring reasons for explainable ranking', () => {
   assert.equal(scored.scoreReasons.some((row) => row.code === 'benefit_keywords'), true);
 });
 
-test('formatHotMonitorMessage separates benefits and technical hotspots', () => {
+test('formatHotMonitorMessage labels the channel as benefit radar while keeping technical candidates separate', () => {
   const text = formatHotMonitorMessage([
     {
       title: 'Free GPU credits',
@@ -299,7 +299,8 @@ test('formatHotMonitorMessage separates benefits and technical hotspots', () => 
     },
   ], { total: 2 }, { assistantName: 'Hermes' });
 
-  assert.match(text, /Hermes 30 分钟热点\/福利雷达/);
+  assert.match(text, /Hermes 福利雷达/);
+  assert.doesNotMatch(text, /30 分钟热点\/福利雷达/);
   assert.match(text, /福利\/免费活动/);
   assert.match(text, /技术热点/);
   assert.match(text, /Free GPU credits/);

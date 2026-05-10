@@ -829,11 +829,11 @@ function selectAlertItems(snapshot = {}, previousState = {}, env = process.env, 
 function formatHotMonitorMessage(alertItems = [], snapshot = {}, options = {}) {
   const assistant = options.assistantName || 'Hermes';
   const lines = [
-    `${assistant} 30 分钟热点/福利雷达`,
+    `${assistant} 福利雷达`,
     `本轮扫描：${snapshot.total || 0} 条，命中：${alertItems.length} 条。`,
   ];
   if (!alertItems.length) {
-    lines.push('没有发现新的高价值热点或福利活动。');
+    lines.push('没有发现新的高价值福利活动或与你项目强相关的技术线索。');
     return lines.join('\n');
   }
   const tech = alertItems.filter((item) => !item.categories?.includes('benefit'));
