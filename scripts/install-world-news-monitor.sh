@@ -6,7 +6,7 @@ PROJECT_DIR="/opt/OpenclawHomework"
 NODE_BIN="/usr/bin/node"
 ENV_FILE="/etc/hermes-feishu-bridge.env"
 OUTPUT_FILE="/var/lib/openclaw-homework/world-news-latest.json"
-ON_CALENDAR="*-*-* 09:10:00,15:10:00,21:10:00"
+ON_CALENDAR="*-*-* 09:10:00,*-*-* 15:10:00,*-*-* 21:10:00"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -32,6 +32,21 @@ fi
 
 mkdir -p "$(dirname "${OUTPUT_FILE}")"
 
+ON_CALENDAR_LINES=""
+IFS=',' read -r -a ON_CALENDAR_ENTRIES <<< "${ON_CALENDAR}"
+for ENTRY in "${ON_CALENDAR_ENTRIES[@]}"; do
+  ENTRY="${ENTRY#"${ENTRY%%[![:space:]]*}"}"
+  ENTRY="${ENTRY%"${ENTRY##*[![:space:]]}"}"
+  if [[ -n "${ENTRY}" ]]; then
+    ON_CALENDAR_LINES+="OnCalendar=${ENTRY}"$'\n'
+  fi
+done
+
+if [[ -z "${ON_CALENDAR_LINES}" ]]; then
+  echo "Missing --on-calendar value." >&2
+  exit 2
+fi
+
 cat > "/etc/systemd/system/${UNIT_NAME}.service" <<EOF
 [Unit]
 Description=OpenclawHomework world news monitor
@@ -50,8 +65,7 @@ cat > "/etc/systemd/system/${UNIT_NAME}.timer" <<EOF
 Description=Run OpenclawHomework world news monitor three times daily
 
 [Timer]
-OnCalendar=${ON_CALENDAR}
-AccuracySec=1min
+${ON_CALENDAR_LINES}AccuracySec=1min
 Persistent=true
 
 [Install]
