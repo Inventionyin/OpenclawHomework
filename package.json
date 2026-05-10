@@ -20,7 +20,8 @@
     "trend:token-factory": "node scripts/trend-token-factory.js",
     "hot:monitor": "node scripts/hot-monitor.js",
     "trigger:ui": "node scripts/trigger-ui-tests.js",
-    "watchdog": "node scripts/server-watchdog.js"
+    "watchdog": "node scripts/server-watchdog.js",
+    "deploy:verify": "node scripts/deploy-and-verify.js"
   },
   "engines": {
     "node": ">=18"

@@ -55,6 +55,62 @@ https://hermes.evanshine.me/webhook/feishu
 - 做代码修改后必须运行 npm test。
 ```
 
+### 一键部署闭环
+
+本地代码提交并推送后，优先使用部署闭环脚本同步两台服务器，避免“GitHub 已更新、服务器还是旧版本”。
+
+脚本位置：
+
+```bash
+node scripts/deploy-and-verify.js
+```
+
+要求：本机 SSH 需要能免密登录两台服务器，推荐使用 SSH key 或 ssh-agent。不要把服务器密码写入仓库。
+
+常用环境变量：
+
+```bash
+DEPLOY_OPENCLAW_HOST=38.76.178.91
+DEPLOY_OPENCLAW_USER=root
+DEPLOY_OPENCLAW_KEY=/path/to/openclaw_key
+DEPLOY_HERMES_HOST=38.76.188.94
+DEPLOY_HERMES_USER=root
+DEPLOY_HERMES_KEY=/path/to/hermes_key
+```
+
+先看计划，不执行：
+
+```bash
+npm run deploy:verify -- --dry-run
+```
+
+同步两台服务器、运行轻量验证、重启飞书桥：
+
+```bash
+npm run deploy:verify
+```
+
+只同步 Hermes：
+
+```bash
+npm run deploy:verify -- --targets hermes
+```
+
+脚本会在每台服务器执行：
+
+```bash
+cd /opt/OpenclawHomework
+git fetch origin main
+git reset --hard origin/main
+node --check scripts/feishu-bridge.js
+node scripts/agent-evals.js
+systemctl restart <role>-feishu-bridge
+systemctl restart <role>-clawemail-inbox-notifier || true
+curl -fsS http://127.0.0.1:8788/health
+```
+
+注意：这个脚本会对服务器上的 `/opt/OpenclawHomework` 执行 `git reset --hard origin/main`，只用于生产部署目录。不要在有未保存实验改动的服务器目录里直接运行。
+
 ## 2. 当前架构
 
 ```text
