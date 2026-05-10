@@ -43,6 +43,26 @@ test('buildIntentDiagnosis explains low-confidence ops request with clearer next
   assert.doesNotMatch(diagnosis.nextStep, /unknown|guide/i);
 });
 
+test('buildIntentDiagnosis supports natural tone for low-confidence ops clarification', () => {
+  const diagnosis = buildIntentDiagnosis(
+    '那个你帮我搞一下',
+    {
+      agent: 'ops-agent',
+      action: 'clarify',
+      target: 'unknown',
+      confidence: 'low',
+      requiresAuth: true,
+    },
+    { tone: 'natural' },
+  );
+
+  assert.equal(diagnosis.intentLabel, '服务器运维操作');
+  assert.equal(diagnosis.canExecute, false);
+  assert.match(diagnosis.reason, /这句有点宽/);
+  assert.doesNotMatch(diagnosis.reason, /我理解你想做的是|这次先不执行/);
+  assert.match(diagnosis.nextStep, /你现在内存多少|看看 Hermes 的服务器状态/);
+});
+
 test('buildIntentDiagnosis explains that daily report route is a preview not a send', () => {
   const diagnosis = buildIntentDiagnosis(
     '文员，把今天 UI 自动化结果发到邮箱',

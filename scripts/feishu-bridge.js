@@ -39,6 +39,7 @@ const {
 const {
   buildExecutionDiagnosisCard,
   buildIntentDiagnosis,
+  inferRouteDisplayName,
 } = require('./agents/intent-diagnoser');
 const {
   findRegisteredSkill,
@@ -4056,7 +4057,13 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
     const registeredSkill = findRegisteredSkill(route.skillId || '')
       || findRegisteredSkillByAction(route.action || '');
     const executionDiagnosisCard = buildExecutionDiagnosisCard(text, route);
+    const diagnosisMode = String(env.FEISHU_EXECUTION_DIAGNOSIS_MODE || 'full').trim().toLowerCase();
+    const riskLevel = route.riskLevel || registeredSkill?.riskLevel || (route.requiresAuth ? 'medium' : 'low');
+    const canUseLightDiagnosis = diagnosisMode === 'light'
+      && route.agent === 'clerk-agent'
+      && riskLevel === 'low';
     const executionPlanCard = shouldShowExecutionPlanCard(env, route)
+      && !canUseLightDiagnosis
       ? buildExecutionPlanCard({
         ...route,
         rawText: text,
@@ -4074,6 +4081,12 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
       ))
       || Boolean(executionPlanCard);
     if (!shouldPrefix) return replyText;
+    if (canUseLightDiagnosis && !routeTaskReceipt) {
+      return [
+        `识别到：${inferRouteDisplayName(route)}`,
+        replyText,
+      ].filter(Boolean).join('\n');
+    }
     const parsedMaxChars = Number(env.FEISHU_EXECUTION_DIAGNOSIS_MAX_REPLY_CHARS || 9000);
     const maxChars = Number.isFinite(parsedMaxChars) && parsedMaxChars > 0 ? parsedMaxChars : 9000;
     const combinedReply = [

@@ -182,10 +182,19 @@ test('runDailyAgentPipeline writes state file when provided', async () => {
     assert.equal(existsSync(stateFile), true);
     const state = JSON.parse(readFileSync(stateFile, 'utf8'));
     assert.equal(state.lastRunDay, '2026-05-06');
+    assert.match(state.runId, /^daily-pipeline-2026-05-06-/);
     assert.equal(state.failedStages, 0);
     assert.equal(state.completedStages, 6);
-    assert.equal(state.stageStatuses.some((stage) => stage.id === 'trend-intel'), true);
-    assert.equal(state.stageStatuses.some((stage) => stage.id === 'trend-token-factory'), true);
+    const trendIntelStage = state.stageStatuses.find((stage) => stage.id === 'trend-intel');
+    const trendTokenStage = state.stageStatuses.find((stage) => stage.id === 'trend-token-factory');
+    assert.equal(Boolean(trendIntelStage), true);
+    assert.equal(Boolean(trendTokenStage), true);
+    assert.equal(typeof trendIntelStage.startedAt, 'string');
+    assert.equal(typeof trendIntelStage.endedAt, 'string');
+    assert.equal(Number.isFinite(trendIntelStage.durationMs), true);
+    const tasks = listTasks(result.env);
+    assert.equal(tasks[0].summary.runId, state.runId);
+    assert.equal(tasks[0].summary.stageDurations.some((stage) => stage.id === 'trend-intel' && Number.isFinite(stage.durationMs)), true);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -280,4 +289,36 @@ test('runDailyAgentPipeline degrades optional ui stage instead of failing pipeli
   assert.equal(uiStage.status, 'degraded');
   assert.equal(uiStage.reason, 'optional_stage_failed');
   assert.equal(result.summary.domains.uiAutomation.status, 'degraded');
+});
+
+test('runDailyAgentPipeline writes ops event when enabled', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'daily-agent-pipeline-ops-events-'));
+  try {
+    const eventsFile = join(tempDir, 'ops-events.jsonl');
+    const result = await runDailyAgentPipeline({
+      force: true,
+      day: '2026-05-06',
+      env: {
+        TOKEN_FACTORY_TASK_DIR: join(tempDir, 'tasks'),
+        OPS_EVENT_LEDGER_ENABLED: 'true',
+        OPS_EVENT_LEDGER_PATH: eventsFile,
+      },
+      runNewsDigest: async () => ({ report: { total: 2 } }),
+      runTrendIntel: async () => ({ report: { total: 2 } }),
+      runTrendTokenFactory: async () => ({ report: { totalJobs: 2 } }),
+      runScheduledUi: async () => ({ dispatched: true }),
+      runScheduledTokenLab: async () => ({ ran: true }),
+      runDigest: async () => ({ sent: true }),
+    });
+
+    const event = JSON.parse(readFileSync(eventsFile, 'utf8').trim());
+    assert.equal(event.module, 'daily-agent-pipeline');
+    assert.equal(event.event, 'completed');
+    assert.equal(event.runId, result.runId);
+    assert.equal(event.status, 'completed');
+    assert.equal(Number.isFinite(event.durationMs), true);
+    assert.equal(event.metadata.totalStages, 6);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 });

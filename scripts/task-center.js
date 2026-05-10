@@ -524,6 +524,9 @@ function normalizeStageStatuses(stages = []) {
       id: String(stage?.id || '').trim(),
       status: String(stage?.status || '').trim() || 'unknown',
       reason: String(stage?.reason || '').trim(),
+      startedAt: String(stage?.startedAt || '').trim(),
+      endedAt: String(stage?.endedAt || '').trim(),
+      durationMs: numberFromSources(stage?.durationMs),
     }))
     .filter((stage) => stage.id);
 }
@@ -557,6 +560,10 @@ function findDailyPipelineTask(env = process.env, options = {}) {
 
 function buildPipelineFailureDiagnosis(summary) {
   const failedStageIds = Array.isArray(summary.failedStageIds) ? summary.failedStageIds : [];
+  const degradedStageIds = Array.isArray(summary.degradedStageIds) ? summary.degradedStageIds : [];
+  if (!failedStageIds.length && !summary.error && degradedStageIds.length) {
+    return `退化完成：${degradedStageIds.slice(0, 3).join('，')} 有降级信号，需要复盘但不阻塞整条流水线。`;
+  }
   if (!failedStageIds.length && !summary.error) {
     return '';
   }
@@ -573,12 +580,17 @@ function buildPipelineFailureDiagnosis(summary) {
 
 function buildPipelineNextAction(summary) {
   const failedStageIds = Array.isArray(summary.failedStageIds) ? summary.failedStageIds : [];
+  const degradedStageIds = Array.isArray(summary.degradedStageIds) ? summary.degradedStageIds : [];
   if (!summary.source?.task && !summary.source?.state) {
     return '尚无每日流水线运行记录，先说：文员，试跑今天的自动流水线。';
   }
   if (summary.failedStages > 0 || failedStageIds.length) {
     const target = failedStageIds.length ? failedStageIds.slice(0, 2).join('、') : '失败阶段';
     return `先修复 ${target}，再说：文员，启动今天的自动流水线。`;
+  }
+  if (summary.pipelineStatus === 'completed_with_degraded' || summary.degradedStages > 0 || degradedStageIds.length) {
+    const target = degradedStageIds.length ? degradedStageIds.slice(0, 2).join('、') : '退化阶段';
+    return `流水线已完成但有退化阶段：${target}。先复盘数据源或可选阶段，再维持定时任务。`;
   }
   if (summary.totalStages && summary.completedStages < summary.totalStages) {
     return '流水线阶段未跑满，先查看对应 systemd/journal 日志，再补跑今天的自动流水线。';
@@ -607,9 +619,15 @@ function summarizeDailyPipeline(options = {}) {
   const stateFailedStageIds = stateStages.length
     ? stateStages.filter((stage) => stage.status === 'failed').map((stage) => stage.id)
     : [];
+  const stateDegradedStageIds = stateStages.length
+    ? stateStages.filter((stage) => stage.status === 'degraded').map((stage) => stage.id)
+    : [];
   const failedStageIds = stateFailedStageIds.length
     ? parseStageIds(stateFailedStageIds)
     : taskFailedStageIds;
+  const degradedStageIds = stateDegradedStageIds.length
+    ? parseStageIds(stateDegradedStageIds)
+    : parseStageIds(task?.summary?.degradedStageIds);
 
   const stateDay = String(state?.lastRunDay || '').trim();
   const taskDay = String(task?.summary?.day || '').trim();
@@ -620,15 +638,20 @@ function summarizeDailyPipeline(options = {}) {
 
   const summary = {
     ...taskSummary,
+    runId: String(state?.runId || task?.summary?.runId || '').trim(),
     day,
     lastRunAt: String(state?.lastRunAt || task?.updatedAt || task?.createdAt || '').trim(),
     taskId: task?.id || null,
     status: task?.status || '',
+    pipelineStatus: String(state?.pipelineStatus || task?.summary?.pipelineStatus || '').trim(),
     totalStages: numberFromSources(state?.totalStages, task?.summary?.totalStages),
     completedStages: numberFromSources(state?.completedStages, task?.summary?.completedStages),
     failedStages: numberFromSources(state?.failedStages, task?.summary?.failedStages, failedStageIds.length),
+    degradedStages: numberFromSources(state?.degradedStages, task?.summary?.degradedStages, degradedStageIds.length),
     failedStageIds,
+    degradedStageIds,
     stageStatuses: stateStages,
+    stageDurations: Array.isArray(state?.stageDurations) ? state.stageDurations : task?.summary?.stageDurations || [],
     source: {
       task: Boolean(task),
       state: Boolean(state),

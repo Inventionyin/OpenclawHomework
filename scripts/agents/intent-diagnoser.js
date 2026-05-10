@@ -200,8 +200,9 @@ function buildOpsClarifyExamples(route = {}) {
   return ['你现在内存多少', '看看 Hermes 的服务器状态', '修复 OpenClaw'];
 }
 
-function buildIntentDiagnosis(text = '', route = {}) {
+function buildIntentDiagnosis(text = '', route = {}, options = {}) {
   const intentLabel = inferIntentLabel(route);
+  const tone = options.tone || route.tone || 'strict';
   const diagnosis = {
     outcome: 'proceed',
     route,
@@ -236,7 +237,9 @@ function buildIntentDiagnosis(text = '', route = {}) {
   if (route.agent === 'ops-agent' && route.action === 'clarify') {
     diagnosis.outcome = 'clarify';
     diagnosis.canExecute = false;
-    diagnosis.reason = '我还不能确定你要做什么运维操作，或者要看哪台服务器，所以这次先不执行，避免误操作。';
+    diagnosis.reason = tone === 'natural'
+      ? '这句有点宽，我需要先确认是查状态、看硬盘，还是重启/修复某台服务器。'
+      : '我还不能确定你要做什么运维操作，或者要看哪台服务器，所以这次先不执行，避免误操作。';
     diagnosis.missing = ['action', 'target'];
     diagnosis.blockedBy = ['low_confidence'];
     diagnosis.nextStep = buildOpsClarifyExamples(route).join(' / ');
@@ -332,4 +335,5 @@ function buildIntentDiagnosis(text = '', route = {}) {
 module.exports = {
   buildExecutionDiagnosisCard,
   buildIntentDiagnosis,
+  inferRouteDisplayName,
 };

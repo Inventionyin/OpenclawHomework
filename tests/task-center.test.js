@@ -513,3 +513,42 @@ test('task center daily pipeline summary degrades when only state file exists', 
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('task center daily pipeline summary highlights degraded completion', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'task-center-daily-pipeline-degraded-'));
+  const stateFile = join(tempDir, 'pipeline-state.json');
+  const env = {
+    TOKEN_FACTORY_TASK_DIR: join(tempDir, 'tasks'),
+    DAILY_AGENT_PIPELINE_STATE_FILE: stateFile,
+  };
+  try {
+    require('node:fs').writeFileSync(stateFile, `${JSON.stringify({
+      runId: 'daily-pipeline-2026-05-06-test',
+      lastRunDay: '2026-05-06',
+      lastRunAt: '2026-05-06T01:08:00.000Z',
+      totalStages: 4,
+      completedStages: 3,
+      failedStages: 0,
+      degradedStages: 1,
+      pipelineStatus: 'completed_with_degraded',
+      stageStatuses: [
+        { id: 'news-digest', status: 'completed', durationMs: 11 },
+        { id: 'trend-intel', status: 'degraded', reason: 'completed_with_degraded_sources', durationMs: 22 },
+        { id: 'scheduled-ui', status: 'completed', durationMs: 33 },
+      ],
+    })}\n`, 'utf8');
+
+    const summary = summarizeDailyPipeline({
+      env,
+      now: new Date('2026-05-06T03:00:00.000Z'),
+    });
+
+    assert.equal(summary.runId, 'daily-pipeline-2026-05-06-test');
+    assert.equal(summary.pipelineStatus, 'completed_with_degraded');
+    assert.equal(summary.degradedStages, 1);
+    assert.match(summary.failureDiagnosis, /退化完成|degraded|trend-intel/);
+    assert.match(summary.nextAction, /退化阶段|trend-intel|复盘/);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});

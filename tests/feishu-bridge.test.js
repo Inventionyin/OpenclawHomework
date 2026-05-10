@@ -1022,6 +1022,54 @@ test('buildRoutedAgentReply prefixes clerk skill replies with execution diagnosi
   assert.match(reply.replyText, /下一步：执行 skill/);
 });
 
+test('buildRoutedAgentReply can use lightweight diagnosis for low-risk clerk skill replies', async () => {
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-skill-diagnosis-light',
+          content: JSON.stringify({ text: '文员，邮箱平台怎么玩' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      FEISHU_EXECUTION_DIAGNOSIS_MODE: 'light',
+    },
+    {
+      buildMailWorkbenchReportFromEnv: () => ({
+        inbox: [],
+        outgoing: [],
+        summary: {
+          inboxCount: 0,
+          sentCount: 0,
+          failedCount: 0,
+          pendingApprovalCount: 0,
+        },
+      }),
+    },
+    {
+      agent: 'clerk-agent',
+      action: 'mailbox-workbench',
+      skillId: 'mailbox-workbench',
+      requiresAuth: true,
+      riskLevel: 'low',
+      autoRun: true,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /^识别到：邮箱工作台/m);
+  assert.doesNotMatch(reply.replyText, /执行前识别/);
+  assert.doesNotMatch(reply.replyText, /风险：low/);
+  assert.match(reply.replyText, /ClawEmail 邮箱工作台/);
+});
+
 test('buildRoutedAgentReply can record registered skill route task when enabled', async () => {
   let recordedRoute = null;
   const reply = await buildRoutedAgentReply(

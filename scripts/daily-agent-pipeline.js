@@ -28,6 +28,9 @@ const {
 const {
   runMemoryAutopilot,
 } = require('./memory-autopilot');
+const {
+  appendOpsEvent,
+} = require('./ops-event-ledger');
 
 function parseArgs(argv = process.argv.slice(2)) {
   const args = {
@@ -127,24 +130,45 @@ async function runTrendIntelStage(options = {}) {
 }
 
 async function runPipelineStage(stage, context) {
+  const startedAt = new Date();
   try {
     const result = await stage.run();
+    const endedAt = new Date();
     return {
       id: stage.id,
       label: stage.label,
       status: 'completed',
       reason: result?.reason || '',
+      startedAt: startedAt.toISOString(),
+      endedAt: endedAt.toISOString(),
+      durationMs: endedAt.getTime() - startedAt.getTime(),
       result,
     };
   } catch (error) {
+    const endedAt = new Date();
     return {
       id: stage.id,
       label: stage.label,
       status: 'failed',
       reason: 'runner_failed',
+      startedAt: startedAt.toISOString(),
+      endedAt: endedAt.toISOString(),
+      durationMs: endedAt.getTime() - startedAt.getTime(),
       error: sanitizeError(error),
     };
   }
+}
+
+function buildRunId(day, now = new Date()) {
+  return `daily-pipeline-${day}-${now.toISOString().replace(/[:.]/g, '-')}`;
+}
+
+function summarizeStageDurations(stages = []) {
+  return stages.map((stage) => ({
+    id: stage.id,
+    status: stage.status,
+    durationMs: Number.isFinite(Number(stage.durationMs)) ? Number(stage.durationMs) : 0,
+  }));
 }
 
 function resolveStageDomainSummary(stages = []) {
@@ -183,6 +207,7 @@ async function runDailyAgentPipeline(options = {}) {
     ...(options.env || {}),
   };
   const day = options.day || getDayKey(new Date(), env.PROACTIVE_DIGEST_TZ_OFFSET_MINUTES || 480);
+  const runId = options.runId || buildRunId(day, options.now || new Date());
   const plan = buildPipelinePlan({ day });
   const stateFile = options.stateFile || env.DAILY_AGENT_PIPELINE_STATE_FILE || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'memory', 'daily-agent-pipeline-state.json');
   if (options.dryRun) {
@@ -190,6 +215,7 @@ async function runDailyAgentPipeline(options = {}) {
       ok: true,
       reason: 'dry_run',
       day,
+      runId,
       env,
       stages: plan.stages.map((stage) => ({ ...stage, status: 'planned' })),
       summary: {
@@ -209,6 +235,7 @@ async function runDailyAgentPipeline(options = {}) {
     now,
     summaryPatch: {
       day,
+      runId,
       totalStages: plan.stages.length,
     },
   }, { env, now });
@@ -273,7 +300,7 @@ async function runDailyAgentPipeline(options = {}) {
 
   const stages = [];
   for (const stage of stageDefs) {
-    const stageResult = await runPipelineStage(stage, { day, env });
+    const stageResult = await runPipelineStage(stage, { day, env, runId });
     if (stageResult.id === 'scheduled-ui' && stageResult.status === 'failed' && truthyEnv(env.DAILY_PIPELINE_UI_OPTIONAL)) {
       stages.push({
         ...stageResult,
@@ -291,12 +318,14 @@ async function runDailyAgentPipeline(options = {}) {
   const ok = failedStages.length === 0;
   const finalEvent = ok ? 'completed' : 'completed_with_failures';
   const domains = resolveStageDomainSummary(stages);
+  const stageDurations = summarizeStageDurations(stages);
   const pipelineStatus = failedStages.length
     ? 'failed'
     : degradedStages.length
       ? 'completed_with_degraded'
       : 'completed';
   writeState(stateFile, {
+    runId,
     lastRunDay: day,
     lastRunAt: new Date().toISOString(),
     totalStages: stages.length,
@@ -305,10 +334,14 @@ async function runDailyAgentPipeline(options = {}) {
     degradedStages: degradedStages.length,
     pipelineStatus,
     domains,
+    stageDurations,
     stageStatuses: stages.map((stage) => ({
       id: stage.id,
       status: stage.status,
       reason: stage.reason || '',
+      startedAt: stage.startedAt,
+      endedAt: stage.endedAt,
+      durationMs: Number.isFinite(Number(stage.durationMs)) ? Number(stage.durationMs) : 0,
     })),
   });
   recordTaskEvent({
@@ -319,20 +352,44 @@ async function runDailyAgentPipeline(options = {}) {
     now: new Date().toISOString(),
     summaryPatch: {
       day,
+      runId,
       totalStages: stages.length,
       completedStages: completedStages.length,
       failedStages: failedStages.length,
       degradedStages: degradedStages.length,
       pipelineStatus,
       domains,
+      stageDurations,
       failedStageIds: failedStages.map((stage) => stage.id).join(','),
     },
     error: failedStages.length ? failedStages.map((stage) => `${stage.id}: ${stage.error || stage.reason}`).join(' | ') : '',
   }, { env });
+  appendOpsEvent(env, {
+    module: 'daily-agent-pipeline',
+    event: finalEvent,
+    runId,
+    status: pipelineStatus,
+    reason: failedStages.length
+      ? 'failed_stages'
+      : degradedStages.length
+        ? 'completed_with_degraded'
+        : 'completed',
+    durationMs: stageDurations.reduce((total, stage) => total + stage.durationMs, 0),
+    metadata: {
+      day,
+      totalStages: stages.length,
+      completedStages: completedStages.length,
+      failedStages: failedStages.length,
+      degradedStages: degradedStages.length,
+      failedStageIds: failedStages.map((stage) => stage.id),
+      degradedStageIds: degradedStages.map((stage) => stage.id),
+    },
+  });
 
   return {
     ok,
     day,
+    runId,
     env,
     stages,
     summary: {
@@ -342,6 +399,7 @@ async function runDailyAgentPipeline(options = {}) {
       degradedStages: degradedStages.length,
       pipelineStatus,
       domains,
+      stageDurations,
     },
   };
 }
@@ -353,6 +411,7 @@ async function main() {
     ok: result.ok,
     reason: result.reason,
     day: result.day,
+    runId: result.runId,
     summary: result.summary,
     stages: result.stages?.map((stage) => ({
       id: stage.id,
