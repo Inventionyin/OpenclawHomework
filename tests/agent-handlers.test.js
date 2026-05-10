@@ -14,6 +14,7 @@ const {
   buildMultiIntentPlanReply,
   buildCapabilityGuideReply,
   buildQuickStartGuide,
+  buildShortCapabilityGuideReply,
   buildBrainGuideReply,
   buildDocAgentReply,
   buildEcosystemAgentReply,
@@ -26,10 +27,10 @@ const {
 } = require('../scripts/agents/agent-handlers');
 
 test('buildCapabilityGuideReply explains practical agent playbook', () => {
-  const reply = buildCapabilityGuideReply('OpenClaw');
+  const reply = buildCapabilityGuideReply('OpenClaw', { mode: 'pro' });
   assert.match(reply, /OpenClaw/);
   assert.match(reply, /大神版玩法菜单/);
-  assert.match(reply, /最快上手/);
+  assert.match(reply, /快速入口/);
   assert.match(reply, /文员，查看任务中枢主控脑/);
   assert.match(reply, /观察 https:\/\/shop\.evanshine\.me\/login 页面结构/);
   assert.match(reply, /日常体检/);
@@ -55,9 +56,20 @@ test('buildCapabilityGuideReply explains practical agent playbook', () => {
   assert.match(reply, /触发：/);
 });
 
+test('buildShortCapabilityGuideReply keeps default help compact', () => {
+  const reply = buildShortCapabilityGuideReply('OpenClaw');
+  assert.match(reply, /OpenClaw 可以直接聊天下任务/);
+  assert.match(reply, /快速入口/);
+  assert.match(reply, /1\. 项目总览/);
+  assert.match(reply, /完整能力：发“大神版菜单”/);
+  assert.doesNotMatch(reply, /Skill 总控菜单/);
+  assert(reply.length < 520);
+});
+
 test('buildQuickStartGuide gives copyable next-step prompts', () => {
   const reply = buildQuickStartGuide();
-  assert.match(reply, /最快上手/);
+  assert.match(reply, /快速入口/);
+  assert.match(reply, /1\. 项目总览/);
   assert.match(reply, /今天项目什么情况/);
   assert.match(reply, /帮我跑一下 main 分支的 UI 自动化冒烟测试/);
   assert.match(reply, /从 https:\/\/shop\.evanshine\.me\/products 提取商品标题和价格/);

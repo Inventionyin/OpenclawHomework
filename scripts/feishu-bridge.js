@@ -1214,12 +1214,10 @@ function parseSmallTalkMessage(text, env = process.env) {
   if (/^(帮助|help|怎么用|使用说明|你会做什么|你能做什么|怎么玩|玩法)[!！。.\s]*$/i.test(normalized)) {
     return [
       `我是 ${assistantName} UI 自动化助手。`,
-      buildQuickStartGuide(),
-      '',
       buildCapabilityGuideReply(assistantName),
       '',
       '绑定权限：绑定我 / whoami',
-      '高级命令：/status /health /logs /exec df -h /peer-status /peer-repair',
+      '高级命令：/status /health /logs /peer-status。完整菜单：大神版菜单',
     ].join('\n');
   }
 

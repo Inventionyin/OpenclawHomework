@@ -157,18 +157,37 @@ function buildDocAgentReply(text, memoryContext = buildMemoryContext()) {
 
 function buildQuickStartGuide() {
   return [
-    '最快上手：',
-    '- 看全局：今天项目什么情况？',
-    '- 看任务脑：文员，查看任务中枢主控脑',
-    '- 跑测试：帮我跑一下 main 分支的 UI 自动化冒烟测试',
-    '- 看页面：观察 https://shop.evanshine.me/login 页面结构',
-    '- 抽页面数据：从 https://shop.evanshine.me/products 提取商品标题和价格',
-    '- 烧 token 学习：文员，烧 token 看新闻',
-    '- 写日报：文员，发送今天日报到邮箱',
+    '快速入口',
+    '1. 项目总览：今天项目什么情况？',
+    '2. 任务中枢：文员，查看任务中枢主控脑',
+    '3. 跑测试：帮我跑一下 main 分支的 UI 自动化冒烟测试',
+    '4. 看页面：观察 https://shop.evanshine.me/login 页面结构',
+    '5. 抽数据：从 https://shop.evanshine.me/products 提取商品标题和价格',
+    '6. 热点学习：文员，烧 token 看新闻',
+    '7. 发日报：文员，发送今天日报到邮箱',
+  ].join('\n');
+}
+
+function buildShortCapabilityGuideReply(assistantName = 'OpenClaw') {
+  return [
+    `${assistantName} 可以直接聊天下任务。`,
+    '',
+    buildQuickStartGuide(),
+    '',
+    '常用说法',
+    '- 服务器状态：你现在内存多少 / 你硬盘还剩多少',
+    '- 邮箱：邮箱平台怎么玩 / 文员，今天邮箱里有哪些任务',
+    '- 知识库/GBrain：把这段经验沉淀到知识库：xxx',
+    '- 生图：生成一张图片：极简科技风商品主图',
+    '',
+    '想看完整能力：发“大神版菜单”。',
   ].join('\n');
 }
 
 function buildCapabilityGuideReply(assistantName = 'OpenClaw', options = {}) {
+  if (options.mode !== 'pro') {
+    return buildShortCapabilityGuideReply(assistantName);
+  }
   const capabilities = listCapabilities();
   const skillMenu = buildRegisteredSkillMenu({ mode: options.mode || 'pro' });
   return [
@@ -1756,6 +1775,7 @@ module.exports = {
   ALLOWED_OPS_ACTIONS,
   buildCapabilityGuideReply,
   buildQuickStartGuide,
+  buildShortCapabilityGuideReply,
   buildBrainGuideReply,
   buildBrowserAgentReply,
   buildChatAgentPrompt,

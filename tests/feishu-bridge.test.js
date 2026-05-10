@@ -171,22 +171,20 @@ test('parseSmallTalkMessage replies to greeting without triggering automation', 
 
 test('parseSmallTalkMessage help includes categorized natural-language examples', () => {
   const reply = parseSmallTalkMessage('帮助');
-  assert.match(reply, /最快上手/);
+  assert.match(reply, /快速入口/);
   assert.match(reply, /今天项目什么情况/);
   assert.match(reply, /观察 https:\/\/shop\.evanshine\.me\/login 页面结构/);
-  assert.match(reply, /看我自己/);
-  assert.match(reply, /硬盘清理/);
-  assert.match(reply, /看对方/);
-  assert.match(reply, /修复 OpenClaw/);
-  assert.match(reply, /文件通道/);
-  assert.match(reply, /微信 Bridge 计划/);
+  assert.match(reply, /服务器状态/);
+  assert.match(reply, /完整能力：发“大神版菜单”/);
+  assert.doesNotMatch(reply, /Skill 总控菜单/);
+  assert(reply.length < 700);
 });
 
 test('parseSmallTalkMessage supports capability discovery phrases', () => {
   const reply = parseSmallTalkMessage('你会做什么');
   assert.match(reply, /UI 自动化/);
   assert.match(reply, /服务器/);
-  assert.match(reply, /记忆/);
+  assert.match(reply, /知识库/);
   assert.match(reply, /邮箱/);
   assert.match(reply, /GBrain|Obsidian/);
 });
