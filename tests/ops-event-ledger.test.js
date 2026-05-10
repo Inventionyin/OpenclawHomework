@@ -9,6 +9,7 @@ const {
   appendOpsEvent,
   readOpsEvents,
   getOpsEventLedgerPath,
+  summarizeOpsEvents,
 } = require('../scripts/ops-event-ledger');
 
 test('buildOpsEventEntry keeps required fields and redacts secret-like metadata', () => {
@@ -85,4 +86,61 @@ test('getOpsEventLedgerPath defaults to data/ops-events/events.jsonl', () => {
   const env = { LOCAL_PROJECT_DIR: 'D:\\tmp\\project' };
   const actual = getOpsEventLedgerPath(env).replace(/\\/g, '/');
   assert.equal(actual, 'D:/tmp/project/data/ops-events/events.jsonl');
+});
+
+test('summarizeOpsEvents aggregates recent failures degraded runs and slow modules', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'ops-event-ledger-summary-'));
+  const file = join(tempDir, 'events.jsonl');
+  const env = {
+    OPS_EVENT_LEDGER_ENABLED: 'true',
+    OPS_EVENT_LEDGER_PATH: file,
+  };
+
+  try {
+    appendOpsEvent(env, {
+      timestamp: '2026-05-10T00:00:00.000Z',
+      module: 'daily-agent-pipeline',
+      event: 'completed',
+      runId: 'run-ok',
+      status: 'completed',
+      durationMs: 100,
+    });
+    appendOpsEvent(env, {
+      timestamp: '2026-05-10T00:10:00.000Z',
+      module: 'daily-agent-pipeline',
+      event: 'completed_with_failures',
+      runId: 'run-fail',
+      status: 'failed',
+      reason: 'scheduled-ui failed with token ghp_secret',
+      durationMs: 900,
+    });
+    appendOpsEvent(env, {
+      timestamp: '2026-05-10T00:20:00.000Z',
+      module: 'hot-monitor',
+      event: 'scan',
+      runId: 'hot-1',
+      status: 'degraded',
+      reason: 'one source timeout',
+      durationMs: 300,
+    });
+
+    const summary = summarizeOpsEvents(env, {
+      since: '2026-05-10T00:05:00.000Z',
+      until: '2026-05-10T00:30:00.000Z',
+      limit: 20,
+    });
+
+    assert.equal(summary.window.scanned, 3);
+    assert.equal(summary.window.matched, 2);
+    assert.equal(summary.totals.total, 2);
+    assert.equal(summary.totals.failed, 1);
+    assert.equal(summary.totals.degraded, 1);
+    assert.equal(summary.byModule['daily-agent-pipeline'].failed, 1);
+    assert.equal(summary.byModule['hot-monitor'].degraded, 1);
+    assert.equal(summary.slowest[0].runId, 'run-fail');
+    assert.equal(summary.failureSamples.find((item) => item.runId === 'run-fail').reason, '[redacted secret-like text]');
+    assert.equal(summary.latestByRunId.some((item) => item.runId === 'hot-1'), true);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 });

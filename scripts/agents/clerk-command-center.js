@@ -12,6 +12,9 @@ const {
   readDailySummarySnapshot,
 } = require('../daily-summary-snapshot');
 const {
+  summarizeOpsEvents,
+} = require('../ops-event-ledger');
+const {
   summarizeDailyPlan,
   summarizeDailyPipeline,
   summarizeTaskCenterBrain,
@@ -276,6 +279,16 @@ function buildClerkCommandCenterState(options = {}) {
     '',
     warnings,
   );
+  const opsEvents = safeReadObject(
+    () => (options.summarizeOpsEvents || summarizeOpsEvents)(env, {
+      until: now.toISOString(),
+      limit: 500,
+      sampleSize: 5,
+    }),
+    {},
+    'ops_events_unavailable',
+    warnings,
+  );
   const runs = Array.isArray(snapshot.runs) ? snapshot.runs : [];
 
   const mergedTasks = mergeTaskDigest(tasks, taskDigest);
@@ -308,6 +321,7 @@ function buildClerkCommandCenterState(options = {}) {
         items: Array.isArray(trendIntel.learningRadar?.items) ? trendIntel.learningRadar.items : [],
       },
     },
+    opsEvents,
     multiAgentSummary: loadMultiAgentSummary(env, options),
     warnings,
   };
@@ -368,6 +382,37 @@ function formatPipelineSignal(pipeline = {}) {
   return `- 每日流水线：${parts.join('，') || '已有记录'}${stageText}`;
 }
 
+function formatOpsEventSignals(opsEvents = {}) {
+  const totals = opsEvents.totals || {};
+  if (!Number(totals.total || 0)) {
+    return ['- 运维事件：暂无可用记录'];
+  }
+  const lines = [
+    `- 运维事件：${Number(totals.total || 0)} 条，失败 ${Number(totals.failed || 0)}，退化 ${Number(totals.degraded || 0)}`,
+  ];
+  const byModule = Object.entries(opsEvents.byModule || {})
+    .sort(([, a], [, b]) => (
+      Number(b.failed || 0) - Number(a.failed || 0)
+      || Number(b.degraded || 0) - Number(a.degraded || 0)
+      || Number(b.total || 0) - Number(a.total || 0)
+    ))
+    .slice(0, 3);
+  if (byModule.length) {
+    lines.push(`- 事件模块：${byModule.map(([name, row]) => `${name} ${row.total || 0} 条/失败 ${row.failed || 0}/退化 ${row.degraded || 0}`).join('；')}`);
+  }
+  const failures = Array.isArray(opsEvents.failureSamples) ? opsEvents.failureSamples : [];
+  if (failures.length) {
+    const first = failures[0];
+    lines.push(`- 最近异常：${first.module || 'unknown'} ${first.event || 'unknown'} ${first.runId || ''}${first.reason ? `：${first.reason}` : ''}`.trim());
+  }
+  const slowest = Array.isArray(opsEvents.slowest) ? opsEvents.slowest : [];
+  if (slowest.length) {
+    const first = slowest[0];
+    lines.push(`- 最慢事件：${first.module || 'unknown'} ${first.event || 'unknown'} ${first.runId || ''} ${Number(first.durationMs || 0)}ms`.trim());
+  }
+  return lines;
+}
+
 function buildClerkCommandCenterReply(options = {}) {
   const state = buildClerkCommandCenterState(options);
   const defaultNextActions = [
@@ -426,6 +471,7 @@ function buildClerkCommandCenterReply(options = {}) {
     formatUiAutomationSignal(state.snapshot.latestRun),
     `- ${state.snapshot.latestRun ? formatLatestRun(state.snapshot.latestRun) : '日报快照：暂无最近 run'}`,
     ...formatTrendRadarSignal(state.trendIntel),
+    ...formatOpsEventSignals(state.opsEvents),
     `- 模型账本：${state.usage.entries.length ? `${state.usage.entries.length} 条，约 ${state.usage.totalTokens} tokens（真实 ${state.usage.realTokens} / 字符估算 ${state.usage.estimatedTokens}）` : '暂无可用记录'}`,
     `- 邮件流水：${state.mail.todayEntries.length ? `今天 ${state.mail.todayEntries.length} 条` : '暂无可用记录'}`,
     ...(state.warnings.length ? [`- 降级提示：${state.warnings.join('、')}`] : []),

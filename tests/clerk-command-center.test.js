@@ -413,6 +413,60 @@ test('buildClerkCommandCenterReply includes explicit ui and trend radar signals'
   assert.match(reply, /借鉴测试用例/);
 });
 
+test('buildClerkCommandCenterReply includes ops event health and slow event summary', () => {
+  const reply = buildClerkCommandCenterReply({
+    now: new Date('2026-05-10T04:00:00.000Z'),
+    summarizeDailyPlan: () => samplePlan(),
+    summarizeTasks: () => sampleTaskSummary(),
+    summarizeOpsEvents: () => ({
+      totals: {
+        total: 3,
+        failed: 1,
+        degraded: 1,
+      },
+      byModule: {
+        'daily-agent-pipeline': {
+          total: 2,
+          failed: 1,
+          degraded: 0,
+          avgDurationMs: 500,
+        },
+        'hot-monitor': {
+          total: 1,
+          failed: 0,
+          degraded: 1,
+          avgDurationMs: 300,
+        },
+      },
+      failureSamples: [
+        {
+          module: 'daily-agent-pipeline',
+          event: 'completed_with_failures',
+          runId: 'run-fail',
+          reason: 'scheduled-ui runner_failed',
+        },
+      ],
+      slowest: [
+        {
+          module: 'daily-agent-pipeline',
+          event: 'completed_with_failures',
+          runId: 'run-fail',
+          durationMs: 900,
+        },
+      ],
+    }),
+    readUsageLedger: () => [],
+    readMailLedger: () => [],
+    readDailySummarySnapshot: () => ({ runs: [] }),
+  });
+
+  assert.match(reply, /运维事件：3 条，失败 1，退化 1/);
+  assert.match(reply, /daily-agent-pipeline/);
+  assert.match(reply, /hot-monitor/);
+  assert.match(reply, /run-fail/);
+  assert.match(reply, /最慢事件/);
+});
+
 test('buildClerkCommandCenterState degrades bad ledgers and broken snapshots', () => {
   const state = buildClerkCommandCenterState({
     summarizeDailyPlan: () => samplePlan(),
