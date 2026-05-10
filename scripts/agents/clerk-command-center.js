@@ -22,6 +22,8 @@ const {
   summarizeTasks,
 } = require('../task-center');
 
+const DEFAULT_PROACTIVE_THINKER_OUTPUT_DIR = '/var/lib/openclaw-homework/proactive-thinker';
+
 function readJsonFileSafe(filePath, readJsonFile) {
   if (typeof readJsonFile === 'function') {
     return readJsonFile(filePath);
@@ -87,8 +89,7 @@ function defaultReadProactiveThinkerReport(env, options = {}) {
   const day = now instanceof Date && Number.isFinite(now.getTime())
     ? now.toISOString().slice(0, 10)
     : new Date().toISOString().slice(0, 10);
-  const outputDir = env.PROACTIVE_THINKER_OUTPUT_DIR
-    || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'proactive-thinker');
+  const outputDir = env.PROACTIVE_THINKER_OUTPUT_DIR || DEFAULT_PROACTIVE_THINKER_OUTPUT_DIR;
   const filePath = env.PROACTIVE_THINKER_LATEST_FILE || joinReportPath(outputDir, `${day}.json`);
   const report = readJsonFileSafe(filePath, options.readJsonFile);
   if (!report || typeof report !== 'object') {

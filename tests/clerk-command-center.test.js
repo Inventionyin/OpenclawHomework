@@ -179,6 +179,27 @@ test('buildClerkCommandCenterState gathers latest proactive thinker report', () 
   assert.equal(state.proactiveThinker.reportPath, '/var/lib/openclaw-homework/proactive-thinker/2026-05-10.md');
 });
 
+test('buildClerkCommandCenterState defaults proactive thinker lookup to production output dir', () => {
+  const state = buildClerkCommandCenterState({
+    env: { LOCAL_PROJECT_DIR: '/workspace/openclaw' },
+    now: new Date('2026-05-10T04:00:00.000Z'),
+    summarizeDailyPlan: () => samplePlan(),
+    summarizeTasks: () => sampleTaskSummary(),
+    readUsageLedger: () => [],
+    readMailLedger: () => [],
+    readDailySummarySnapshot: () => ({ runs: [] }),
+    readJsonFile: (filePath) => {
+      if (String(filePath) === '/var/lib/openclaw-homework/proactive-thinker/2026-05-10.json') {
+        return sampleProactiveThinkerReport();
+      }
+      return null;
+    },
+  });
+
+  assert.equal(state.proactiveThinker.status, 'awaiting_confirmation');
+  assert.equal(state.proactiveThinker.pendingConfirmationCount, 1);
+});
+
 test('buildClerkCommandCenterState enriches task summary from task-center digest when available', () => {
   const state = buildClerkCommandCenterState({
     summarizeDailyPlan: () => samplePlan(),
