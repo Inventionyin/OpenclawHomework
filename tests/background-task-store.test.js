@@ -16,8 +16,13 @@ test('background task store creates updates and reads latest task', () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'task-store-'));
   const env = { TOKEN_FACTORY_TASK_DIR: tempDir };
   try {
-    const task = createTask({ id: 'task-a', now: '2026-05-06T00:00:00.000Z' }, env);
+    const task = createTask({
+      id: 'task-a',
+      now: '2026-05-06T00:00:00.000Z',
+      metadata: { routeKind: 'skill' },
+    }, env);
     assert.equal(task.status, 'queued');
+    assert.equal(task.metadata.routeKind, 'skill');
 
     updateTask('task-a', {
       status: 'completed',
@@ -26,6 +31,7 @@ test('background task store creates updates and reads latest task', () => {
     }, env);
 
     assert.equal(readTask('task-a', env).status, 'completed');
+    assert.equal(readTask('task-a', env).metadata.routeKind, 'skill');
     assert.equal(getLatestTask(env).id, 'task-a');
     assert.equal(getLatestTask(env).summary.totalTokens, 42);
   } finally {

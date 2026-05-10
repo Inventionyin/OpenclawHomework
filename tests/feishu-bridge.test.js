@@ -1015,6 +1015,63 @@ test('buildRoutedAgentReply prefixes clerk skill replies with execution diagnosi
   assert.match(reply.replyText, /邮箱工作台/);
   assert.match(reply.replyText, /clerk-agent \/ mailbox-workbench/);
   assert.match(reply.replyText, /风险：low/);
+  assert.match(reply.replyText, /执行计划卡/);
+  assert.match(reply.replyText, /下一步：执行 skill/);
+});
+
+test('buildRoutedAgentReply can record registered skill route task when enabled', async () => {
+  let recordedRoute = null;
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-skill-task-record',
+          content: JSON.stringify({ text: '文员，邮箱平台怎么玩' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      FEISHU_ROUTE_TASK_RECORD_ENABLED: 'true',
+    },
+    {
+      buildMailWorkbenchReportFromEnv: () => ({
+        inbox: [],
+        outgoing: [],
+        summary: {
+          inboxCount: 0,
+          sentCount: 0,
+          failedCount: 0,
+          pendingApprovalCount: 0,
+        },
+      }),
+      routeTaskRecorder: (route) => {
+        recordedRoute = route;
+        return {
+          id: 'route-task-1',
+          type: 'skill:mailbox-workbench',
+          status: 'queued',
+        };
+      },
+    },
+    {
+      agent: 'clerk-agent',
+      action: 'mailbox-workbench',
+      skillId: 'mailbox-workbench',
+      requiresAuth: true,
+      riskLevel: 'low',
+      autoRun: true,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.equal(recordedRoute.skillId, 'mailbox-workbench');
+  assert.match(reply.replyText, /任务中枢：已记录 route-task-1/);
 });
 
 test('buildRoutedAgentReply prefixes task center brain replies with execution diagnosis card', async () => {
@@ -1088,6 +1145,8 @@ test('buildRoutedAgentReply can sync Obsidian memory vault through memory agent'
   );
 
   assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /执行计划卡/);
+  assert.match(reply.replyText, /Obsidian 记忆同步/);
   assert.match(reply.replyText, /Obsidian 记忆库已同步/);
   assert.match(reply.replyText, /\/tmp\/obsidian-vault/);
 });
@@ -2765,6 +2824,74 @@ test('buildRoutedAgentReply can send clerk daily summary email to explicit user 
   assert.match(reply.replyText, /执行前识别/);
   assert.match(reply.replyText, /clerk-agent \/ daily-email/);
   assert.match(reply.replyText, /1693457391@qq\.com/);
+});
+
+test('buildRoutedAgentReply prefixes browser runtime plan card for observe action', async () => {
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-browser-runtime-plan-card',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '观察 https://shop.evanshine.me/login 页面结构' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+    },
+    {},
+    {
+      agent: 'browser-agent',
+      action: 'browser-observe',
+      targetUrl: 'https://shop.evanshine.me/login',
+      requiresAuth: true,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /执行计划卡｜Browser Runtime/);
+  assert.match(reply.replyText, /操作：observe/);
+  assert.match(reply.replyText, /shop\.evanshine\.me\/login/);
+  assert.match(reply.replyText, /Browser Runtime dry-run/);
+});
+
+test('buildRoutedAgentReply shows browser runtime plan card for legacy browser dry-run route', async () => {
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-browser-dry-run-plan-card',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '观察 https://shop.evanshine.me/login 页面结构' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_ALLOWED_USER_IDS: 'user-a',
+    },
+    {},
+    {
+      agent: 'browser-agent',
+      action: 'browser-dry-run',
+      requiresAuth: true,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.match(reply.replyText, /执行计划卡｜Browser Runtime/);
+  assert.match(reply.replyText, /操作：observe/);
+  assert.match(reply.replyText, /浏览器自动化计划/);
 });
 
 test('buildRoutedAgentReply warns when clerk daily email recipient is invalid', async () => {

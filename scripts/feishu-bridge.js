@@ -87,6 +87,12 @@ const {
   appendAgentTrace,
 } = require('./agent-trace-ledger');
 const {
+  buildExecutionPlanCard,
+} = require('./execution-plan-card');
+const {
+  recordRouteTask,
+} = require('./route-task-planner');
+const {
   appendMailLedgerEntry,
 } = require('./mail-ledger');
 const {
@@ -3849,8 +3855,51 @@ const MULTI_INTENT_EXECUTION_ALLOWLIST = new Set([
   'browser-agent:protocol-assets-to-tests',
 ]);
 
+const BROWSER_RUNTIME_ACTIONS = new Set([
+  'browser-observe',
+  'browser-act',
+  'browser-extract',
+  'browser-dry-run',
+  'observe',
+  'act',
+  'extract',
+]);
+
 function isExecutableMultiIntent(route = {}) {
   return MULTI_INTENT_EXECUTION_ALLOWLIST.has(`${route.agent}:${route.action}`);
+}
+
+function isRouteExecutionPlanCandidate(route = {}) {
+  if (!route || typeof route !== 'object') return false;
+  if (BROWSER_RUNTIME_ACTIONS.has(String(route.action || '').trim())) return true;
+  return Boolean(findRegisteredSkill(route.skillId || '') || findRegisteredSkillByAction(route.action || ''));
+}
+
+function shouldShowExecutionPlanCard(env = process.env, route = {}) {
+  if (String(env.FEISHU_EXECUTION_PLAN_CARD_ENABLED ?? 'true').toLowerCase() === 'false') {
+    return false;
+  }
+  return isRouteExecutionPlanCandidate(route);
+}
+
+function shouldRecordRouteTask(env = process.env, route = {}) {
+  if (!isRouteExecutionPlanCandidate(route)) return false;
+  return String(env.FEISHU_ROUTE_TASK_RECORD_ENABLED || env.ROUTE_TASK_RECORD_ENABLED || 'false').toLowerCase() === 'true';
+}
+
+function buildRouteTaskReceipt(route = {}, env = process.env, options = {}) {
+  if (!shouldRecordRouteTask(env, route)) return '';
+  const recorder = options.routeTaskRecorder || recordRouteTask;
+  try {
+    const task = recorder(route, {
+      env,
+      now: options.now,
+      createTask: options.createTask,
+    });
+    return task?.id ? `任务中枢：已记录 ${task.id}（${task.type || 'route'} / ${task.status || 'unknown'}）` : '';
+  } catch (error) {
+    return `任务中枢：记录失败（${redactPeerOutput(error.message || error)}）`;
+  }
 }
 
 function formatMultiIntentExecutionReply(results = []) {
@@ -4004,16 +4053,33 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
     const registeredSkill = findRegisteredSkill(route.skillId || '')
       || findRegisteredSkillByAction(route.action || '');
     const executionDiagnosisCard = buildExecutionDiagnosisCard(text, route);
+    const executionPlanCard = shouldShowExecutionPlanCard(env, route)
+      ? buildExecutionPlanCard({
+        ...route,
+        rawText: text,
+      })
+      : '';
+    const routeTaskReceipt = buildRouteTaskReceipt({
+      ...route,
+      rawText: text,
+    }, env, options);
     const shouldPrefix = route.agent === 'capability-agent'
       || (route.agent === 'clerk-agent' && (
         route.skillId
         || registeredSkill?.agent === route.agent
         || route.action === 'task-center-brain'
-      ));
+      ))
+      || Boolean(executionPlanCard);
     if (!shouldPrefix) return replyText;
     const parsedMaxChars = Number(env.FEISHU_EXECUTION_DIAGNOSIS_MAX_REPLY_CHARS || 9000);
     const maxChars = Number.isFinite(parsedMaxChars) && parsedMaxChars > 0 ? parsedMaxChars : 9000;
-    const combinedReply = [executionDiagnosisCard, '', replyText].join('\n');
+    const combinedReply = [
+      executionDiagnosisCard,
+      executionPlanCard,
+      routeTaskReceipt,
+      '',
+      replyText,
+    ].filter(Boolean).join('\n');
     if (combinedReply.length > maxChars) {
       const suffix = '...(回复过长，已截断)';
       const compactCard = [
@@ -4068,17 +4134,18 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
   }
 
   if (route.agent === 'memory-agent') {
+    const memoryReply = await buildMemoryAgentReply(route, undefined, {
+      assistantName: getAssistantName(env),
+      env,
+      obsidianMemorySync: options.obsidianMemorySync,
+      memoryDir: options.memoryDir,
+      vaultDir: options.vaultDir,
+      now: options.now,
+      summarizeTaskCenterBrain: options.summarizeTaskCenterBrain,
+    });
     return {
       handled: true,
-      replyText: await buildMemoryAgentReply(route, undefined, {
-        assistantName: getAssistantName(env),
-        env,
-        obsidianMemorySync: options.obsidianMemorySync,
-        memoryDir: options.memoryDir,
-        vaultDir: options.vaultDir,
-        now: options.now,
-        summarizeTaskCenterBrain: options.summarizeTaskCenterBrain,
-      }),
+      replyText: withExecutionDiagnosis(memoryReply),
     };
   }
 
@@ -4158,7 +4225,7 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
       });
       return {
         handled: true,
-        replyText: buildDifyTestingAssistantReply({ ...route, rawText: text }, result),
+        replyText: withExecutionDiagnosis(buildDifyTestingAssistantReply({ ...route, rawText: text }, result)),
       };
     }
     return {
@@ -4168,32 +4235,33 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
   }
 
   if (route.agent === 'browser-agent') {
+    const browserReply = await buildBrowserAgentReply({ ...route, rawText: text }, {
+      env,
+      text,
+      browserAutomationRunner: options.browserAutomationRunner,
+      browserFactory: options.browserFactory,
+      playwrightAdapter: options.playwrightAdapter,
+      protocolAssetSaver: options.protocolAssetSaver || ((asset) => saveProtocolAsset(asset, { env })),
+      protocolAssetReporter: options.protocolAssetReporter || ((request = {}) => {
+        const report = buildProtocolAssetReport({ text: request.query || text }, { env });
+        return {
+          summary: [
+            `总数 ${report.total}`,
+            `方法 ${Object.entries(report.byMethod || {}).map(([key, value]) => `${key}:${value}`).join('、') || '无'}`,
+            `状态 ${Object.entries(report.byStatusClass || {}).map(([key, value]) => `${key}:${value}`).join('、') || '无'}`,
+          ].join('；'),
+          lines: (report.recent || []).map((item, index) => `${index + 1}. ${item.method} ${item.path} ${item.status} ${item.id}`),
+        };
+      }),
+      protocolTestCaseBuilder: options.protocolTestCaseBuilder || ((request = {}) => buildProtocolTestCases(
+        { text: request.query || text },
+        { env, limit: 10 },
+      )),
+      screenshotPath: options.screenshotPath,
+    });
     return {
       handled: true,
-      replyText: await buildBrowserAgentReply({ ...route, rawText: text }, {
-        env,
-        text,
-        browserAutomationRunner: options.browserAutomationRunner,
-        browserFactory: options.browserFactory,
-        playwrightAdapter: options.playwrightAdapter,
-        protocolAssetSaver: options.protocolAssetSaver || ((asset) => saveProtocolAsset(asset, { env })),
-        protocolAssetReporter: options.protocolAssetReporter || ((request = {}) => {
-          const report = buildProtocolAssetReport({ text: request.query || text }, { env });
-          return {
-            summary: [
-              `总数 ${report.total}`,
-              `方法 ${Object.entries(report.byMethod || {}).map(([key, value]) => `${key}:${value}`).join('、') || '无'}`,
-              `状态 ${Object.entries(report.byStatusClass || {}).map(([key, value]) => `${key}:${value}`).join('、') || '无'}`,
-            ].join('；'),
-            lines: (report.recent || []).map((item, index) => `${index + 1}. ${item.method} ${item.path} ${item.status} ${item.id}`),
-          };
-        }),
-        protocolTestCaseBuilder: options.protocolTestCaseBuilder || ((request = {}) => buildProtocolTestCases(
-          { text: request.query || text },
-          { env, limit: 10 },
-        )),
-        screenshotPath: options.screenshotPath,
-      }),
+      replyText: withExecutionDiagnosis(browserReply),
     };
   }
 

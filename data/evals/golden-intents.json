@@ -18,5 +18,37 @@
   {
     "text": "看看内存、硬盘、今天失败任务和 token 用量",
     "expected": { "agent": "planner-agent", "action": "multi-intent-plan" }
+  },
+  {
+    "text": "观察 https://shop.evanshine.me/login 页面结构",
+    "expected": { "agent": "browser-agent", "action": "browser-dry-run" }
+  },
+  {
+    "text": "抓一下 https://github.com/microsoft/RD-Agent 正文",
+    "expected": { "agent": "clerk-agent", "action": "web-content-fetch" }
+  },
+  {
+    "text": "请根据需求文档生成测试用例",
+    "expected": { "agent": "qa-agent", "action": "dify-testing-assistant" }
+  },
+  {
+    "text": "邮箱平台怎么玩",
+    "expected": { "agent": "qa-agent", "action": "email-playbook" }
+  },
+  {
+    "text": "文员，邮箱平台现在怎么结合起来玩",
+    "expected": { "agent": "clerk-agent", "action": "mailbox-workbench" }
+  },
+  {
+    "text": "同步 Obsidian 记忆库",
+    "expected": { "agent": "memory-agent", "action": "obsidian-sync" }
+  },
+  {
+    "text": "烧 token 看新闻",
+    "expected": { "agent": "clerk-agent", "action": "trend-token-factory" }
+  },
+  {
+    "text": "文员，查看任务中枢主控脑",
+    "expected": { "agent": "clerk-agent", "action": "task-center-brain" }
   }
 ]

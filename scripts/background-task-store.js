@@ -41,6 +41,7 @@ function createTask(input = {}, env = process.env) {
     createdAt: now,
     updatedAt: now,
     summary: input.summary || {},
+    metadata: input.metadata || {},
     files: input.files || {},
     error: input.error || '',
   }, env);
