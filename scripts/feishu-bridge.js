@@ -18,6 +18,7 @@ const {
 } = require('./agents/router');
 const {
   buildCapabilityGuideReply,
+  buildQuickStartGuide,
   buildBrowserAgentReply,
   buildChatAgentPrompt,
   buildClerkAgentReply,
@@ -1204,6 +1205,8 @@ function parseSmallTalkMessage(text, env = process.env) {
       '- 看看 Hermes 的服务器状态',
       '- 重启你自己',
       '- 帮我跑一下 main 分支的 UI 自动化冒烟测试',
+      '- 文员，查看任务中枢主控脑',
+      '- 文员，烧 token 看新闻',
       '发“帮助”可以看完整示例。',
     ].join('\n');
   }
@@ -1211,6 +1214,8 @@ function parseSmallTalkMessage(text, env = process.env) {
   if (/^(帮助|help|怎么用|使用说明|你会做什么|你能做什么|怎么玩|玩法)[!！。.\s]*$/i.test(normalized)) {
     return [
       `我是 ${assistantName} UI 自动化助手。`,
+      buildQuickStartGuide(),
+      '',
       buildCapabilityGuideReply(assistantName),
       '',
       '绑定权限：绑定我 / whoami',

@@ -1138,6 +1138,26 @@ test('routeAgentIntent handles boss-style natural-language control phrases', () 
     action: 'guide',
     requiresAuth: false,
   });
+  assert.deepEqual(routeAgentIntent('现在该怎么玩'), {
+    agent: 'capability-agent',
+    action: 'guide',
+    requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('今天可以怎么玩'), {
+    agent: 'capability-agent',
+    action: 'guide',
+    requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('现在能做什么'), {
+    agent: 'capability-agent',
+    action: 'guide',
+    requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('文员，现在该怎么玩'), {
+    agent: 'clerk-agent',
+    action: 'command-center',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('大神版菜单'), {
     agent: 'capability-agent',
     action: 'guide',
@@ -1173,6 +1193,12 @@ test('routeAgentIntent handles boss-style natural-language control phrases', () 
   assert.deepEqual(routeAgentIntent('下一步'), {
     agent: 'chat-agent',
     action: 'chat',
+    requiresAuth: false,
+  });
+  assert.deepEqual(routeAgentIntent('现在项目怎么继续推进'), {
+    agent: 'planner-agent',
+    action: 'clarify',
+    confidence: 'low',
     requiresAuth: false,
   });
 });

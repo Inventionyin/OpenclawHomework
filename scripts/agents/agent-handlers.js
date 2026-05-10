@@ -155,11 +155,26 @@ function buildDocAgentReply(text, memoryContext = buildMemoryContext()) {
   ].join('\n');
 }
 
+function buildQuickStartGuide() {
+  return [
+    '最快上手：',
+    '- 看全局：今天项目什么情况？',
+    '- 看任务脑：文员，查看任务中枢主控脑',
+    '- 跑测试：帮我跑一下 main 分支的 UI 自动化冒烟测试',
+    '- 看页面：观察 https://shop.evanshine.me/login 页面结构',
+    '- 抽页面数据：从 https://shop.evanshine.me/products 提取商品标题和价格',
+    '- 烧 token 学习：文员，烧 token 看新闻',
+    '- 写日报：文员，发送今天日报到邮箱',
+  ].join('\n');
+}
+
 function buildCapabilityGuideReply(assistantName = 'OpenClaw', options = {}) {
   const capabilities = listCapabilities();
   const skillMenu = buildRegisteredSkillMenu({ mode: options.mode || 'pro' });
   return [
     `${assistantName} 大神版玩法菜单：你不用背命令，按目标直接说。`,
+    '',
+    buildQuickStartGuide(),
     '',
     '1) 日常体检（低风险，随问随回）：',
     '- 看我自己：你现在内存多少 / 你硬盘还剩多少 / 你现在卡不卡',
@@ -276,6 +291,8 @@ function buildEcosystemAgentReply(route = {}, options = {}) {
 function buildPlannerClarifyReply(text = '') {
   return [
     '我可以继续，但这个需求有点大，我先帮你拆成可执行方向。',
+    '',
+    buildQuickStartGuide(),
     '',
     '你可以直接说其中一种：',
     '- 升级自然语言：让 OpenClaw/Hermes 更会聊天、更会判断任务',
@@ -1738,6 +1755,7 @@ function buildChatAgentPrompt(text, memoryContext = '') {
 module.exports = {
   ALLOWED_OPS_ACTIONS,
   buildCapabilityGuideReply,
+  buildQuickStartGuide,
   buildBrainGuideReply,
   buildBrowserAgentReply,
   buildChatAgentPrompt,

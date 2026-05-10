@@ -13,6 +13,7 @@ const {
   buildBrowserAgentReply,
   buildMultiIntentPlanReply,
   buildCapabilityGuideReply,
+  buildQuickStartGuide,
   buildBrainGuideReply,
   buildDocAgentReply,
   buildEcosystemAgentReply,
@@ -28,6 +29,9 @@ test('buildCapabilityGuideReply explains practical agent playbook', () => {
   const reply = buildCapabilityGuideReply('OpenClaw');
   assert.match(reply, /OpenClaw/);
   assert.match(reply, /大神版玩法菜单/);
+  assert.match(reply, /最快上手/);
+  assert.match(reply, /文员，查看任务中枢主控脑/);
+  assert.match(reply, /观察 https:\/\/shop\.evanshine\.me\/login 页面结构/);
   assert.match(reply, /日常体检/);
   assert.match(reply, /你现在卡不卡/);
   assert.match(reply, /UI 自动化/);
@@ -49,6 +53,15 @@ test('buildCapabilityGuideReply explains practical agent playbook', () => {
   assert.match(reply, /邮箱协同/);
   assert.match(reply, /UI 自动化执行/);
   assert.match(reply, /触发：/);
+});
+
+test('buildQuickStartGuide gives copyable next-step prompts', () => {
+  const reply = buildQuickStartGuide();
+  assert.match(reply, /最快上手/);
+  assert.match(reply, /今天项目什么情况/);
+  assert.match(reply, /帮我跑一下 main 分支的 UI 自动化冒烟测试/);
+  assert.match(reply, /从 https:\/\/shop\.evanshine\.me\/products 提取商品标题和价格/);
+  assert.match(reply, /文员，发送今天日报到邮箱/);
 });
 
 test('buildBrainGuideReply explains Obsidian and GBrain memory upgrade', () => {

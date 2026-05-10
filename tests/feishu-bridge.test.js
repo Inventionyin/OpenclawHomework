@@ -165,10 +165,15 @@ test('parseSmallTalkMessage replies to greeting without triggering automation', 
   assert.match(reply, /你现在内存多少/);
   assert.match(reply, /哪些东西占硬盘/);
   assert.match(reply, /重启你自己/);
+  assert.match(reply, /文员，查看任务中枢主控脑/);
+  assert.match(reply, /文员，烧 token 看新闻/);
 });
 
 test('parseSmallTalkMessage help includes categorized natural-language examples', () => {
   const reply = parseSmallTalkMessage('帮助');
+  assert.match(reply, /最快上手/);
+  assert.match(reply, /今天项目什么情况/);
+  assert.match(reply, /观察 https:\/\/shop\.evanshine\.me\/login 页面结构/);
   assert.match(reply, /看我自己/);
   assert.match(reply, /硬盘清理/);
   assert.match(reply, /看对方/);

@@ -855,6 +855,9 @@ function routeOfficeIntent(text) {
 
 function routeCapabilityIntent(text) {
   const normalized = String(text ?? '').trim().toLowerCase();
+  if (hasClerkWakeWord(normalized)) {
+    return null;
+  }
   const wantsProMenu = /(大神版菜单|大神菜单|高级菜单|玩法菜单|skill\s*菜单|技能菜单|能力菜单|总控菜单)/i.test(normalized);
   if (wantsProMenu) {
     return {
@@ -867,7 +870,7 @@ function routeCapabilityIntent(text) {
   if (/(你|我)?(现在)?(能|可以|会).{0,12}(做|干|玩).{0,20}(什么|哪些|啥|事情|功能)/i.test(normalized)
     || /(有哪些|有什么).{0,16}(功能|能力|玩法|指令|命令|技能)/i.test(normalized)
     || /^(帮助|help|怎么用|使用说明|你会做什么|你能做什么|怎么玩|玩法)$/i.test(normalized)
-    || /(现在|今天).{0,8}(我|我们).{0,8}(该|可以).{0,8}(怎么玩|怎么用|做什么)/i.test(normalized)) {
+    || /(现在|今天).{0,8}(?:我|我们)?.{0,4}(该|可以|能).{0,8}(怎么玩|怎么用|做什么)/i.test(normalized)) {
     return { agent: 'capability-agent', action: 'guide', requiresAuth: false };
   }
   return null;
@@ -985,6 +988,8 @@ function routeEcosystemIntent(text) {
 function routeBroadPlannerIntent(text) {
   const normalized = String(text ?? '').trim().toLowerCase();
   if (/(帮我|给我|把|将|来).{0,12}(项目|机器人|openclaw|hermes|龙虾|系统).{0,18}(优化|升级|完善|搞好|弄好|改好|二改|重构|增强)/i.test(normalized)
+    || /(项目|openclaw|hermes|龙虾|系统).{0,16}(怎么|如何).{0,12}(继续|推进|往下|下一步|做下去)/i.test(normalized)
+    || /(怎么|如何).{0,12}(继续|推进|往下|下一步|做下去).{0,16}(项目|openclaw|hermes|龙虾|系统)/i.test(normalized)
     || /(搞|做|整|安排).{0,12}(完整|全套|一套|重度).{0,16}(工作流|系统|方案|agent|智能体)/i.test(normalized)
     || /(项目|整体).{0,12}(质量).{0,12}(搞一下|提升|优化|加强)/i.test(normalized)
     || /(ui\s*自动化|自动化|新闻|token).{0,20}(都|一起).{0,10}(安排|规划|统筹)/i.test(normalized)) {
