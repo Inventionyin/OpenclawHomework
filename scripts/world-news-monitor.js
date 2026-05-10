@@ -28,12 +28,12 @@ const CATEGORY_RULES = [
   },
   {
     category: '科技与AI',
-    pattern: /ai|artificial intelligence|chip|semiconductor|technology|tech|software|cyber|data|robot|space|satellite|科技|人工智能|芯片|半导体|软件|网络安全|数据|机器人|航天|卫星/i,
+    pattern: /\bai\b|artificial intelligence|chip|semiconductor|technology|tech|software|cyber|data|robot|space|satellite|科技|人工智能|芯片|半导体|软件|网络安全|数据|机器人|航天|卫星/i,
     why: '适合观察技术趋势、AI 产业变化和可学习的新工具。',
   },
   {
     category: '社会与文化',
-    pattern: /health|climate|education|culture|film|sports|travel|society|science|study|weather|健康|气候|教育|文化|电影|体育|旅行|社会|科学|研究|天气/i,
+    pattern: /health|virus|outbreak|hospital|medic|disease|climate|education|culture|film|sports|travel|society|science|study|weather|健康|病毒|疫情|医院|医疗|疾病|气候|教育|文化|电影|体育|旅行|社会|科学|研究|天气/i,
     why: '信息有现实感，适合拓展视野和找聊天素材。',
   },
 ];

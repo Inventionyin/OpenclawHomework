@@ -78,6 +78,20 @@ test('normalizeWorldNewsItems deduplicates and classifies global news separately
   assert.equal(items[1].category, '其他观察');
 });
 
+test('normalizeWorldNewsItems does not classify incidental ai letters inside ordinary words as AI news', () => {
+  const items = normalizeWorldNewsItems([
+    {
+      title: 'Tenerife medics poised to receive virus-hit cruise ship passengers',
+      link: 'https://example.com/virus-cruise',
+      summary: "BBC's Sarah Rainsford reports from the port after a deadly hantavirus outbreak.",
+      source: 'BBC World',
+      publishedAt: 'Sun, 10 May 2026 05:09:52 GMT',
+    },
+  ], { now: new Date('2026-05-10T12:00:00.000Z') });
+
+  assert.equal(items[0].category, '社会与文化');
+});
+
 test('buildWorldNewsDigest creates precise category counts and top picks', () => {
   const digest = buildWorldNewsDigest([
     {
