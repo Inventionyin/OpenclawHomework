@@ -115,6 +115,64 @@ test('buildBrowserAgentReply renders browser automation dry-run plan', async () 
   assert.match(reply, /dry-run/);
 });
 
+test('buildBrowserAgentReply renders Browser Runtime observe dry-run plan', async () => {
+  const reply = await buildBrowserAgentReply({
+    action: 'browser-observe',
+    targetUrl: 'https://shop.evanshine.me/login',
+    rawText: '观察登录页结构和可点击元素',
+  });
+
+  assert.match(reply, /Browser Runtime/);
+  assert.match(reply, /observe/);
+  assert.match(reply, /shop\.evanshine\.me\/login/);
+  assert.match(reply, /observe_dom/);
+  assert.match(reply, /summarize_interactive_elements/);
+});
+
+test('buildBrowserAgentReply accepts async Browser Runtime runner', async () => {
+  const reply = await buildBrowserAgentReply({
+    action: 'browser-observe',
+    rawText: '观察登录页',
+  }, {
+    browserRuntimeRunner: async () => ({
+      mode: 'dry-run',
+      operation: 'observe',
+      blocked: false,
+      plan: { targetUrl: 'https://shop.evanshine.me/login', schemaFields: [] },
+      steps: [{ type: 'observe_dom', detail: 'async runner result' }],
+    }),
+  });
+
+  assert.match(reply, /shop\.evanshine\.me\/login/);
+  assert.match(reply, /async runner result/);
+});
+
+test('buildBrowserAgentReply blocks Browser Runtime act without required input', async () => {
+  const reply = await buildBrowserAgentReply({
+    action: 'browser-act',
+    rawText: '点击登录按钮',
+  });
+
+  assert.match(reply, /Browser Runtime/);
+  assert.match(reply, /已拦截/);
+  assert.match(reply, /targetUrl/);
+});
+
+test('buildBrowserAgentReply renders Browser Runtime extract schema plan', async () => {
+  const reply = await buildBrowserAgentReply({
+    action: 'browser-extract',
+    targetUrl: 'https://projectku.local/products',
+    schema: { fields: { title: 'string', price: 'number' } },
+    rawText: '提取商品标题和价格',
+  });
+
+  assert.match(reply, /Browser Runtime/);
+  assert.match(reply, /extract/);
+  assert.match(reply, /title/);
+  assert.match(reply, /price/);
+  assert.match(reply, /extract_schema/);
+});
+
 test('buildBrowserAgentReply renders blocked state naturally', async () => {
   const reply = await buildBrowserAgentReply({
     action: 'browser-dry-run',

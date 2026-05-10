@@ -54,6 +54,9 @@ const {
   runBrowserAutomationTask,
 } = require('../browser-cdp-executor');
 const {
+  buildBrowserRuntimeDryRun,
+} = require('../browser-runtime');
+const {
   buildIntentDiagnosis,
 } = require('./intent-diagnoser');
 const {
@@ -413,6 +416,44 @@ function formatBrowserExecutionAssetLines(assets = {}) {
 async function buildBrowserAgentReply(route = {}, options = {}) {
   const rawText = route.rawText || options.text || '';
   const baseDiagnosis = buildIntentDiagnosis(rawText, route);
+  if (['browser-observe', 'browser-act', 'browser-extract'].includes(route.action)) {
+    const runner = options.browserRuntimeRunner || buildBrowserRuntimeDryRun;
+    const result = await runner({
+      action: route.action,
+      targetUrl: route.targetUrl || route.url,
+      instruction: route.instruction || rawText,
+      actionText: route.actionText || route.command || rawText,
+      schema: route.schema || route.fields,
+      rawText,
+    });
+    const steps = Array.isArray(result.steps) ? result.steps : [];
+    const lines = [
+      'Browser Runtime dry-run：',
+      `- 操作：${sanitizeReplyField(result.operation || route.action, 80)}`,
+      `- 模式：${sanitizeReplyField(result.mode || 'dry-run', 80)}`,
+      `- 目标：${sanitizeReplyField(result.plan?.targetUrl || '未提供 targetUrl', 240)}`,
+    ];
+
+    if (result.blocked) {
+      lines.push('- 状态：已拦截');
+      lines.push(`- 原因：${sanitizeReplyField(result.reason || '输入不完整或目标不安全', 500)}`);
+      return lines.join('\n');
+    }
+
+    const schemaFields = Array.isArray(result.plan?.schemaFields) ? result.plan.schemaFields : [];
+    if (schemaFields.length) {
+      lines.push(`- 提取字段：${schemaFields.map((field) => sanitizeReplyField(field, 60)).join('、')}`);
+    }
+    if (steps.length) {
+      lines.push('', '步骤：');
+      steps.forEach((step, index) => {
+        lines.push(`${index + 1}. ${sanitizeReplyField(step.type || 'step', 80)} - ${sanitizeReplyField(step.detail || step.targetUrl || '', 240)}`);
+      });
+    }
+    lines.push('', '当前不会启动真实浏览器；这是给后续 Playwright/CDP 执行器消费的安全计划。');
+    return lines.join('\n');
+  }
+
   if (route.action === 'protocol-assets-to-tests') {
     const builder = options.protocolTestCaseBuilder || ((request = {}) => buildProtocolTestCases(
       { text: request.query || '' },
