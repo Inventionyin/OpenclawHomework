@@ -144,6 +144,18 @@ const REGISTERED_SKILLS = [
     triggers: ['创意实验室', '随机玩法', '自己想点好玩的'],
   },
   {
+    id: 'proactive-thinker',
+    name: '主动思考器',
+    action: 'proactive-thinker',
+    agent: 'clerk-agent',
+    description: '汇总新闻、福利、开源趋势、任务中枢和创意实验室，生成“今天自己想了什么”的安全报告。',
+    category: '项目总控',
+    riskLevel: 'low',
+    autoRun: true,
+    requiresAuth: true,
+    triggers: ['主动思考', '主动任务报告', '今天你自己想了什么', '哪些需要我确认'],
+  },
+  {
     id: 'mailbox-workbench',
     name: '邮箱工作台',
     action: 'mailbox-workbench',

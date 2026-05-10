@@ -307,6 +307,12 @@ function looksLikeCreativeLabIntent(text) {
     || /(hermes|openclaw|龙虾|文员|秘书|助理).{0,12}(自己)?(想|安排|挑|选).{0,12}(随机|好玩|开放性|创意).{0,12}(任务|玩法|事情)?/i.test(normalized);
 }
 
+function looksLikeProactiveThinkerIntent(text) {
+  const normalized = String(text ?? '').trim().toLowerCase();
+  return /(主动思考器|主动思考|主动任务报告|今天你自己想了什么|自己想了什么|哪些需要我确认|有什么需要我确认)/i.test(normalized)
+    || /(hermes|openclaw|龙虾|文员|秘书|助理).{0,12}(自己)?(想|思考|琢磨|考虑).{0,12}(什么|了啥|哪些|报告)/i.test(normalized);
+}
+
 function detectDayRange(text) {
   const normalized = String(text ?? '').trim().toLowerCase();
   if (/(昨天|昨日|昨晚|前一天|上一天)/i.test(normalized)) return 'yesterday';
@@ -412,11 +418,17 @@ function routeClerkIntent(text) {
     return null;
   }
 
+  if (/(主动思考|主动任务报告).{0,18}(发到|发给|发送|邮箱|邮件)/i.test(normalized)
+    || /(发到|发给|发送).{0,18}(主动思考|主动任务报告)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'proactive-thinker-email', requiresAuth: true };
+  }
+
   const registeredClerkSkillRoute = routeRegisteredSkillIntent(original, [
     'daily-email',
     'trend-token-factory',
     'trend-intel',
     'token-factory',
+    'proactive-thinker',
   ]);
   if (registeredClerkSkillRoute) {
     return registeredClerkSkillRoute;
@@ -429,6 +441,10 @@ function routeClerkIntent(text) {
 
   if (looksLikeTaskCenterBrainIntent(original)) {
     return { agent: 'clerk-agent', action: 'task-center-brain', requiresAuth: true };
+  }
+
+  if (looksLikeProactiveThinkerIntent(original)) {
+    return { agent: 'clerk-agent', action: 'proactive-thinker', requiresAuth: true };
   }
 
   if (looksLikeCreativeLabIntent(original)) {
@@ -707,6 +723,11 @@ function routeOfficeIntent(text) {
   const recipientMatch = original.match(/\b([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\b/i);
   const recipientEmail = recipientMatch ? recipientMatch[1] : '';
 
+  if (/(主动思考|主动任务报告).{0,18}(发到|发给|发送|邮箱|邮件)/i.test(normalized)
+    || /(发到|发给|发送).{0,18}(主动思考|主动任务报告)/i.test(normalized)) {
+    return { agent: 'clerk-agent', action: 'proactive-thinker-email', requiresAuth: true };
+  }
+
   const workflowEnhancementRoute = routeWorkflowEnhancementIntent(original);
   if (workflowEnhancementRoute) {
     return workflowEnhancementRoute;
@@ -717,6 +738,7 @@ function routeOfficeIntent(text) {
     'trend-token-factory',
     'trend-intel',
     'token-factory',
+    'proactive-thinker',
   ]);
   if (registeredOfficeSkillRoute) {
     return registeredOfficeSkillRoute;
@@ -724,6 +746,10 @@ function routeOfficeIntent(text) {
 
   if (looksLikeTaskCenterBrainIntent(original)) {
     return { agent: 'clerk-agent', action: 'task-center-brain', requiresAuth: true };
+  }
+
+  if (looksLikeProactiveThinkerIntent(original)) {
+    return { agent: 'clerk-agent', action: 'proactive-thinker', requiresAuth: true };
   }
 
   const officeApprovalActionMatch = original.match(/(?:审批|忽略|无视).{0,10}第\s*(\d+)\s*封(?:并发送|并外发|并归档|邮件)?/i);

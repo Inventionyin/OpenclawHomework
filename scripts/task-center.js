@@ -17,6 +17,7 @@ const TYPE_LABELS = {
   'daily-pipeline': '每日流水线',
   'trend-token-factory': '趋势 token 工厂',
   'creative-lab': '创意实验室',
+  'proactive-thinker': '主动思考器',
   'hot-monitor': '热点/福利雷达',
   'research-dev-loop': '研发循环',
   'skill-flow': '技能流程',
@@ -458,7 +459,7 @@ function summarizeDailyPlan(options = {}) {
 }
 
 const PROACTIVE_TYPE_MAP = {
-  proactive: ['token-factory', 'trend-token-factory', 'creative-lab', 'ui-automation', 'daily-digest', 'news-digest', 'token-lab', 'hot-monitor', 'research-dev-loop', 'skill-flow', 'web-content-fetch'],
+  proactive: ['token-factory', 'trend-token-factory', 'creative-lab', 'proactive-thinker', 'ui-automation', 'daily-digest', 'news-digest', 'token-lab', 'hot-monitor', 'research-dev-loop', 'skill-flow', 'web-content-fetch'],
   news: ['news-digest'],
   hot: ['hot-monitor'],
   ui: ['ui-automation'],

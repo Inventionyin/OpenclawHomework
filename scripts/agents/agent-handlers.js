@@ -94,6 +94,10 @@ const {
   formatCreativeLabReply,
   runCreativeLab,
 } = require('../creative-lab');
+const {
+  formatProactiveThinkerReply,
+  runProactiveThinker,
+} = require('../proactive-thinker');
 
 const OPS_SECRET_PATTERNS = [
   /\bauthorization\s*:\s*\S+/i,
@@ -1327,6 +1331,28 @@ function buildClerkAgentReply(route = {}, options = {}) {
       env: options.env || process.env,
       now: options.now || new Date(),
     }));
+  }
+
+  if (route.action === 'proactive-thinker' || route.action === 'proactive-thinker-email') {
+    const runner = options.runProactiveThinker || runProactiveThinker;
+    const result = runner({
+      env: options.env || process.env,
+      now: options.now || new Date(),
+      email: route.action === 'proactive-thinker-email',
+      emailSender: options.emailSender,
+    });
+    return Promise.resolve(result).then((resolved) => {
+      const report = resolved?.report || resolved;
+      const reply = formatProactiveThinkerReply(report);
+      if (route.action !== 'proactive-thinker-email') {
+        return reply;
+      }
+      const emailResult = resolved?.emailResult || {};
+      const status = emailResult.sent
+        ? '邮件状态：已发送。'
+        : `邮件状态：未发送（${sanitizeReplyField(emailResult.reason || 'unknown', 120)}）。`;
+      return `${reply}\n${status}`;
+    });
   }
 
   if (route.action === 'daily-pipeline') {

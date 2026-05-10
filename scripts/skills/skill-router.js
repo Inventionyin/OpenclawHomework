@@ -207,6 +207,20 @@ function buildCreativeLabRoute(text) {
   }, skill);
 }
 
+function buildProactiveThinkerRoute(text) {
+  const normalized = String(text ?? '').trim().toLowerCase();
+  if (!(/(主动思考器|主动思考|主动任务报告|今天你自己想了什么|自己想了什么|哪些需要我确认|有什么需要我确认)/i.test(normalized)
+    || /(hermes|openclaw|龙虾|文员|秘书|助理).{0,12}(自己)?(想|思考|琢磨|考虑).{0,12}(什么|了啥|哪些|报告)/i.test(normalized))) {
+    return null;
+  }
+  const skill = findRegisteredSkill('proactive-thinker');
+  return withSkillMetadata({
+    agent: skill.agent,
+    action: skill.action,
+    skillId: skill.id,
+  }, skill);
+}
+
 function buildMailboxRoute(text) {
   const normalized = String(text ?? '').trim().toLowerCase();
   let skillId = '';
@@ -345,6 +359,7 @@ function routeSkillIntent(text) {
     || buildDifyTestingAssistantRoute(text)
     || buildCommandCenterRoute(text)
     || buildTodoSummaryRoute(text)
+    || buildProactiveThinkerRoute(text)
     || buildCreativeLabRoute(text)
     || buildMailboxRoute(text)
     || buildServerOpsStatusRoute(text)
@@ -364,6 +379,7 @@ module.exports = {
   buildDifyTestingAssistantRoute,
   buildMailboxRoute,
   buildObsidianMemorySyncRoute,
+  buildProactiveThinkerRoute,
   buildResearchDevRoute,
   buildServerOpsStatusRoute,
   buildSkillFlowRoute,

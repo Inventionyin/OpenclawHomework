@@ -4585,6 +4585,9 @@ async function buildRoutedAgentReplyResult(payload, env, options = {}, route = r
       handled: true,
       replyText: withExecutionDiagnosis(await buildClerkAgentReply(route, {
         env,
+        emailSender: options.emailSender
+          ? (message, senderEnv) => options.emailSender(message, senderEnv)
+          : (message, senderEnv) => sendMailboxActionEmail(message, senderEnv, options),
         publishWechatMpArticle: options.publishWechatMpArticle,
       })),
     };

@@ -2877,6 +2877,50 @@ test('buildRoutedAgentReply can send clerk daily summary email to explicit user 
   assert.match(reply.replyText, /1693457391@qq\.com/);
 });
 
+test('buildRoutedAgentReply passes email sender to proactive thinker email route', async () => {
+  const sent = [];
+  const reply = await buildRoutedAgentReply(
+    {
+      event: {
+        message: {
+          message_id: 'msg-proactive-thinker-email',
+          chat_id: 'chat-a',
+          content: JSON.stringify({ text: '文员，把今天主动思考报告发到邮箱' }),
+        },
+        sender: {
+          sender_id: {
+            open_id: 'user-a',
+          },
+        },
+      },
+    },
+    {
+      FEISHU_AUTHORIZED_OPEN_IDS: 'user-a',
+      EMAIL_NOTIFY_ENABLED: 'true',
+      PROACTIVE_THINKER_EMAIL_TO: 'owner@example.com',
+      PROACTIVE_THINKER_OUTPUT_DIR: join(tmpdir(), 'proactive-thinker-bridge-test'),
+    },
+    {
+      emailSender: async (message) => {
+        sent.push(message);
+        return { sent: true };
+      },
+    },
+    {
+      agent: 'clerk-agent',
+      action: 'proactive-thinker-email',
+      requiresAuth: true,
+    },
+  );
+
+  assert.equal(reply.handled, true);
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0].to, ['owner@example.com']);
+  assert.match(sent[0].subject, /主动思考报告/);
+  assert.match(reply.replyText, /Hermes 主动思考器/);
+  assert.match(reply.replyText, /邮件状态：已发送/);
+});
+
 test('buildRoutedAgentReply prefixes browser runtime plan card for observe action', async () => {
   const reply = await buildRoutedAgentReply(
     {
