@@ -132,6 +132,18 @@ const REGISTERED_SKILLS = [
     triggers: ['待办', 'todo', '未完成', '下一步', '今日总结明日计划'],
   },
   {
+    id: 'creative-lab',
+    name: '创意实验室',
+    action: 'creative-lab',
+    agent: 'clerk-agent',
+    description: '从全球新闻、福利雷达和开源趋势里随机挑一个低风险玩法；中高风险只进入待确认。',
+    category: '项目总控',
+    riskLevel: 'low',
+    autoRun: true,
+    requiresAuth: true,
+    triggers: ['创意实验室', '随机玩法', '自己想点好玩的'],
+  },
+  {
     id: 'mailbox-workbench',
     name: '邮箱工作台',
     action: 'mailbox-workbench',

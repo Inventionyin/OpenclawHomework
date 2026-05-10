@@ -25,6 +25,7 @@ test('skill registry exposes workflow enhancement skills with risk metadata', ()
   assert.ok(ids.includes('dify-testing-assistant'));
   assert.ok(ids.includes('trend-intel'));
   assert.ok(ids.includes('trend-token-factory'));
+  assert.ok(ids.includes('creative-lab'));
   assert.ok(ids.includes('token-factory'));
   assert.ok(ids.includes('command-center'));
   assert.ok(ids.includes('todo-summary'));
@@ -41,6 +42,8 @@ test('skill registry exposes workflow enhancement skills with risk metadata', ()
   assert.equal(findRegisteredSkill('command-center').autoRun, true);
   assert.equal(findRegisteredSkill('server-ops-status').agent, 'ops-agent');
   assert.equal(findRegisteredSkill('trend-intel').category, '热点学习');
+  assert.equal(findRegisteredSkill('creative-lab').category, '项目总控');
+  assert.equal(findRegisteredSkill('creative-lab').autoRun, true);
   assert.equal(findRegisteredSkill('mailbox-workbench').category, '邮箱协同');
   assert.equal(findRegisteredSkill('obsidian-memory-sync').category, '长期记忆');
 });
@@ -50,6 +53,7 @@ test('skill registry builds categorized pro menu from registered skills', () => 
 
   assert.match(menu, /Skill 总控菜单/);
   assert.match(menu, /热点学习/);
+  assert.match(menu, /创意实验室/);
   assert.match(menu, /邮箱协同/);
   assert.match(menu, /长期记忆/);
   assert.match(menu, /Obsidian 记忆同步/);
@@ -141,6 +145,15 @@ test('skill router selects office testing and proactive skills', () => {
     requiresAuth: true,
     riskLevel: 'medium',
     autoRun: false,
+  });
+
+  assert.deepEqual(routeSkillIntent('文员，自己想一个随机好玩的任务'), {
+    agent: 'clerk-agent',
+    action: 'creative-lab',
+    skillId: 'creative-lab',
+    requiresAuth: true,
+    riskLevel: 'low',
+    autoRun: true,
   });
 });
 

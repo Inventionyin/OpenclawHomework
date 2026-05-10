@@ -261,6 +261,27 @@ test('task center brain includes trend token factory in proactive history and fa
   }
 });
 
+test('task center labels creative lab tasks', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'task-center-creative-lab-'));
+  const env = { TOKEN_FACTORY_TASK_DIR: tempDir };
+
+  try {
+    createTask({
+      id: 'creative-lab-demo',
+      type: 'creative-lab',
+      now: '2026-05-06T01:00:00.000Z',
+      status: 'awaiting_confirmation',
+    }, env);
+
+    const summary = summarizeTasks({ env });
+    assert.equal(summary.byType.some((row) => row.type === 'creative-lab' && row.label === '创意实验室'), true);
+    assert.equal(summary.counts.awaiting_confirmation, 1);
+    assert.equal(summary.byType.find((row) => row.type === 'creative-lab').awaiting_confirmation, 1);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('task center brain exposes today history failure review and next plan', () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'task-center-brain-'));
   const env = { TOKEN_FACTORY_TASK_DIR: tempDir };

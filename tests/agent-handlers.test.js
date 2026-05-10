@@ -1207,6 +1207,35 @@ test('buildClerkAgentReply explains multi-agent lab before execution', () => {
   assert.match(reply, /report/);
 });
 
+test('buildClerkAgentReply runs creative lab through injected runner', () => {
+  let received;
+  const reply = buildClerkAgentReply({ action: 'creative-lab' }, {
+    env: { LOCAL_PROJECT_DIR: '/tmp/project' },
+    runCreativeLab: (request) => {
+      received = request;
+      return {
+        status: 'awaiting_confirmation',
+        selected: [{
+          title: '核验福利线索：免费 AI 主机',
+          source: 'V2EX',
+          risk: 'medium',
+          reason: '需要人工确认是否过期',
+          suggestedPrompt: '先核验，不自动注册',
+        }],
+        autoRunnable: [],
+        pendingConfirmation: [{ title: '核验福利线索：免费 AI 主机' }],
+        files: { output: '/tmp/project/data/creative-lab/latest.json' },
+      };
+    },
+  });
+
+  assert.equal(received.env.LOCAL_PROJECT_DIR, '/tmp/project');
+  assert.match(reply, /Hermes 创意实验室/);
+  assert.match(reply, /免费 AI 主机/);
+  assert.match(reply, /待确认/);
+  assert.match(reply, /不会自动发信|中风险动作没有自动执行/);
+});
+
 test('buildClerkAgentReply delegates RD-Agent-lite research loop', async () => {
   let received;
   const reply = await buildClerkAgentReply({

@@ -90,6 +90,10 @@ const {
 const {
   publishWechatMpArticle,
 } = require('../wechat-mp-publisher');
+const {
+  formatCreativeLabReply,
+  runCreativeLab,
+} = require('../creative-lab');
 
 const OPS_SECRET_PATTERNS = [
   /\bauthorization\s*:\s*\S+/i,
@@ -1315,6 +1319,14 @@ function buildClerkAgentReply(route = {}, options = {}) {
       '',
       '启动口令：文员，启动高 token 训练场。',
     ].join('\n');
+  }
+
+  if (route.action === 'creative-lab') {
+    const runner = options.runCreativeLab || runCreativeLab;
+    return formatCreativeLabReply(runner({
+      env: options.env || process.env,
+      now: options.now || new Date(),
+    }));
   }
 
   if (route.action === 'daily-pipeline') {

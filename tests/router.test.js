@@ -613,6 +613,16 @@ test('routeAgentIntent routes clerk agent office work requests', () => {
     action: 'multi-agent-lab',
     requiresAuth: true,
   });
+  assert.deepEqual(routeAgentIntent('文员，自己想一个随机好玩的任务'), {
+    agent: 'clerk-agent',
+    action: 'creative-lab',
+    requiresAuth: true,
+  });
+  assert.deepEqual(routeAgentIntent('Hermes 自己想点好玩的开放性玩法'), {
+    agent: 'clerk-agent',
+    action: 'creative-lab',
+    requiresAuth: true,
+  });
   assert.deepEqual(routeAgentIntent('文员，启动 RD-Agent-lite 研发循环，优化 UI 自动化失败复盘'), {
     agent: 'clerk-agent',
     action: 'research-dev-loop',

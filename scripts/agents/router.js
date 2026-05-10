@@ -301,6 +301,12 @@ function looksLikeTaskCenterBrainIntent(text) {
     || /(今天任务).{0,8}(全景图|全景|驾驶舱)/i.test(normalized);
 }
 
+function looksLikeCreativeLabIntent(text) {
+  const normalized = String(text ?? '').trim().toLowerCase();
+  return /(创意实验室|creative\s*lab|随机玩法|开放性玩法|随机任务|自己想点好玩|想一个随机好玩|想点好玩|安排点好玩)/i.test(normalized)
+    || /(hermes|openclaw|龙虾|文员|秘书|助理).{0,12}(自己)?(想|安排|挑|选).{0,12}(随机|好玩|开放性|创意).{0,12}(任务|玩法|事情)?/i.test(normalized);
+}
+
 function detectDayRange(text) {
   const normalized = String(text ?? '').trim().toLowerCase();
   if (/(昨天|昨日|昨晚|前一天|上一天)/i.test(normalized)) return 'yesterday';
@@ -423,6 +429,10 @@ function routeClerkIntent(text) {
 
   if (looksLikeTaskCenterBrainIntent(original)) {
     return { agent: 'clerk-agent', action: 'task-center-brain', requiresAuth: true };
+  }
+
+  if (looksLikeCreativeLabIntent(original)) {
+    return { agent: 'clerk-agent', action: 'creative-lab', requiresAuth: true };
   }
 
   const tokenUsageRoute = buildTokenUsageSummaryRoute(original);
@@ -561,6 +571,10 @@ function routeClerkIntent(text) {
   if (/(启动|开始|跑|执行|开).{0,12}(多\s*agent|多智能体|agent).{0,20}(训练场|实验室|lab|对打|评测|生成|归档)/i.test(normalized)
     || /(多\s*agent|多智能体|agent).{0,20}(训练场|实验室|lab|对打|评测|生成|归档)/i.test(normalized)) {
     return { agent: 'clerk-agent', action: 'multi-agent-lab', requiresAuth: true };
+  }
+
+  if (looksLikeCreativeLabIntent(original)) {
+    return { agent: 'clerk-agent', action: 'creative-lab', requiresAuth: true };
   }
 
   if (looksLikeTaskCenterBrainIntent(original)) {
@@ -1273,6 +1287,10 @@ function routeAgentIntent(text, options = {}) {
   const bossControlRoute = routeBossControlIntent(original);
   if (bossControlRoute) {
     return bossControlRoute;
+  }
+
+  if (looksLikeCreativeLabIntent(original)) {
+    return { agent: 'clerk-agent', action: 'creative-lab', requiresAuth: true };
   }
 
   const capabilityRoute = routeCapabilityIntent(normalized);

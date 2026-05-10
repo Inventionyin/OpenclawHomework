@@ -193,6 +193,20 @@ function buildTodoSummaryRoute(text) {
   }, skill);
 }
 
+function buildCreativeLabRoute(text) {
+  const normalized = String(text ?? '').trim().toLowerCase();
+  if (!(/(创意实验室|creative\s*lab|随机玩法|开放性玩法|随机任务|自己想点好玩|想一个随机好玩|想点好玩|安排点好玩)/i.test(normalized)
+    || /(hermes|openclaw|龙虾|文员|秘书|助理).{0,12}(自己)?(想|安排|挑|选).{0,12}(随机|好玩|开放性|创意).{0,12}(任务|玩法|事情)?/i.test(normalized))) {
+    return null;
+  }
+  const skill = findRegisteredSkill('creative-lab');
+  return withSkillMetadata({
+    agent: skill.agent,
+    action: skill.action,
+    skillId: skill.id,
+  }, skill);
+}
+
 function buildMailboxRoute(text) {
   const normalized = String(text ?? '').trim().toLowerCase();
   let skillId = '';
@@ -331,6 +345,7 @@ function routeSkillIntent(text) {
     || buildDifyTestingAssistantRoute(text)
     || buildCommandCenterRoute(text)
     || buildTodoSummaryRoute(text)
+    || buildCreativeLabRoute(text)
     || buildMailboxRoute(text)
     || buildServerOpsStatusRoute(text)
     || buildObsidianMemorySyncRoute(text)
@@ -344,6 +359,7 @@ function routeSkillIntent(text) {
 
 module.exports = {
   buildCommandCenterRoute,
+  buildCreativeLabRoute,
   buildDailyEmailRoute,
   buildDifyTestingAssistantRoute,
   buildMailboxRoute,
