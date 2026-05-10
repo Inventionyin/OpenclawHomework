@@ -58,6 +58,7 @@ function summarizeDashboardState(rawState = {}, env = process.env, options = {})
   const mail = rawState.mail || {};
   const pipeline = rawState.pipeline || {};
   const snapshot = rawState.snapshot || {};
+  const proactiveThinker = rawState.proactiveThinker || {};
 
   return {
     ok: true,
@@ -109,6 +110,14 @@ function summarizeDashboardState(rawState = {}, env = process.env, options = {})
       latestRun: snapshot.latestRun || null,
       runCount: toArray(snapshot.runs).length,
     },
+    proactiveThinker: {
+      status: proactiveThinker.status || 'missing',
+      summary: proactiveThinker.summary || '',
+      generatedAt: proactiveThinker.generatedAt || '',
+      pendingConfirmationCount: Number(proactiveThinker.pendingConfirmationCount || 0),
+      reportPath: proactiveThinker.reportPath || '',
+      topSignals: trimList(proactiveThinker.topSignals, 5),
+    },
     warnings: trimList(rawState.warnings, 8),
   };
 }
@@ -153,11 +162,25 @@ function renderList(items = [], formatter = (item) => item) {
   return items.map((item) => `<li>${escapeHtml(formatter(item))}</li>`).join('');
 }
 
+function formatProactiveStatus(proactiveThinker = {}) {
+  if (!proactiveThinker || proactiveThinker.status === 'missing') {
+    return '暂无报告';
+  }
+  if (proactiveThinker.status === 'awaiting_confirmation') {
+    return `待确认 ${formatNumber(proactiveThinker.pendingConfirmationCount)} 项`;
+  }
+  if (proactiveThinker.status === 'completed') {
+    return '已完成';
+  }
+  return proactiveThinker.status || 'unknown';
+}
+
 function buildDashboardHtml(state = {}) {
   const counts = state.tasks?.counts || {};
   const latest = state.tasks?.latest || {};
   const latestRun = state.snapshot?.latestRun || {};
   const pipeline = state.pipeline || {};
+  const proactiveThinker = state.proactiveThinker || {};
   const generatedAt = state.generatedAt ? new Date(state.generatedAt).toLocaleString('zh-CN') : '';
 
   return `<!doctype html>
@@ -371,6 +394,14 @@ function buildDashboardHtml(state = {}) {
         <h2>最近 UI 自动化</h2>
         <p class="muted">${escapeHtml(latestRun.conclusion || latest.status || '暂无记录')}</p>
         ${latestRun.runUrl ? `<a href="${escapeHtml(latestRun.runUrl)}" target="_blank" rel="noreferrer">打开 GitHub Run</a>` : '<span class="muted">暂无链接</span>'}
+      </div>
+
+      <div class="panel wide">
+        <h2>主动思考器</h2>
+        <p class="muted">状态：${escapeHtml(formatProactiveStatus(proactiveThinker))}</p>
+        <p>${escapeHtml(proactiveThinker.summary || '暂无主动思考摘要')}</p>
+        ${proactiveThinker.reportPath ? `<p class="mono muted">${escapeHtml(proactiveThinker.reportPath)}</p>` : ''}
+        <ul>${renderList(proactiveThinker.topSignals || [], (item) => `${item.title || '未命名线索'}${item.source ? ` · ${item.source}` : ''}`)}</ul>
       </div>
 
       <div class="panel full">

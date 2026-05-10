@@ -77,6 +77,70 @@ function defaultReadTrendIntelReport(env, options = {}) {
   return readJsonFileSafe(filePath, options.readJsonFile);
 }
 
+function joinReportPath(baseDir, filename) {
+  const base = String(baseDir || '').replace(/[\\/]+$/, '');
+  return base ? `${base}/${filename}` : filename;
+}
+
+function defaultReadProactiveThinkerReport(env, options = {}) {
+  const now = options.now || new Date();
+  const day = now instanceof Date && Number.isFinite(now.getTime())
+    ? now.toISOString().slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
+  const outputDir = env.PROACTIVE_THINKER_OUTPUT_DIR
+    || join(env.LOCAL_PROJECT_DIR || process.cwd(), 'data', 'proactive-thinker');
+  const filePath = env.PROACTIVE_THINKER_LATEST_FILE || joinReportPath(outputDir, `${day}.json`);
+  const report = readJsonFileSafe(filePath, options.readJsonFile);
+  if (!report || typeof report !== 'object') {
+    return null;
+  }
+  return {
+    ...report,
+    __filePath: filePath,
+  };
+}
+
+function collectProactiveSignals(report = {}) {
+  const sections = report.sections || {};
+  return [
+    ...(Array.isArray(sections.worldNews?.items) ? sections.worldNews.items : []),
+    ...(Array.isArray(sections.hotMonitor?.items) ? sections.hotMonitor.items : []),
+    ...(Array.isArray(sections.trendIntel?.items) ? sections.trendIntel.items : []),
+    ...(Array.isArray(report.creative?.selected) ? report.creative.selected : []),
+  ].slice(0, 5).map((item = {}) => ({
+    title: item.title || item.projectName || item.name || item.summary || '未命名线索',
+    source: item.source || item.kind || item.platform || '',
+    reason: item.reason || item.summary || item.description || item.usefulFor || '',
+    link: item.link || item.url || item.html_url || '',
+  }));
+}
+
+function summarizeProactiveThinker(report = null) {
+  if (!report || typeof report !== 'object') {
+    return {
+      status: 'missing',
+      summary: '暂无主动思考器报告。',
+      generatedAt: '',
+      pendingConfirmationCount: 0,
+      pendingConfirmations: [],
+      reportPath: '',
+      topSignals: [],
+    };
+  }
+  const pendingConfirmations = Array.isArray(report.pendingConfirmations)
+    ? report.pendingConfirmations
+    : [];
+  return {
+    status: report.status || 'unknown',
+    summary: report.summary || '',
+    generatedAt: report.generatedAt || '',
+    pendingConfirmationCount: pendingConfirmations.length,
+    pendingConfirmations: pendingConfirmations.slice(0, 5),
+    reportPath: report.files?.markdown || report.files?.md || report.__filePath || '',
+    topSignals: collectProactiveSignals(report),
+  };
+}
+
 function toLocalDayKey(input, timezoneOffsetMinutes = 480) {
   const date = input instanceof Date ? input : new Date(input);
   if (!Number.isFinite(date.getTime())) {
@@ -279,6 +343,12 @@ function buildClerkCommandCenterState(options = {}) {
     '',
     warnings,
   );
+  const proactiveThinkerReport = safeReadObject(
+    () => (options.readProactiveThinkerReport || defaultReadProactiveThinkerReport)(env, { ...options, now }),
+    null,
+    '',
+    warnings,
+  );
   const opsEvents = safeReadObject(
     () => (options.summarizeOpsEvents || summarizeOpsEvents)(env, {
       until: now.toISOString(),
@@ -321,6 +391,7 @@ function buildClerkCommandCenterState(options = {}) {
         items: Array.isArray(trendIntel.learningRadar?.items) ? trendIntel.learningRadar.items : [],
       },
     },
+    proactiveThinker: summarizeProactiveThinker(proactiveThinkerReport),
     opsEvents,
     multiAgentSummary: loadMultiAgentSummary(env, options),
     warnings,
@@ -413,6 +484,28 @@ function formatOpsEventSignals(opsEvents = {}) {
   return lines;
 }
 
+function formatProactiveThinkerSignals(proactiveThinker = {}) {
+  if (!proactiveThinker || proactiveThinker.status === 'missing') {
+    return ['- 主动思考器：暂无报告'];
+  }
+  const pendingCount = Number(proactiveThinker.pendingConfirmationCount || 0);
+  const statusText = proactiveThinker.status === 'awaiting_confirmation'
+    ? `待确认 ${pendingCount} 项`
+    : proactiveThinker.status === 'completed'
+      ? '已完成'
+      : proactiveThinker.status || 'unknown';
+  const lines = [`- 主动思考器：${statusText}${proactiveThinker.summary ? `，${proactiveThinker.summary}` : ''}`];
+  const firstPending = Array.isArray(proactiveThinker.pendingConfirmations) ? proactiveThinker.pendingConfirmations[0] : null;
+  if (firstPending?.title) {
+    lines.push(`- 待确认首项：${firstPending.title}${firstPending.suggestedPrompt ? `；建议：${firstPending.suggestedPrompt}` : ''}`);
+    lines.push('- 处理指令：文员，哪些需要我确认？');
+  }
+  if (proactiveThinker.reportPath) {
+    lines.push(`- 主动思考报告：${proactiveThinker.reportPath}`);
+  }
+  return lines;
+}
+
 function buildClerkCommandCenterReply(options = {}) {
   const state = buildClerkCommandCenterState(options);
   const defaultNextActions = [
@@ -471,6 +564,7 @@ function buildClerkCommandCenterReply(options = {}) {
     formatUiAutomationSignal(state.snapshot.latestRun),
     `- ${state.snapshot.latestRun ? formatLatestRun(state.snapshot.latestRun) : '日报快照：暂无最近 run'}`,
     ...formatTrendRadarSignal(state.trendIntel),
+    ...formatProactiveThinkerSignals(state.proactiveThinker),
     ...formatOpsEventSignals(state.opsEvents),
     `- 模型账本：${state.usage.entries.length ? `${state.usage.entries.length} 条，约 ${state.usage.totalTokens} tokens（真实 ${state.usage.realTokens} / 字符估算 ${state.usage.estimatedTokens}）` : '暂无可用记录'}`,
     `- 邮件流水：${state.mail.todayEntries.length ? `今天 ${state.mail.todayEntries.length} 条` : '暂无可用记录'}`,
@@ -582,4 +676,5 @@ module.exports = {
   buildClerkCommandCenterState,
   buildClerkDailyReportReply,
   loadDailySummaryArtifacts,
+  summarizeProactiveThinker,
 };

@@ -55,6 +55,44 @@ function sampleTaskSummary() {
   };
 }
 
+function sampleProactiveThinkerReport() {
+  return {
+    generatedAt: '2026-05-10T02:00:00.000Z',
+    day: '2026-05-10',
+    status: 'awaiting_confirmation',
+    summary: '主动思考完成：整理 6 条信号，待确认 1 项。',
+    sections: {
+      worldNews: {
+        items: [
+          { title: '全球 AI 监管更新', source: 'World RSS', reason: '可能影响 AI 测试合规。' },
+        ],
+      },
+      hotMonitor: {
+        items: [
+          { title: '免费 token 活动', source: 'V2EX', reason: '需要人工确认是否过期。' },
+        ],
+      },
+      trendIntel: {
+        items: [
+          { title: 'browserbase/stagehand', source: 'GitHub Trending', reason: 'AI 浏览器自动化。' },
+        ],
+      },
+    },
+    pendingConfirmations: [
+      {
+        id: 'pending-1',
+        title: '核验免费 token 活动',
+        risk: 'medium',
+        suggestedPrompt: '确认活动有效后再归档。',
+      },
+    ],
+    files: {
+      markdown: '/var/lib/openclaw-homework/proactive-thinker/2026-05-10.md',
+      json: '/var/lib/openclaw-homework/proactive-thinker/2026-05-10.json',
+    },
+  };
+}
+
 test('buildClerkCommandCenterState gathers injected task, ledger, mail, and snapshot data', () => {
   const calls = [];
   const now = new Date('2026-05-06T04:00:00.000Z');
@@ -111,6 +149,34 @@ test('buildClerkCommandCenterState gathers injected task, ledger, mail, and snap
   assert.equal(state.snapshot.latestRun.id, 42);
   assert.deepEqual(state.warnings, []);
   assert.deepEqual(calls.map((call) => call[0]), ['plan', 'tasks', 'usage', 'mail', 'snapshot']);
+});
+
+test('buildClerkCommandCenterState gathers latest proactive thinker report', () => {
+  const env = {
+    LOCAL_PROJECT_DIR: '/workspace/openclaw',
+    PROACTIVE_THINKER_OUTPUT_DIR: '/var/lib/openclaw-homework/proactive-thinker',
+  };
+  const state = buildClerkCommandCenterState({
+    env,
+    now: new Date('2026-05-10T04:00:00.000Z'),
+    summarizeDailyPlan: () => samplePlan(),
+    summarizeTasks: () => sampleTaskSummary(),
+    readUsageLedger: () => [],
+    readMailLedger: () => [],
+    readDailySummarySnapshot: () => ({ runs: [] }),
+    readJsonFile: (filePath) => {
+      if (String(filePath).endsWith('/var/lib/openclaw-homework/proactive-thinker/2026-05-10.json')) {
+        return sampleProactiveThinkerReport();
+      }
+      return null;
+    },
+  });
+
+  assert.equal(state.proactiveThinker.status, 'awaiting_confirmation');
+  assert.equal(state.proactiveThinker.pendingConfirmationCount, 1);
+  assert.equal(state.proactiveThinker.summary, '主动思考完成：整理 6 条信号，待确认 1 项。');
+  assert.equal(state.proactiveThinker.topSignals[0].title, '全球 AI 监管更新');
+  assert.equal(state.proactiveThinker.reportPath, '/var/lib/openclaw-homework/proactive-thinker/2026-05-10.md');
 });
 
 test('buildClerkCommandCenterState enriches task summary from task-center digest when available', () => {
@@ -465,6 +531,32 @@ test('buildClerkCommandCenterReply includes ops event health and slow event summ
   assert.match(reply, /hot-monitor/);
   assert.match(reply, /run-fail/);
   assert.match(reply, /最慢事件/);
+});
+
+test('buildClerkCommandCenterReply renders proactive thinker status and confirmation command', () => {
+  const reply = buildClerkCommandCenterReply({
+    env: {
+      LOCAL_PROJECT_DIR: '/workspace/openclaw',
+      PROACTIVE_THINKER_OUTPUT_DIR: '/var/lib/openclaw-homework/proactive-thinker',
+    },
+    now: new Date('2026-05-10T04:00:00.000Z'),
+    summarizeDailyPlan: () => samplePlan(),
+    summarizeTasks: () => sampleTaskSummary(),
+    readUsageLedger: () => [],
+    readMailLedger: () => [],
+    readDailySummarySnapshot: () => ({ runs: [] }),
+    readJsonFile: (filePath) => {
+      if (String(filePath).endsWith('/var/lib/openclaw-homework/proactive-thinker/2026-05-10.json')) {
+        return sampleProactiveThinkerReport();
+      }
+      return null;
+    },
+  });
+
+  assert.match(reply, /主动思考器/);
+  assert.match(reply, /待确认 1/);
+  assert.match(reply, /核验免费 token 活动/);
+  assert.match(reply, /文员，哪些需要我确认/);
 });
 
 test('buildClerkCommandCenterState degrades bad ledgers and broken snapshots', () => {

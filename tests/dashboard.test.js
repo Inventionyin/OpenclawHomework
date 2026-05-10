@@ -32,6 +32,14 @@ test('summarizeDashboardState keeps read-only dashboard fields compact', () => {
       runs: [{ conclusion: 'success' }],
       latestRun: { conclusion: 'success', runUrl: 'https://github.com/run' },
     },
+    proactiveThinker: {
+      status: 'awaiting_confirmation',
+      summary: '主动思考完成：整理 6 条信号，待确认 1 项。',
+      generatedAt: '2026-05-10T02:00:00.000Z',
+      pendingConfirmationCount: 1,
+      reportPath: '/var/lib/openclaw-homework/proactive-thinker/2026-05-10.md',
+      topSignals: [{ title: '全球 AI 监管更新', source: 'World RSS' }],
+    },
     warnings: ['usage_ledger_unavailable'],
   }, {
     ASSISTANT_NAME: 'Hermes',
@@ -51,6 +59,9 @@ test('summarizeDashboardState keeps read-only dashboard fields compact', () => {
   assert.equal(state.usage.totalTokens, 200);
   assert.equal(state.mail.todayCount, 1);
   assert.equal(state.snapshot.runCount, 1);
+  assert.equal(state.proactiveThinker.status, 'awaiting_confirmation');
+  assert.equal(state.proactiveThinker.pendingConfirmationCount, 1);
+  assert.equal(state.proactiveThinker.topSignals[0].title, '全球 AI 监管更新');
   assert.deepEqual(state.warnings, ['usage_ledger_unavailable']);
 });
 
@@ -68,13 +79,25 @@ test('buildDashboardHtml renders escaped dashboard data', () => {
     usage: { totalTokens: 0, realTokens: 0, estimatedTokens: 0, entries: [] },
     mail: { todayCount: 0, totalCount: 0, todayEntries: [] },
     snapshot: {},
+    proactiveThinker: {
+      status: 'awaiting_confirmation',
+      summary: '主动思考 <需要确认>',
+      pendingConfirmationCount: 1,
+      reportPath: '/tmp/proactive.md',
+      topSignals: [{ title: '福利 <token>', source: 'V2EX' }],
+    },
     warnings: [],
   });
 
   assert.match(html, /OpenClaw\/Hermes 控制台/);
+  assert.match(html, /主动思考器/);
+  assert.match(html, /待确认 1 项/);
+  assert.match(html, /主动思考 &lt;需要确认&gt;/);
+  assert.match(html, /福利 &lt;token&gt;/);
   assert.match(html, /Hermes &lt;script&gt;/);
   assert.match(html, /UI &lt;自动化&gt;/);
   assert.doesNotMatch(html, /Hermes <script>/);
+  assert.doesNotMatch(html, /福利 <token>/);
 });
 
 test('escapeHtml escapes special characters', () => {
