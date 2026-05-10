@@ -267,7 +267,24 @@ test('routeAgentIntent routes safe combined requests to multi-intent planner', (
 test('routeAgentIntent routes browser CDP and protocol automation requests', () => {
   assert.deepEqual(routeAgentIntent('打开 https://projectku.local/login 看看登录页为什么验证码不出来'), {
     agent: 'browser-agent',
-    action: 'browser-dry-run',
+    action: 'browser-observe',
+    targetUrl: 'https://projectku.local/login',
+    requiresAuth: true,
+  });
+
+  assert.deepEqual(routeAgentIntent('在 https://shop.evanshine.me/login 输入账号并点击登录'), {
+    agent: 'browser-agent',
+    action: 'browser-act',
+    targetUrl: 'https://shop.evanshine.me/login',
+    actionText: '在 https://shop.evanshine.me/login 输入账号并点击登录',
+    requiresAuth: true,
+  });
+
+  assert.deepEqual(routeAgentIntent('从 https://shop.evanshine.me/products 提取商品标题和价格'), {
+    agent: 'browser-agent',
+    action: 'browser-extract',
+    targetUrl: 'https://shop.evanshine.me/products',
+    instruction: '从 https://shop.evanshine.me/products 提取商品标题和价格',
     requiresAuth: true,
   });
 

@@ -21,7 +21,7 @@
   },
   {
     "text": "观察 https://shop.evanshine.me/login 页面结构",
-    "expected": { "agent": "browser-agent", "action": "browser-dry-run" }
+    "expected": { "agent": "browser-agent", "action": "browser-observe" }
   },
   {
     "text": "抓一下 https://github.com/microsoft/RD-Agent 正文",

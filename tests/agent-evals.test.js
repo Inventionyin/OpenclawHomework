@@ -54,7 +54,7 @@ test('golden intent cases cover phase 2 and phase 3 natural-language controls', 
 
   assert.deepEqual(byText.get('观察 https://shop.evanshine.me/login 页面结构'), {
     agent: 'browser-agent',
-    action: 'browser-dry-run',
+    action: 'browser-observe',
   });
   assert.deepEqual(byText.get('抓一下 https://github.com/microsoft/RD-Agent 正文'), {
     agent: 'clerk-agent',

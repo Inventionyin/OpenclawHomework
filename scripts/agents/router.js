@@ -18,6 +18,7 @@ const {
   routeFromContextHint,
 } = require('./intent-context');
 const {
+  extractFirstUrl,
   routeSkillIntent,
 } = require('../skills/skill-router');
 
@@ -1018,8 +1019,15 @@ function routeMultiIntentPlan(text) {
 function routeBrowserAutomationIntent(text) {
   const normalized = String(text ?? '').trim().toLowerCase();
   const mentionsBrowser = /(浏览器|页面|网页|cdp|har|协议|接口|network|console|控制台|截图|验证码|登录页|注册页|登录流程|注册流程|抓包|抓一下|打开\s*https?:\/\/|https?:\/\/)/i.test(normalized);
-  const wantsProtocol = /(cdp|har|协议|接口|network|抓包|抓一下|请求|响应|登录流程接口|注册流程接口)/i.test(normalized);
+  const wantsProtocol = /(cdp|har|协议|接口|network|抓包|请求|响应|登录流程接口|注册流程接口)/i.test(normalized);
   const wantsBrowser = /(打开|看看|检查|定位|调试|截图|验证码|登录页|注册页|console|控制台|页面)/i.test(normalized);
+  const explicitBrowserSurface = /(浏览器|页面|网页|cdp|har|network|console|开发者工具|devtools|登录页|注册页|验证码)/i.test(normalized);
+  const wantsExtract = /(提取|抽取|采集|读取|获取).{0,30}(标题|价格|字段|列表|表格|文本|数据|商品|结果|信息)/i.test(normalized)
+    || /(extract).{0,20}(schema|field|data|text)/i.test(normalized);
+  const wantsTroubleshoot = /(为什么|怎么|不出来|异常|报错|失败|定位|检查|看看|看下|观察|结构)/i.test(normalized);
+  const wantsExplicitAction = /(点击|输入|填写|选择|提交|搜索|勾选|上传|切换|打开菜单|关闭弹窗)/i.test(normalized)
+    || /(登录|注册).{0,12}(账号|密码|提交|按钮|表单|点击|输入|填写)/i.test(normalized);
+  const wantsAct = wantsExplicitAction && !wantsExtract && !wantsTroubleshoot;
   const wantsProtocolAssets = /(最近|查看|看看|里有什么|有哪些|资产库|协议资产|接口资产).{0,20}(协议|接口|资产)/i.test(normalized)
     || /(协议|接口).{0,20}(资产库|资产)/i.test(normalized);
   const wantsProtocolTestCases = /(整理|生成|转换|变成|变为|产出).{0,20}(测试用例|接口用例|contract|契约用例)/i.test(normalized)
@@ -1027,7 +1035,11 @@ function routeBrowserAutomationIntent(text) {
   const hasUrl = /https?:\/\//i.test(normalized);
   const wantsLiveRun = /(真实执行|真的打开浏览器|跑一遍页面检查)/i.test(normalized);
 
-  if (!mentionsBrowser || (!wantsProtocol && !wantsBrowser)) {
+  if (!mentionsBrowser || (!wantsProtocol && !wantsBrowser && !wantsAct && !wantsExtract)) {
+    return null;
+  }
+
+  if (!hasUrl && !wantsProtocol && !explicitBrowserSurface) {
     return null;
   }
 
@@ -1055,9 +1067,37 @@ function routeBrowserAutomationIntent(text) {
     };
   }
 
+  if (!wantsProtocol) {
+    const targetUrl = extractFirstUrl(text);
+    if (wantsExtract) {
+      return {
+        agent: 'browser-agent',
+        action: 'browser-extract',
+        ...(targetUrl ? { targetUrl } : {}),
+        instruction: stripMention(String(text ?? '').trim()),
+        requiresAuth: true,
+      };
+    }
+    if (wantsAct) {
+      return {
+        agent: 'browser-agent',
+        action: 'browser-act',
+        ...(targetUrl ? { targetUrl } : {}),
+        actionText: stripMention(String(text ?? '').trim()),
+        requiresAuth: true,
+      };
+    }
+    return {
+      agent: 'browser-agent',
+      action: 'browser-observe',
+      ...(targetUrl ? { targetUrl } : {}),
+      requiresAuth: true,
+    };
+  }
+
   return {
     agent: 'browser-agent',
-    action: wantsProtocol ? 'protocol-capture-plan' : 'browser-dry-run',
+    action: 'protocol-capture-plan',
     requiresAuth: true,
   };
 }
@@ -1313,8 +1353,17 @@ function routeAgentIntent(text, options = {}) {
   }
 
   const clerkRoute = routeClerkIntent(original);
+  const browserAutomationRoute = routeBrowserAutomationIntent(original);
+  if (browserAutomationRoute && (!hasClerkWakeWord(original) || browserAutomationRoute.targetUrl)) {
+    return browserAutomationRoute;
+  }
+
   if (clerkRoute) {
     return clerkRoute;
+  }
+
+  if (browserAutomationRoute) {
+    return browserAutomationRoute;
   }
 
   const officeRoute = routeOfficeIntent(original);
@@ -1325,11 +1374,6 @@ function routeAgentIntent(text, options = {}) {
   const qaAssetRoute = routeQaAssetIntent(normalized);
   if (qaAssetRoute) {
     return qaAssetRoute;
-  }
-
-  const browserAutomationRoute = routeBrowserAutomationIntent(original);
-  if (browserAutomationRoute) {
-    return browserAutomationRoute;
   }
 
   const naturalLanguageOpsRoute = routeNaturalLanguageOps(normalized);
